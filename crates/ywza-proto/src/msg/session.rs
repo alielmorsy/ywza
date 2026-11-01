@@ -1,0 +1,110 @@
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use uuid::Uuid;
+
+/// Conversation identifier; a UUID rendered as a string on the wire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SessionId(pub Uuid);
+
+impl SessionId {
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+}
+
+impl Default for SessionId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionStatus {
+    Running,
+    Done,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionSummary {
+    pub id: SessionId,
+    pub title: String,
+    pub status: SessionStatus,
+    /// Last activity, Unix milliseconds.
+    pub updated_ms: u64,
+}
+
+/// One entry in a session's history.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SessionEvent {
+    User {
+        text: String,
+    },
+    Assistant {
+        text: String,
+    },
+    ToolCall {
+        id: String,
+        name: String,
+        args: Value,
+    },
+    ToolResult {
+        id: String,
+        ok: bool,
+        text: String,
+        has_image: bool,
+    },
+    Done {
+        summary: String,
+    },
+    Failed {
+        error: String,
+    },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::msg::testutil::check;
+    use serde_json::json;
+
+    #[test]
+    fn session_events() {
+        use SessionEvent::*;
+        check(User { text: "u".into() }, json!({"type":"user","text":"u"}));
+        check(
+            Assistant { text: "a".into() },
+            json!({"type":"assistant","text":"a"}),
+        );
+        check(
+            ToolCall {
+                id: "c1".into(),
+                name: "click".into(),
+                args: json!({"element":1}),
+            },
+            json!({"type":"tool_call","id":"c1","name":"click","args":{"element":1}}),
+        );
+        check(
+            ToolResult {
+                id: "c1".into(),
+                ok: true,
+                text: "ok".into(),
+                has_image: false,
+            },
+            json!({"type":"tool_result","id":"c1","ok":true,"text":"ok","has_image":false}),
+        );
+        check(
+            Done {
+                summary: "s".into(),
+            },
+            json!({"type":"done","summary":"s"}),
+        );
+        check(
+            Failed { error: "e".into() },
+            json!({"type":"failed","error":"e"}),
+        );
+    }
+}
