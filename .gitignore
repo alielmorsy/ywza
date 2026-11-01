@@ -1,0 +1,8 @@
+target/
+notes/
+spikes/
+.idea/
+.codex/
+.ltt.json
+*.log
+__pycache__/
