@@ -1,0 +1,32 @@
+[package]
+name = "ywza-ocr"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = ["ocr-windows"]
+# Windows.Media.Ocr. Only compiled on Windows; the feature is a no-op elsewhere.
+ocr-windows = ["dep:windows"]
+# PP-OCR (det + rec) through ONNX Runtime. `ort` downloads a prebuilt onnxruntime at build
+# time and models are downloaded at first use.
+ocr-paddle = ["dep:ort", "dep:ureq"]
+# Same engine, but loads the official libonnxruntime.so at runtime (exe dir or ORT_DYLIB_PATH)
+# instead of linking ort's prebuilt static library, which needs a newer libstdc++
+# (Debian 10 / GCC 8 cannot link it). Use instead of `ocr-paddle`.
+ocr-paddle-dynamic = ["ocr-paddle", "ort/load-dynamic"]
+
+[dependencies]
+anyhow = "1"
+ort = { version = "=2.0.0-rc.15", optional = true, default-features = false, features = ["std", "api-31", "download-binaries", "tls-native", "copy-dylibs"] }
+ureq = { version = "3", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", optional = true, features = [
+    "Foundation_Collections",
+    "Globalization",
+    "Graphics_Imaging",
+    "Media_Ocr",
+    "Storage_Streams",
+    "Win32_System_WinRT",
+] }
