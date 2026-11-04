@@ -1,0 +1,31 @@
+[package]
+name = "ywza-agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+ocr-paddle = ["ywza-ocr/ocr-paddle"]
+ocr-paddle-dynamic = ["ywza-ocr/ocr-paddle-dynamic"]
+
+[dependencies]
+anyhow = "1"
+data-encoding = "2"
+getrandom = "0.4"
+iroh = "1.4.1"
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "json", "http2"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+schemars = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
+toml = "0.8"
+ywza-desktop = { path = "../ywza-desktop" }
+ywza-ocr = { path = "../ywza-ocr" }
+ywza-proto = { path = "../ywza-proto" }
+ywza-stream = { path = "../ywza-stream" }
+ywza-term = { path = "../ywza-term" }
+
+[dev-dependencies]
+tempfile = "3"

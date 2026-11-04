@@ -1,0 +1,120 @@
+//! Local TCP port for scripts and MCP servers on this machine (e.g. `python/ywza_mcp`).
+//!
+//! Same frames as the iroh control stream (u32 LE length + JSON) on 127.0.0.1. The agent writes
+//! `<config_dir>/local-tcp.json` (`{"port", "token"}`) at start; the first frame must be
+//! `hello` with `token` = that token. Only the local user can read the config dir, so the
+//! token plays the role `local-client.key` plays for iroh clients.
+
+use std::{
+    path::Path,
+    sync::{atomic::AtomicBool, Arc},
+    time::Duration,
+};
+
+use data_encoding::BASE32_NOPAD;
+use serde_json::json;
+use tokio::{
+    net::{TcpListener, TcpStream},
+    sync::mpsc,
+};
+use ywza_proto::{read_frame, AgentMsg, ClientMsg};
+
+use crate::{atomic::write_atomic, mcp, net, Agent};
+
+pub const FILE: &str = "local-tcp.json";
+
+/// Binds 127.0.0.1 on a free port and writes a fresh token next to it.
+pub async fn bind(dir: &Path) -> anyhow::Result<(TcpListener, String)> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let mut bytes = [0u8; 16];
+    getrandom::fill(&mut bytes).expect("OS random source");
+    let token = BASE32_NOPAD.encode(&bytes);
+    let info = json!({"port": listener.local_addr()?.port(), "token": token});
+    write_atomic(&dir.join(FILE), &info.to_string())?;
+    Ok((listener, token))
+}
+
+pub async fn accept_loop(agent: Arc<Agent>, (listener, token): (TcpListener, String)) {
+    let token = Arc::new(token);
+    loop {
+        let Ok((stream, _)) = listener.accept().await else {
+            continue;
+        };
+        let (agent, token) = (agent.clone(), token.clone());
+        tokio::spawn(async move {
+            if let Err(e) = serve(agent, stream, &token).await {
+                eprintln!("ywza-agent: local client: {e}");
+            }
+        });
+    }
+}
+
+async fn serve(agent: Arc<Agent>, stream: TcpStream, token: &str) -> anyhow::Result<()> {
+    let _ = stream.set_nodelay(true);
+    let (mut recv, send) = stream.into_split();
+    let hello = tokio::time::timeout(Duration::from_secs(10), read_frame(&mut recv)).await??;
+    let ClientMsg::Hello {
+        client_name,
+        token: Some(given),
+    } = hello
+    else {
+        anyhow::bail!("first message was not hello with a token");
+    };
+    if given != token {
+        anyhow::bail!("{client_name}: wrong token");
+    }
+
+    let events = agent.tx.subscribe();
+    let (direct, direct_rx) = mpsc::unbounded_channel();
+    direct.send(AgentMsg::Welcome {
+        agent_version: env!("CARGO_PKG_VERSION").into(),
+        node_id: agent.endpoint.id().to_string(),
+        session_list: agent.sessions.list(),
+        permissions: None,
+    })?;
+    // The local user: every permission.
+    let see_sessions = Arc::new(AtomicBool::new(true));
+    let writer = tokio::spawn(net::write_loop(send, events, direct_rx, see_sessions));
+    let mut session = None;
+
+    loop {
+        let reply = match read_frame::<_, ClientMsg>(&mut recv).await {
+            Ok(ClientMsg::CallTool { call, name, args }) => {
+                let sid = *session.get_or_insert_with(|| mcp::session(&agent, &client_name));
+                let (agent, direct) = (agent.clone(), direct.clone());
+                tokio::spawn(async move {
+                    let _ = direct.send(mcp::call_tool(&agent, sid, call, name, args).await);
+                });
+                None
+            }
+            Ok(ClientMsg::Screenshot { target }) => Some(agent.screenshot(target).await),
+            Ok(ClientMsg::CreatePairing) => {
+                let (agent, direct) = (agent.clone(), direct.clone());
+                tokio::spawn(async move {
+                    let _ = direct.send(net::pair::create(&agent).await);
+                });
+                None
+            }
+            // Need the iroh connection (live view).
+            Ok(ClientMsg::LiveStart { .. } | ClientMsg::LiveStop | ClientMsg::Input { .. }) => {
+                Some(AgentMsg::Error {
+                    message: "not available on the local TCP port".into(),
+                })
+            }
+            Ok(msg) => agent.handle(msg),
+            Err(ywza_proto::Error::Json(e)) => Some(AgentMsg::Error {
+                message: format!("bad message: {e}"),
+            }),
+            Err(_) => break,
+        };
+        if let Some(r) = reply {
+            let _ = direct.send(r);
+        }
+    }
+    if let Some(sid) = session {
+        mcp::end_session(&agent, sid);
+    }
+    drop(direct);
+    writer.abort();
+    Ok(())
+}
