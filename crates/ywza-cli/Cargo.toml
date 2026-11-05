@@ -1,0 +1,19 @@
+[package]
+name = "ywza-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ywza"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+data-encoding = "2"
+iroh = "1.4.1"
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-util", "io-std", "time"] }
+toml = "0.8"
+ywza-proto = { path = "../ywza-proto" }
