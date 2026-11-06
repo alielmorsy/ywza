@@ -11,23 +11,20 @@ DOC = """Drive ywza agents' tools from Python or from your own AI over MCP.
 One MCP server reaches every agent this machine can talk to:
 - "local": this PC's agent, straight over its 127.0.0.1 port (crates/ywza-agent/src/local.rs)
   with port + token from <config_dir>/local-tcp.json.
-- each paired device (`ywza pair <ticket> --name NAME`, listed by `ywza devices`): over the
+- each paired device (`ywza pair <code> --name NAME`, listed by `ywza devices`): over the
   encrypted iroh link (LAN, internet, 4G) through `ywza --device NAME bridge`. The `ywza`
   binary comes from --cli PATH, $YWZA_CLI, or PATH.
 Every tool takes an optional `device`; `list_devices` lists them. Standard library only.
 
-    python -m ywza_mcp [--cli PATH]                     # MCP server on stdio
-    python -m ywza_mcp devices                          # list devices
-    python -m ywza_mcp [--device NAME] tools            # list tool names
-    python -m ywza_mcp [--device NAME] call list_windows
-    python -m ywza_mcp call wait '{"ms": 500}'
+    ywza-mcp [--cli PATH]                     # MCP server on stdio
+    ywza-mcp devices                          # list devices
+    ywza-mcp [--device NAME] tools            # list tool names
+    ywza-mcp [--device NAME] call list_windows
+    ywza-mcp call wait '{"ms": 500}'
 
     from ywza_mcp import Devices
     d = Devices()
     print(d.get("linux-vm").call("list_windows")["text"])
-
-Calls are trusted: agents skip their `ask` approval rules (your AI client's own tool
-permissions gate them); `deny` rules still block.
 """
 
 
