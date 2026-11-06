@@ -1,4 +1,5 @@
 use super::*;
+use super::classify::classify;
 use crate::{Rect, WindowInfo};
 
 const WIN: Rect = Rect {

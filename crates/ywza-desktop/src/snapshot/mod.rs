@@ -10,7 +10,7 @@ mod render;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use classify::{classify, recheck};
+pub(crate) use classify::recheck;
 pub use diff::diff;
 pub use model::{Element, Patterns, Snapshot};
 pub(crate) use model::Raw;

@@ -44,33 +44,31 @@ impl MonitorCapture {
             ::windows::core::factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>()?;
         let item: GraphicsCaptureItem = unsafe { interop.CreateForMonitor(m)? };
         let (device, ctx, winrt_device) = d3d::create_device()?;
-        unsafe {
-            let size = item.Size()?;
-            let pool =
-                Direct3D11CaptureFramePool::CreateFreeThreaded(&winrt_device, FORMAT, 2, size)?;
-            let session = pool.CreateCaptureSession(&item)?;
-            let _ = session.SetIsBorderRequired(false);
-            let _ = session.SetIsCursorCaptureEnabled(cursor);
-            let (tx, rx) = mpsc::channel();
-            let token = pool.FrameArrived(&TypedEventHandler::new(move |_, _| {
-                let _ = tx.send(());
-                Ok(())
-            }))?;
-            session.StartCapture()?;
-            Ok(Self {
-                device,
-                ctx,
-                winrt_device,
-                pool,
-                session,
-                token,
-                rx,
-                size,
-                staging: None,
-                frame: Duration::from_secs(1) / fps.max(1),
-                next_at: Instant::now(),
-            })
-        }
+        let size = item.Size()?;
+        let pool =
+            Direct3D11CaptureFramePool::CreateFreeThreaded(&winrt_device, FORMAT, 2, size)?;
+        let session = pool.CreateCaptureSession(&item)?;
+        let _ = session.SetIsBorderRequired(false);
+        let _ = session.SetIsCursorCaptureEnabled(cursor);
+        let (tx, rx) = mpsc::channel();
+        let token = pool.FrameArrived(&TypedEventHandler::new(move |_, _| {
+            let _ = tx.send(());
+            Ok(())
+        }))?;
+        session.StartCapture()?;
+        Ok(Self {
+            device,
+            ctx,
+            winrt_device,
+            pool,
+            session,
+            token,
+            rx,
+            size,
+            staging: None,
+            frame: Duration::from_secs(1) / fps.max(1),
+            next_at: Instant::now(),
+        })
     }
 
     /// Waits up to `timeout` for a changed frame and copies the newest one into `out`
