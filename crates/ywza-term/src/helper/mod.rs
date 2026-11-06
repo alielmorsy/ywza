@@ -7,5 +7,7 @@ mod server;
 
 pub(crate) use client::call;
 pub use client::set_helper_path;
+// Info not currently used
+#[allow(unused_imports)]
 pub(crate) use protocol::{Info, Request, Response};
 pub use server::helper_main;
