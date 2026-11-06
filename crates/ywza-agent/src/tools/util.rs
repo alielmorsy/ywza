@@ -74,6 +74,7 @@ impl Tool for Wait {
 /// Push a short progress message to the user's devices mid-task.
 #[derive(Deserialize, JsonSchema)]
 pub struct Notify {
+    #[allow(dead_code)] // read by the agent loop from the raw args
     text: String,
 }
 

@@ -22,7 +22,7 @@ mod windows;
 use std::{future::Future, pin::Pin};
 
 use schemars::JsonSchema;
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 
 pub use args::{parse_window, ElementArg, TermArg, WindowArg};

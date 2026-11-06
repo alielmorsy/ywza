@@ -1,6 +1,7 @@
 //! Tool schemas from `JsonSchema`, tidied for LLM function calling.
 
-use schemars::{JsonSchema, SchemaSettings};
+use schemars::generate::SchemaSettings;
+use schemars::JsonSchema;
 use serde_json::{json, Value};
 
 /// The struct doc comment and the JSON Schema of the arguments.
@@ -87,7 +88,7 @@ mod tests {
     use serde::Deserialize;
 
     /// Does a thing.
-    #[derive(Deserialize, JsonSchema)]
+    #[derive(Deserialize, JsonSchema, Debug)]
     #[allow(dead_code)]
     struct Sample {
         a: u32,
