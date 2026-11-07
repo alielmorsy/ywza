@@ -3,6 +3,7 @@
 
 mod cursor;
 mod input;
+mod rate;
 mod send;
 
 use std::sync::{atomic::Ordering, Arc};

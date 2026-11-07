@@ -9,12 +9,20 @@ use tokio_util::sync::CancellationToken;
 use ywza_proto::{write_frame, FrameHeader};
 use ywza_stream::{Ctl, Encoded};
 
-/// More unacknowledged frames than this and non-keyframes are dropped.
-const MAX_BEHIND: usize = 3;
-const MIN_BITRATE: u32 = 500_000;
-const MAX_BITRATE: u32 = 8_000_000;
-/// Raise the bitrate again after this long without lag.
-const CALM: Duration = Duration::from_secs(5);
+use super::rate::RateCtl;
+
+/// A frame in flight longer than max(this, 3x the base latency) means the link is behind.
+const STALE_MIN: Duration = Duration::from_millis(400);
+/// Forced keyframes are spaced out so a slow link is not flooded with them.
+const KEY_GAP: Duration = Duration::from_secs(2);
+const MAX_INFLIGHT: usize = 30;
+
+struct Flight {
+    token: CancellationToken,
+    task: JoinHandle<()>,
+    key: bool,
+    sent: Instant,
+}
 
 pub async fn send_loop(
     conn: Connection,
@@ -23,33 +31,45 @@ pub async fn send_loop(
     ctl: Arc<Ctl>,
     adaptive: bool,
 ) {
-    let mut inflight: Vec<(CancellationToken, JoinHandle<()>)> = Vec::new();
+    let mut inflight: Vec<Flight> = Vec::new();
+    let (ack_tx, mut acks) = mpsc::unbounded_channel::<(Duration, bool)>();
+    let mut rate = RateCtl::new(ctl.bitrate(), Instant::now());
     let mut seq = 0u64;
     let mut need_key = false;
-    let mut calm_since = Instant::now();
+    let mut last_forced: Option<Instant> = None;
     while let Some(f) = rx.recv().await {
-        inflight.retain(|(_, h)| !h.is_finished());
+        let now = Instant::now();
+        while let Ok((latency, key)) = acks.try_recv() {
+            rate.on_ack(now, latency, key);
+        }
+        if adaptive {
+            ctl.set_bitrate(rate.bitrate());
+        }
+        inflight.retain(|fl| !fl.task.is_finished());
         if f.keyframe {
             // Stale-frame drop: nothing older than a keyframe is worth delivering.
-            for (t, _) in inflight.drain(..) {
-                t.cancel();
+            for fl in inflight.drain(..) {
+                fl.token.cancel();
             }
             need_key = false;
-        } else if need_key {
-            continue;
-        } else if inflight.len() > MAX_BEHIND {
+        } else if need_key || is_stale(&inflight, now, rate.base()) {
             // P-frames reference their predecessor: after a drop, wait for a keyframe.
-            need_key = true;
-            ctl.request_keyframe();
-            if adaptive {
-                ctl.set_bitrate(((ctl.bitrate() as f32 * 0.6) as u32).max(MIN_BITRATE));
+            if !need_key {
+                for fl in inflight.iter().filter(|fl| !fl.key) {
+                    fl.token.cancel();
+                }
+                inflight.retain(|fl| fl.key);
+                need_key = true;
+                rate.on_stall(now);
+                if adaptive {
+                    ctl.set_bitrate(rate.bitrate());
+                }
             }
-            calm_since = Instant::now();
+            if last_forced.is_none_or(|t| now.duration_since(t) >= KEY_GAP) {
+                ctl.request_keyframe();
+                last_forced = Some(now);
+            }
             continue;
-        }
-        if adaptive && calm_since.elapsed() > CALM && ctl.bitrate() < MAX_BITRATE {
-            ctl.set_bitrate((ctl.bitrate() + ctl.bitrate() / 4).min(MAX_BITRATE));
-            calm_since = Instant::now();
         }
         let header = FrameHeader {
             monitor,
@@ -60,11 +80,14 @@ pub async fn send_loop(
             height: f.height,
         };
         seq += 1;
+        let sent = Instant::now();
         let Ok(mut send) = conn.open_uni().await else {
             break;
         };
         let token = CancellationToken::new();
         let cancelled = token.clone();
+        let ack = ack_tx.clone();
+        let key = f.keyframe;
         let task = tokio::spawn(async move {
             let write = async {
                 write_frame(&mut send, &header).await.ok()?;
@@ -73,17 +96,37 @@ pub async fn send_loop(
                 // In flight until the peer has acknowledged every byte.
                 send.stopped().await.ok()
             };
-            let reset = tokio::select! {
-                _ = write => false,
-                _ = cancelled.cancelled() => true,
+            let outcome = tokio::select! {
+                r = write => Some(r),
+                _ = cancelled.cancelled() => None,
             };
-            if reset {
-                let _ = send.reset(0u32.into());
+            match outcome {
+                None => {
+                    let _ = send.reset(0u32.into());
+                }
+                Some(Some(_)) => {
+                    let _ = ack.send((sent.elapsed(), key));
+                }
+                Some(None) => {}
             }
         });
-        inflight.push((token, task));
+        inflight.push(Flight {
+            token,
+            task,
+            key,
+            sent,
+        });
     }
-    for (t, _) in inflight {
-        t.cancel();
+    for fl in inflight {
+        fl.token.cancel();
     }
+}
+
+fn is_stale(inflight: &[Flight], now: Instant, base: Option<Duration>) -> bool {
+    let limit = STALE_MIN.max(base.unwrap_or_default() * 3);
+    inflight.len() >= MAX_INFLIGHT
+        || inflight
+            .iter()
+            .find(|fl| !fl.key)
+            .is_some_and(|fl| now.duration_since(fl.sent) > limit)
 }

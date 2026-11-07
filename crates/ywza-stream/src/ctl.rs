@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
-pub const DEFAULT_BITRATE: u32 = 4_000_000;
+pub const DEFAULT_BITRATE: u32 = 6_000_000;
 
 /// Shared knobs between the capture thread and whoever consumes its frames.
 pub struct Ctl {
