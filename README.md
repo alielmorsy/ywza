@@ -31,17 +31,17 @@ ywza works perfectly on Windows. Linux works on X11.
 <table>
   <tr>
     <td width="50%" align="center">
-      <video src="assets/hello_world.mp4" controls muted></video>
+      <video src="https://github.com/user-attachments/assets/a8e35cd8-a06e-4d2b-b73a-34e204fda3d1" controls muted></video>
       <br>Opening Notepad, typing Hello World and moving the window to monitor 0
     </td>
     <td width="50%" align="center">
-      <video src="assets/open_reddit.mp4" controls muted></video>
+      <video src="https://github.com/user-attachments/assets/100879fa-9e3b-42be-8375-6a776974e1e9" controls muted></video>
       <br>Opening Reddit in Chrome
     </td>
   </tr>
   <tr>
     <td width="50%" align="center">
-      <video src="assets/terminal_access.mp4" controls muted></video>
+      <video src="https://github.com/user-attachments/assets/6fe66bb5-ee3c-4f7d-85ff-e31ea51a5b00" controls muted></video>
       <br>Typing Hello World into an empty terminal, then starting Claude in it
     </td>
     <td width="50%"></td>
