@@ -59,6 +59,11 @@ enum Cmd {
         #[arg(short, long)]
         output: PathBuf,
     },
+    /// Open a window that shows a monitor live.
+    Live {
+        #[arg(long, default_value_t = 0)]
+        monitor: u32,
+    },
     #[command(subcommand)]
     Config(ConfigCmd),
     /// After the handshake, pipe raw protocol frames between stdin/stdout and the agent
@@ -106,6 +111,7 @@ async fn main() -> Result<()> {
             window,
             output,
         } => cmd::screenshot::run(&mut c, monitor, window, output).await,
+        Cmd::Live { monitor } => cmd::live::run(&mut c, cli.device.as_deref(), monitor).await,
         Cmd::Config(sub) => cmd::config::run(&mut c, sub).await,
         Cmd::Pair { .. } | Cmd::Devices => unreachable!(),
     };

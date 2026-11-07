@@ -1,6 +1,7 @@
 pub mod bridge;
 pub mod config;
 pub mod devices;
+pub mod live;
 pub mod pair;
 pub mod prompt;
 pub mod screenshot;
