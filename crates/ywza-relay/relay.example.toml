@@ -1,0 +1,54 @@
+# ywza-relay config. Run: ywza-relay --config relay.toml
+# Then set the same `relay_url = "https://<hostname>"` in every device's config.toml.
+
+# Server with only an IP address: set hostname to the IP and cert_mode = "self-signed" (or
+# leave cert_mode out) to get TLS with a pinned certificate, see below.
+# Plain HTTP instead: set tls = false and pick a port, then devices use
+# relay_url = "http://<ip>:<port>". hostname and cert_mode are not needed.
+# The relay only forwards end-to-end encrypted traffic, but QUIC address discovery is off.
+# tls = false
+# http_port = 3340
+
+# Public DNS name or IP address of this machine; the certificate is issued for it.
+hostname = "relay.example.com"
+
+# "letsencrypt" gets and renews a certificate automatically (ports 80 and 443 must be reachable).
+# "manual" reads manual_cert and manual_key.
+# "self-signed" needs no domain or CA: a certificate is generated on first start (valid 10
+# years) and the start-up log prints the line to put in every device's config.toml:
+#   relay_url = "https://<hostname>:<https_port>#pin=<fingerprint>"
+# Devices trust exactly that certificate. Without #pin= they trust the first one they see
+# and record it in known_relays.json. It is the default when hostname is an IP address.
+cert_mode = "letsencrypt"
+
+# Where Let's Encrypt keeps its account and certificates, and the generated
+# self-signed.crt / self-signed.key (default "./certs").
+# cert_dir = "./certs"
+
+# Manual mode only (default <cert_dir>/default.crt and <cert_dir>/default.key).
+# manual_cert = "/etc/ssl/relay.crt"
+# manual_key = "/etc/ssl/relay.key"
+
+# Set to false to use Let's Encrypt staging while testing (default true).
+# letsencrypt_prod = true
+
+# Email for certificate expiry notices (optional).
+# contact = "you@example.com"
+
+# http_port = 80
+# https_port = 443
+
+# UDP port for QUIC address discovery, and whether to run it (default true).
+# quic_port = 7842
+# quic_addr_discovery = true
+
+# Logging. level is overridden by the RUST_LOG environment variable if set.
+# "debug" also shows each client connecting and disconnecting.
+# [log]
+# level = "info"
+# Also write daily files <dir>/ywza-relay.log.YYYY-MM-DD (stderr stays on).
+# dir = "/var/log/ywza"
+# Rotated files to keep (default 14).
+# max_files = 14
+# "text" or "json" (default "text").
+# format = "text"

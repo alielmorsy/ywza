@@ -8,6 +8,7 @@ members = [
     "crates/ywza-stream",
     "crates/ywza-agent",
     "crates/ywza-cli",
+    "crates/ywza-relay",
 ]
 
 [workspace.package]

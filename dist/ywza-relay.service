@@ -1,0 +1,24 @@
+# Linux: the ywza relay server. Put the config at /etc/ywza-relay/relay.toml, then:
+#   sudo cp dist/ywza-relay.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now ywza-relay
+# Set cert_dir = "/var/lib/ywza-relay" in the config so certificates survive restarts.
+# Open TCP 80, 443 and UDP 7842 on the firewall.
+[Unit]
+Description=ywza relay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/ywza-relay --config /etc/ywza-relay/relay.toml
+DynamicUser=yes
+StateDirectory=ywza-relay
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
