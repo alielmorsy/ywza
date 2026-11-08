@@ -7,12 +7,13 @@ use ywza_proto::{
     PAIR_ALPN,
 };
 
-use crate::connect::{device_file, devices_dir};
+use crate::connect::{device_file, devices_dir, relay_url};
 
 const RETRY: &str = "wrong or expired code, run `ywza-agent pair` again";
 
 pub async fn run(code: &str, name: &str) -> Result<()> {
-    let ep = bind(load_or_create_secret_key(&config_dir().join("cli.key"))?).await?;
+    let key = load_or_create_secret_key(&config_dir().join("cli.key"))?;
+    let ep = bind(key, relay_url()?.as_deref()).await?;
     let target = EndpointAddr::new(rendezvous_key(code).public());
     let conn = tokio::time::timeout(Duration::from_secs(30), ep.connect(target, PAIR_ALPN))
         .await
@@ -26,6 +27,7 @@ pub async fn run(code: &str, name: &str) -> Result<()> {
             .or_else(|_| std::env::var("HOSTNAME"))
             .unwrap_or_else(|_| "ywza-cli".into()),
         addr: Some(ep.addr()),
+        relay: None,
     };
     let agent = match client_side(&mut send, &mut recv, code, me).await {
         Ok(info) => info,

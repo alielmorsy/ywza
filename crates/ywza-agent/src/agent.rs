@@ -39,7 +39,8 @@ impl Agent {
         let key = ywza_proto::load_or_create_secret_key(&dir.join("agent.key"))?;
         let local_client =
             ywza_proto::load_or_create_secret_key(&dir.join("local-client.key"))?.public();
-        let endpoint = net::bind(key, local_only, &dir).await?;
+        let relay = config.get().relay_url;
+        let endpoint = net::bind(key, local_only, &dir, relay.as_deref()).await?;
         let ticket = Ticket {
             addr: net::local_addr(&endpoint),
         };

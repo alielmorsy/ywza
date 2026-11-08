@@ -22,6 +22,9 @@ pub struct Config {
     pub trusted_peers: Vec<String>,
     /// Paired devices allowed to connect, each with its own permissions (`[[peers]]`).
     pub peers: Vec<Peer>,
+    /// Custom relay (e.g. https://relay.example.com). Unset uses the public n0 relays. Every device must use the same one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relay_url: Option<String>,
     pub llm: Llm,
     pub ocr: Ocr,
     pub desktop: Desktop,

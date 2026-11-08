@@ -31,7 +31,12 @@ pub struct Started {
 /// Opens the rendezvous endpoint for a fresh code and starts waiting for the one attempt.
 pub async fn begin(agent: &Arc<Agent>) -> anyhow::Result<Started> {
     let code = new_code();
-    let ep = bind_rendezvous(rendezvous_key(&code), agent.local_only).await?;
+    let ep = bind_rendezvous(
+        rendezvous_key(&code),
+        agent.local_only,
+        agent.config.get().relay_url.as_deref(),
+    )
+    .await?;
     if !agent.local_only {
         // Wait briefly for the relays so the code works from other networks.
         let both = async { tokio::join!(ep.online(), agent.endpoint.online()) };
@@ -101,6 +106,12 @@ async fn attempt(agent: &Agent, incoming: Incoming, code: &str) -> anyhow::Resul
         node_id: agent.endpoint.id(),
         name: host_name(),
         addr: Some(local_addr(&agent.endpoint)),
+        relay: agent
+            .config
+            .get()
+            .relay_url
+            .as_deref()
+            .map(ywza_proto::shareable_relay),
     };
     let result = tokio::time::timeout(
         ATTEMPT_TIMEOUT,

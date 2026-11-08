@@ -15,12 +15,25 @@ pub fn device_file(name: &str) -> PathBuf {
     devices_dir().join(format!("{name}.json"))
 }
 
-fn load_device(name: &str) -> Result<Ticket> {
+/// `relay_url` from the local `config.toml`; a missing file means the public relays.
+pub fn relay_url() -> Result<Option<String>> {
+    let path = config_dir().join("config.toml");
+    match std::fs::read_to_string(&path) {
+        Ok(text) => Ok(toml::from_str::<ywza_proto::Config>(&text)
+            .with_context(|| format!("parsing {}", path.display()))?
+            .relay_url),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("reading {}", path.display())),
+    }
+}
+
+/// The device's ticket and the relay it was paired with, if any.
+fn load_device(name: &str) -> Result<(Ticket, Option<String>)> {
     let text = std::fs::read_to_string(device_file(name))
         .with_context(|| format!("no paired device `{name}` (see `ywza devices`, `ywza pair`)"))?;
     let info: PairInfo = serde_json::from_str(&text).with_context(|| format!("device `{name}` file"))?;
     let addr = info.addr.unwrap_or_else(|| EndpointAddr::new(info.node_id));
-    Ok(Ticket { addr })
+    Ok((Ticket { addr }, info.relay))
 }
 
 fn load_local() -> Result<Ticket> {
@@ -33,15 +46,24 @@ fn load_local() -> Result<Ticket> {
 /// Connects to the local agent or a paired device and completes the Hello/Welcome exchange.
 pub async fn open(device: Option<&str>) -> Result<(Endpoint, Control)> {
     let dir = config_dir();
-    let (key, ticket) = match device {
-        Some(name) => ("cli.key", load_device(name)?),
-        None => ("local-client.key", load_local()?),
+    let (key, ticket, relay) = match device {
+        Some(name) => {
+            let (ticket, relay) = load_device(name)?;
+            ("cli.key", ticket, relay)
+        }
+        None => ("local-client.key", load_local()?, None),
     };
-    handshake(&dir.join(key), &ticket).await
+    // A paired device's relay wins over the local config.
+    let relay = match relay {
+        Some(r) => Some(r),
+        None => relay_url()?,
+    };
+    handshake(&dir.join(key), &ticket, relay.as_deref()).await
 }
 
-async fn handshake(key: &Path, ticket: &Ticket) -> Result<(Endpoint, Control)> {
-    let ep = ywza_proto::bind(load_or_create_secret_key(key)?).await?;
+async fn handshake(key: &Path, ticket: &Ticket, relay: Option<&str>) -> Result<(Endpoint, Control)> {
+    let key = load_or_create_secret_key(key)?;
+    let ep = ywza_proto::bind(key, relay).await?;
     let mut c = connect(&ep, ticket).await?;
     let hello = ClientMsg::Hello {
         client_name: "ywza-cli".into(),

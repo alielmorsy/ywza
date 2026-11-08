@@ -12,6 +12,8 @@ pub enum Error {
     Closed,
     #[error("transport: {0}")]
     Transport(Box<dyn std::error::Error + Send + Sync>),
+    #[error("bad relay url `{0}`: {1}")]
+    RelayUrl(String, String),
     #[error("bad ticket: {0}")]
     Ticket(String),
     #[error("wrong pairing code")]

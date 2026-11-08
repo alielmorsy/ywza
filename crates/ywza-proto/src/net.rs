@@ -4,11 +4,11 @@ use data_encoding::BASE64URL_NOPAD;
 use iroh::{
     dns::{DnsResolver, FallbackMode},
     endpoint::{presets, Connection, Incoming, RecvStream, SendStream},
-    Endpoint, EndpointAddr, SecretKey,
+    Endpoint, EndpointAddr, RelayMap, RelayMode, RelayUrl, SecretKey,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::Error;
+use crate::{with_relay, Error};
 
 /// ALPN of the ywza control protocol.
 pub const ALPN: &[u8] = b"ywza/1";
@@ -54,15 +54,28 @@ pub fn dns_resolver() -> DnsResolver {
         .build()
 }
 
-/// Binds an endpoint with the n0 defaults (public relays and address lookup) that accepts [`ALPN`].
-pub async fn bind(secret_key: SecretKey) -> Result<Endpoint, Error> {
-    Endpoint::builder(presets::N0)
+/// The custom relay for a configured `relay_url` (a `#pin=` suffix is ignored here); `None`
+/// keeps the public n0 relays.
+pub fn relay_mode(relay: Option<&str>) -> Result<Option<RelayMode>, Error> {
+    relay
+        .map(|s| {
+            let url: RelayUrl = crate::split_pin(s)?
+                .0
+                .parse()
+                .map_err(|e: iroh::RelayUrlParseError| Error::RelayUrl(s.into(), e.to_string()))?;
+            Ok(RelayMode::Custom(RelayMap::from(url)))
+        })
+        .transpose()
+}
+
+/// Binds an endpoint with the n0 defaults (public relays and address lookup, or the custom
+/// `relay`) that accepts [`ALPN`].
+pub async fn bind(secret_key: SecretKey, relay: Option<&str>) -> Result<Endpoint, Error> {
+    let b = Endpoint::builder(presets::N0)
         .secret_key(secret_key)
         .dns_resolver(dns_resolver())
-        .alpns(vec![ALPN.to_vec()])
-        .bind()
-        .await
-        .map_err(Error::transport)
+        .alpns(vec![ALPN.to_vec()]);
+    with_relay(b, relay)?.bind().await.map_err(Error::transport)
 }
 
 /// Dials the ticket's agent and opens the control stream.
@@ -95,6 +108,19 @@ mod tests {
     fn addr() -> EndpointAddr {
         EndpointAddr::new(SecretKey::generate().public())
             .with_ip_addr("192.168.1.5:4433".parse().unwrap())
+    }
+
+    #[test]
+    fn relay_mode_parses_or_reports_the_bad_url() {
+        assert!(relay_mode(None).unwrap().is_none());
+        assert!(matches!(
+            relay_mode(Some("https://relay.example.com")),
+            Ok(Some(RelayMode::Custom(_)))
+        ));
+        assert!(matches!(
+            relay_mode(Some("not a url")),
+            Err(Error::RelayUrl(..))
+        ));
     }
 
     #[test]

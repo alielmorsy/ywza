@@ -23,6 +23,9 @@ pub struct PairInfo {
     pub node_id: EndpointId,
     pub name: String,
     pub addr: Option<EndpointAddr>,
+    /// The agent's `relay_url` (with its `#pin=`), so the paired device dials through it too.
+    #[serde(default)]
+    pub relay: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -162,6 +165,7 @@ mod tests {
             addr: addr.then(|| {
                 EndpointAddr::new(id).with_ip_addr("10.0.0.2:4433".parse().unwrap())
             }),
+            relay: None,
         }
     }
 

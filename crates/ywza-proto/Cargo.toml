@@ -9,6 +9,7 @@ data-encoding = "2"
 dirs = "7"
 hmac = "0.12"
 iroh = "1.4.1"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
@@ -18,5 +19,6 @@ tokio = { version = "1", features = ["io-util"] }
 uuid = { version = "1", features = ["serde", "v4"] }
 
 [dev-dependencies]
+tempfile = "3"
 tokio = { version = "1", features = ["macros", "rt", "time"] }
 toml = "0.8"

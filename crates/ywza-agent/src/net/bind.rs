@@ -20,17 +20,22 @@ pub fn saved_port(path: &Path) -> u16 {
 /// Binds the agent's endpoint. Remote-reachable agents reuse the UDP port saved in
 /// `<dir>/agent.port`, so the direct addresses in paired tickets survive restarts: clients
 /// reconnect on a LAN even when no relay or address lookup is reachable.
-pub async fn bind(key: SecretKey, local_only: bool, dir: &Path) -> anyhow::Result<Endpoint> {
+pub async fn bind(
+    key: SecretKey,
+    local_only: bool,
+    dir: &Path,
+    relay: Option<&str>,
+) -> anyhow::Result<Endpoint> {
     if local_only {
         return loopback(key, ALPN).await;
     }
     let path = dir.join("agent.port");
     let saved = saved_port(&path);
-    let ep = match bind_port(key.clone(), saved).await {
+    let ep = match bind_port(key.clone(), saved, relay).await {
         Ok(ep) => ep,
         Err(e) if saved != 0 => {
             eprintln!("ywza-agent: UDP port {saved} unavailable ({e:#}); taking a new one");
-            bind_port(key, 0).await?
+            bind_port(key, 0, relay).await?
         }
         Err(e) => return Err(e),
     };
@@ -40,10 +45,15 @@ pub async fn bind(key: SecretKey, local_only: bool, dir: &Path) -> anyhow::Resul
     Ok(ep)
 }
 
-/// The n0 defaults (public relays, address lookup) with the IP sockets on `port` (0 = random).
-async fn bind_port(key: SecretKey, port: u16) -> anyhow::Result<Endpoint> {
-    Ok(Endpoint::builder(presets::N0)
-        .secret_key(key)
+/// The n0 defaults (public relays unless `relay` is set, address lookup) with the IP sockets on
+/// `port` (0 = random).
+async fn bind_port(
+    key: SecretKey,
+    port: u16,
+    relay: Option<&str>,
+) -> anyhow::Result<Endpoint> {
+    let b = ywza_proto::with_relay(Endpoint::builder(presets::N0), relay)?;
+    Ok(b.secret_key(key)
         .alpns(vec![ALPN.to_vec()])
         .dns_resolver(ywza_proto::dns_resolver())
         .clear_ip_transports()
@@ -57,12 +67,16 @@ async fn bind_port(key: SecretKey, port: u16) -> anyhow::Result<Endpoint> {
 }
 
 /// The short-lived endpoint a pairing code is found at: n0 discovery, any port.
-pub async fn bind_rendezvous(key: SecretKey, local_only: bool) -> anyhow::Result<Endpoint> {
+pub async fn bind_rendezvous(
+    key: SecretKey,
+    local_only: bool,
+    relay: Option<&str>,
+) -> anyhow::Result<Endpoint> {
     if local_only {
         return loopback(key, PAIR_ALPN).await;
     }
-    Ok(Endpoint::builder(presets::N0)
-        .secret_key(key)
+    let b = ywza_proto::with_relay(Endpoint::builder(presets::N0), relay)?;
+    Ok(b.secret_key(key)
         .alpns(vec![PAIR_ALPN.to_vec()])
         .dns_resolver(ywza_proto::dns_resolver())
         .bind()

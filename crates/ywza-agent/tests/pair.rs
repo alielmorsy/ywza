@@ -29,6 +29,7 @@ async fn try_pair(
         node_id: client.id(),
         name: "phone".into(),
         addr: None,
+        relay: None,
     };
     let r = client_side(&mut send, &mut recv, code, me).await;
     conn.close(0u32.into(), b"done");
