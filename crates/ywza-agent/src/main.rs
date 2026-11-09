@@ -1,4 +1,4 @@
-//! `ywza-agent [-v|-vv|-q] [run|pair|ticket|service]`
+//! `ywza-agent [-v|-vv|-q] [--log-file <path>] [run|pair|ticket|service]`
 //!
 //! - `run` (default): the service.
 //! - `pair`: asks the running agent for a one-time 6-digit pairing code (via
@@ -10,6 +10,7 @@
 //!
 //! Logging: `-v` debug, `-vv` trace, `-q` warn beat `[log]` in config.toml; `RUST_LOG` beats both.
 //! `run` also writes daily files to `<config_dir>/logs` unless `[log] dir` says otherwise.
+//! `--log-file <path>` (any subcommand) appends to that one file instead; so does `[log] file`.
 
 use std::{path::PathBuf, time::Duration};
 
@@ -32,8 +33,37 @@ fn take_verbosity(args: &mut Vec<String>) -> Option<&'static str> {
     level
 }
 
+/// Removes `--log-file <path>` or `--log-file=<path>` from `args`; `Err` when the path is missing.
+fn take_log_file(args: &mut Vec<String>) -> Result<Option<PathBuf>, ()> {
+    let mut file = None;
+    let mut i = 0;
+    while i < args.len() {
+        if args[i] == "--log-file" {
+            args.remove(i);
+            if i >= args.len() {
+                return Err(());
+            }
+            file = Some(args.remove(i).into());
+        } else if let Some(p) = args[i].strip_prefix("--log-file=") {
+            file = Some(p.into());
+            args.remove(i);
+        } else {
+            i += 1;
+        }
+    }
+    Ok(file)
+}
+
+const USAGE: &str =
+    "usage: ywza-agent [-v|-vv|-q] [--log-file <path>] [run|pair|ticket|service [--user <name>]]";
+
 /// `[log]` from the config file for early init; a bad file is reported when the agent loads it.
-fn log_config(dir: &std::path::Path, flag: Option<&str>, file_logs: bool) -> LogConfig {
+fn log_config(
+    dir: &std::path::Path,
+    flag: Option<&str>,
+    log_file: Option<PathBuf>,
+    file_logs: bool,
+) -> LogConfig {
     let mut log = std::fs::read_to_string(dir.join("config.toml"))
         .ok()
         .and_then(|t| toml::from_str::<Config>(&t).ok())
@@ -42,8 +72,12 @@ fn log_config(dir: &std::path::Path, flag: Option<&str>, file_logs: bool) -> Log
     if let Some(level) = flag {
         log.level = level.into();
     }
-    if !file_logs {
+    if log_file.is_some() {
+        log.file = log_file;
         log.dir = None;
+    } else if !file_logs {
+        log.dir = None;
+        log.file = None;
     } else if log.dir.is_none() {
         log.dir = Some(dir.join("logs"));
     }
@@ -57,12 +91,16 @@ fn main() -> anyhow::Result<()> {
         std::process::exit(code);
     }
     let flag = take_verbosity(&mut args);
+    let Ok(log_file) = take_log_file(&mut args) else {
+        eprintln!("{USAGE}");
+        std::process::exit(2);
+    };
     let dir = ywza_proto::config_dir();
     let cmd = args.get(1).map_or("run", String::as_str).to_string();
-    let log = log_config(&dir, flag, cmd == "run");
+    let log = log_config(&dir, flag, log_file, cmd == "run");
     let _log_guard = ywza_proto::init_log(&log, "ywza-agent", "info").or_else(|e| {
         eprintln!("ywza-agent: {e}; logging to stderr only");
-        ywza_proto::init_log(&LogConfig { dir: None, ..log }, "ywza-agent", "info")
+        ywza_proto::init_log(&LogConfig { dir: None, file: None, ..log }, "ywza-agent", "info")
     })?;
     if args.get(1).map(String::as_str) == Some("service") {
         if let Some(result) = ywza_agent::platform::service(&args) {
@@ -93,7 +131,7 @@ fn main() -> anyhow::Result<()> {
             Ok(())
         }
         _ => {
-            eprintln!("usage: ywza-agent [-v|-vv|-q] [run|pair|ticket|service [--user <name>]]");
+            eprintln!("{USAGE}");
             std::process::exit(2);
         }
     }

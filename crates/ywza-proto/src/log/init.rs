@@ -1,6 +1,6 @@
 use tracing_appender::{
     non_blocking::WorkerGuard,
-    rolling::{Builder, Rotation},
+    rolling::{self, Builder, Rotation},
 };
 use tracing_subscriber::{fmt::writer::MakeWriterExt, EnvFilter};
 
@@ -30,8 +30,8 @@ fn directives(level: &str) -> String {
     format!("{others},{own}")
 }
 
-/// Installs the global subscriber: stderr always, plus daily files `<dir>/<prefix>.log.<date>`
-/// when `cfg.dir` is set. `RUST_LOG` beats `cfg.level`, which beats `default_level`. Keep the
+/// Installs the global subscriber: stderr always, plus `cfg.file` appended to, or else daily files
+/// `<dir>/<prefix>.log.<date>` when `cfg.dir` is set. `RUST_LOG` beats `cfg.level`, which beats `default_level`. Keep the
 /// returned guard alive to flush the file.
 pub fn init(
     cfg: &LogConfig,
@@ -45,8 +45,19 @@ pub fn init(
             .map_err(|e| Error::Log(format!("invalid log level {level:?}: {e}")))?,
     };
     let builder = tracing_subscriber::fmt().with_env_filter(filter);
-    let (guard, file) = match &cfg.dir {
-        Some(dir) => {
+    let (guard, file) = match (&cfg.file, &cfg.dir) {
+        (Some(path), _) => {
+            let parent = path.parent().filter(|p| !p.as_os_str().is_empty());
+            let parent = parent.unwrap_or(std::path::Path::new("."));
+            let name = path
+                .file_name()
+                .ok_or_else(|| Error::Log(format!("log file {} has no file name", path.display())))?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| Error::Log(format!("creating {}: {e}", parent.display())))?;
+            let (w, g) = tracing_appender::non_blocking(rolling::never(parent, name));
+            (Some(g), Some(w))
+        }
+        (None, Some(dir)) => {
             let appender = Builder::new()
                 .rotation(Rotation::DAILY)
                 .filename_prefix(format!("{file_prefix}.log"))
@@ -56,7 +67,7 @@ pub fn init(
             let (w, g) = tracing_appender::non_blocking(appender);
             (Some(g), Some(w))
         }
-        None => (None, None),
+        (None, None) => (None, None),
     };
     match (cfg.format, file) {
         (Format::Text, None) => builder.with_writer(std::io::stderr).init(),
