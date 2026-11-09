@@ -55,22 +55,6 @@ impl Tool for RunCommand {
     }
 }
 
-/// Wait for the given number of milliseconds (max 60000).
-#[derive(Deserialize, JsonSchema)]
-pub struct Wait {
-    ms: u64,
-}
-
-impl Tool for Wait {
-    const NAME: &'static str = "wait";
-
-    async fn run(self, _: &Ctx) -> ToolOutput {
-        let ms = self.ms.min(60_000);
-        tokio::time::sleep(Duration::from_millis(ms)).await;
-        ToolOutput::ok(format!("waited {ms} ms"))
-    }
-}
-
 /// Push a short progress message to the user's devices mid-task.
 #[derive(Deserialize, JsonSchema)]
 pub struct Notify {

@@ -77,8 +77,18 @@ pub async fn open(device: Option<&str>) -> Result<(Endpoint, Control)> {
 async fn handshake(key: &Path, ticket: &Ticket, relay: Option<&str>) -> Result<(Endpoint, Control)> {
     let key = load_or_create_secret_key(key)?;
     let ep = ywza_proto::bind(key, relay).await?;
+    match exchange(&ep, ticket).await {
+        Ok(c) => Ok((ep, c)),
+        Err(e) => {
+            shut(ep).await;
+            Err(e)
+        }
+    }
+}
+
+async fn exchange(ep: &Endpoint, ticket: &Ticket) -> Result<Control> {
     let start = Instant::now();
-    let mut c = connect(&ep, ticket).await?;
+    let mut c = connect(ep, ticket).await?;
     tracing::debug!(ms = start.elapsed().as_millis() as u64, "connected");
     let hello = ClientMsg::Hello {
         client_name: "ywza-cli".into(),
@@ -97,7 +107,7 @@ async fn handshake(key: &Path, ticket: &Ticket, relay: Option<&str>) -> Result<(
                 ms = start.elapsed().as_millis() as u64,
                 "handshake done"
             );
-            Ok((ep, c))
+            Ok(c)
         }
         AgentMsg::Error { message } => {
             tracing::debug!(%message, "agent refused the handshake");
@@ -120,5 +130,9 @@ pub async fn ask(c: &mut Control, msg: ClientMsg) -> Result<AgentMsg> {
 /// `bridge` must exit promptly so its client sees the drop and reconnects.
 pub async fn close(ep: Endpoint, c: &Control) {
     c.conn.close(0u32.into(), b"bye");
+    shut(ep).await;
+}
+
+pub async fn shut(ep: Endpoint) {
     let _ = tokio::time::timeout(std::time::Duration::from_secs(1), ep.close()).await;
 }

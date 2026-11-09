@@ -121,7 +121,7 @@ class Devices:
 
     def names(self):
         local = ["local"] if (self.dir / "agent.ticket").exists() else []
-        return local + sorted(p.stem for p in (self.dir / "devices").glob("*.ticket"))
+        return local + sorted(p.stem for p in (self.dir / "devices").glob("*.json"))
 
     def default(self):
         names = self.names()

@@ -17,6 +17,7 @@ mod schema;
 mod screen;
 mod terminal;
 mod util;
+mod wait;
 mod windows;
 
 use std::{future::Future, pin::Pin};
@@ -91,7 +92,7 @@ pub fn registry() -> Vec<Entry> {
         entry::<terminal::TermWrite>(),
         entry::<terminal::TermKeys>(),
         entry::<util::RunCommand>(),
-        entry::<util::Wait>(),
+        entry::<wait::Wait>(),
         entry::<util::Notify>(),
     ]
 }

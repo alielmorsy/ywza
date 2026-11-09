@@ -125,7 +125,7 @@ fn window(title: &str, rx: Receiver<Packet>, stop: &AtomicBool) -> Result<()> {
                     ..WindowOptions::default()
                 },
             )?;
-            x.limit_update_rate(Some(Duration::from_micros(16_600)));
+            x.set_target_fps(60);
             win = Some(x);
         }
         let Some(win) = win.as_mut() else { continue };

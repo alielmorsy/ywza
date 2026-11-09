@@ -1,13 +1,13 @@
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
-use iroh::EndpointAddr;
+use iroh::{Endpoint, EndpointAddr};
 use ywza_proto::{
     bind, client_side, config_dir, load_or_create_secret_key, rendezvous_key, Error, PairInfo,
     PAIR_ALPN,
 };
 
-use crate::connect::{device_file, devices_dir, relay_url};
+use crate::connect::{device_file, devices_dir, relay_url, shut};
 
 const RETRY: &str = "wrong or expired code, run `ywza-agent pair` again";
 
@@ -16,6 +16,12 @@ pub async fn run(code: &str, name: &str) -> Result<()> {
     let relay = relay_url()?;
     tracing::debug!(relay = relay.as_deref().unwrap_or("default"), "pairing: binding");
     let ep = bind(key, relay.as_deref()).await?;
+    let r = pair(&ep, code, name).await;
+    shut(ep).await;
+    r
+}
+
+async fn pair(ep: &Endpoint, code: &str, name: &str) -> Result<()> {
     let target = EndpointAddr::new(rendezvous_key(code).public());
     tracing::debug!("pairing: dialing the code's rendezvous endpoint");
     let conn = tokio::time::timeout(Duration::from_secs(30), ep.connect(target, PAIR_ALPN))
@@ -47,6 +53,5 @@ pub async fn run(code: &str, name: &str) -> Result<()> {
     std::fs::write(device_file(name), serde_json::to_string_pretty(&agent)?)?;
     println!("paired as `{name}`; use --device {name}");
     conn.close(0u32.into(), b"bye");
-    let _ = tokio::time::timeout(Duration::from_secs(1), ep.close()).await;
     Ok(())
 }

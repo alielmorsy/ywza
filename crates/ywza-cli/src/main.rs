@@ -111,6 +111,7 @@ async fn main() -> Result<()> {
     }
 
     let (ep, mut c) = connect::open(cli.device.as_deref()).await?;
+    let bridge = matches!(cli.cmd, Cmd::Bridge);
     let r = match cli.cmd {
         Cmd::Bridge => cmd::bridge::run(&mut c).await,
         Cmd::Prompt { text, session } => cmd::prompt::run(&mut c, text, session, cli.verbose).await,
@@ -126,6 +127,12 @@ async fn main() -> Result<()> {
         Cmd::Pair { .. } | Cmd::Devices => unreachable!(),
     };
     connect::close(ep, &c).await;
+    // Exit right here: tokio's stdin reader thread would block runtime shutdown until the
+    // client closes our stdin, so the client would never see EOF when the agent drops the
+    // link (e.g. a login-screen switch) and its call would hang.
+    if bridge {
+        std::process::exit(r.is_ok() as i32 ^ 1);
+    }
     r
 }
 

@@ -8,12 +8,9 @@ pub async fn run(c: &mut Control) -> Result<()> {
         r = tokio::io::copy(&mut stdin, &mut c.send) => r,
         r = tokio::io::copy(&mut c.recv, &mut stdout) => r,
     };
-    // Exit right here: tokio's stdin reader thread would block runtime shutdown until the
-    // client closes our stdin, so the client would never see EOF when the agent drops the
-    // link (e.g. a login-screen switch) and its call would hang.
     if let Err(e) = &r {
         tracing::error!(error = %e, "bridge stopped");
     }
-    c.conn.close(0u32.into(), b"bye");
-    std::process::exit(if r.is_ok() { 0 } else { 1 });
+    r?;
+    Ok(())
 }
