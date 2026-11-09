@@ -100,8 +100,15 @@ async fn serve(agent: Arc<Agent>, stream: TcpStream, token: &str) -> anyhow::Res
                 });
                 None
             }
-            // Need the iroh connection (live view).
-            Ok(ClientMsg::LiveStart { .. } | ClientMsg::LiveStop | ClientMsg::Input { .. }) => {
+            // Need the iroh connection (live view, file copy).
+            Ok(
+                ClientMsg::LiveStart { .. }
+                | ClientMsg::LiveStop
+                | ClientMsg::Input { .. }
+                | ClientMsg::Pull { .. }
+                | ClientMsg::Push { .. }
+                | ClientMsg::PushEnd { .. },
+            ) => {
                 Some(AgentMsg::Error {
                     message: "not available on the local TCP port".into(),
                 })

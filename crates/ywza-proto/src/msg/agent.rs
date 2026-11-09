@@ -65,6 +65,30 @@ pub enum AgentMsg {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         png_base64: Option<String>,
     },
+    /// A pull started: the source's file name and the totals about to be sent.
+    XferStart {
+        xfer: u64,
+        name: String,
+        files: u64,
+        bytes: u64,
+    },
+    /// The agent accepts the push's entry streams.
+    XferReady {
+        xfer: u64,
+    },
+    /// Every entry stream was handled (`files` of them, failed ones included).
+    XferDone {
+        xfer: u64,
+        files: u64,
+        bytes: u64,
+    },
+    /// One entry failed (`path`), or with `path` absent the whole transfer, which ends here.
+    XferError {
+        xfer: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        path: Option<String>,
+        message: String,
+    },
     Error {
         message: String,
     },
@@ -172,6 +196,32 @@ mod tests {
                 png_base64: None,
             },
             json!({"type":"tool_result","call":4,"ok":true,"text":"t"}),
+        );
+        check(
+            XferStart {
+                xfer: 1,
+                name: "d".into(),
+                files: 2,
+                bytes: 3,
+            },
+            json!({"type":"xfer_start","xfer":1,"name":"d","files":2,"bytes":3}),
+        );
+        check(XferReady { xfer: 1 }, json!({"type":"xfer_ready","xfer":1}));
+        check(
+            XferDone {
+                xfer: 1,
+                files: 2,
+                bytes: 3,
+            },
+            json!({"type":"xfer_done","xfer":1,"files":2,"bytes":3}),
+        );
+        check(
+            XferError {
+                xfer: 1,
+                path: Some("a".into()),
+                message: "m".into(),
+            },
+            json!({"type":"xfer_error","xfer":1,"path":"a","message":"m"}),
         );
         check(
             Error {

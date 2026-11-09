@@ -82,6 +82,7 @@ async fn serve_client(agent: Arc<Agent>, incoming: Incoming) -> anyhow::Result<(
         client_name.clone(),
         direct.clone(),
     );
+    let pushes = tokio::spawn(client.pushes.clone().accept(c.conn.clone(), direct.clone()));
 
     loop {
         let frame = tokio::select! {
@@ -146,5 +147,6 @@ async fn serve_client(agent: Arc<Agent>, incoming: Incoming) -> anyhow::Result<(
     drop(direct);
     reader.abort();
     writer.abort();
+    pushes.abort();
     Ok(())
 }

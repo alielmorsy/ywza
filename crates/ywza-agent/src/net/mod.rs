@@ -8,6 +8,7 @@ mod peer;
 mod relay_log;
 mod request;
 mod writer;
+mod xfer;
 
 pub use accept::accept_loop;
 pub use bind::{bind, bind_rendezvous, local_addr, saved_port};

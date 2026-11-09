@@ -50,7 +50,7 @@ impl Permissions {
         let (ok, name) = match msg {
             Hello { .. } => return None,
             Screenshot { .. } | LiveStart { .. } | LiveStop => (self.view, "view"),
-            Input { .. } => (self.control, "control"),
+            Input { .. } | Pull { .. } | Push { .. } | PushEnd { .. } => (self.control, "control"),
             Prompt { .. } | Cancel { .. } | ListSessions | GetSession { .. } => (self.chat, "chat"),
             ListTools | CallTool { .. } => (self.tools, "tools"),
             GetConfig | SetConfig { .. } | CreatePairing => (self.settings, "settings"),

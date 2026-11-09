@@ -1,5 +1,6 @@
 pub mod bridge;
 pub mod config;
+pub mod cp;
 pub mod devices;
 pub mod live;
 pub mod pair;

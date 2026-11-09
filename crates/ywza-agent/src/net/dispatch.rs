@@ -1,4 +1,4 @@
-//! One connected client's messages: live view, input, pairing, tool calls.
+//! One connected client's messages: live view, input, pairing, tool calls, file copy.
 
 use std::{future::Future, sync::Arc};
 
@@ -6,6 +6,7 @@ use iroh::endpoint::Connection;
 use tokio::sync::mpsc::UnboundedSender;
 use ywza_proto::{AgentMsg, ClientMsg, InputEvent, SessionId};
 
+use super::xfer::{self, Pushes};
 use crate::{live::Live, mcp, net::pair, Agent};
 
 pub struct Client {
@@ -17,6 +18,7 @@ pub struct Client {
     live: Option<Live>,
     /// Created on the first `call_tool`, so its calls show up as one session.
     mcp: Option<SessionId>,
+    pub pushes: Pushes,
 }
 
 impl Client {
@@ -33,6 +35,7 @@ impl Client {
             direct,
             live: None,
             mcp: None,
+            pushes: Pushes::default(),
         }
     }
 
@@ -74,6 +77,25 @@ impl Client {
                     .mcp
                     .get_or_insert_with(|| mcp::session(&agent, &self.name));
                 self.reply_later(async move { mcp::call_tool(&agent, sid, call, name, args).await });
+            }
+            ClientMsg::Pull {
+                xfer,
+                path,
+                recursive,
+            } => {
+                tokio::spawn(xfer::pull(
+                    self.conn.clone(),
+                    xfer,
+                    path,
+                    recursive,
+                    self.direct.clone(),
+                ));
+            }
+            ClientMsg::Push { xfer, dest, name } => self.send(self.pushes.start(xfer, &dest, &name)),
+            ClientMsg::PushEnd { xfer, files } => {
+                if let Some(reply) = self.pushes.end(xfer, files) {
+                    self.send(reply);
+                }
             }
             ClientMsg::Screenshot { target } => {
                 let agent = self.agent.clone();

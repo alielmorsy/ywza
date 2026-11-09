@@ -67,6 +67,15 @@ enum Cmd {
         #[arg(long, default_value_t = 0)]
         monitor: u32,
     },
+    /// Copy files and folders: `ywza cp -r vm:/home/vm/folder E:\files`. A `device:` prefix
+    /// names a paired device; a bare path is on this machine. The last path is the destination.
+    Cp {
+        /// Copy folders and everything in them.
+        #[arg(short, long)]
+        recursive: bool,
+        #[arg(required = true, num_args = 2..)]
+        paths: Vec<String>,
+    },
     #[command(subcommand)]
     Config(ConfigCmd),
     /// After the handshake, pipe raw protocol frames between stdin/stdout and the agent
@@ -107,6 +116,7 @@ async fn main() -> Result<()> {
     match &cli.cmd {
         Cmd::Devices => return cmd::devices::run(),
         Cmd::Pair { code, name } => return cmd::pair::run(code, name).await,
+        Cmd::Cp { recursive, paths } => return cmd::cp::run(paths, *recursive).await,
         _ => {}
     }
 
@@ -124,7 +134,7 @@ async fn main() -> Result<()> {
         } => cmd::screenshot::run(&mut c, monitor, window, output).await,
         Cmd::Live { monitor } => cmd::live::run(&mut c, cli.device.as_deref(), monitor).await,
         Cmd::Config(sub) => cmd::config::run(&mut c, sub).await,
-        Cmd::Pair { .. } | Cmd::Devices => unreachable!(),
+        Cmd::Pair { .. } | Cmd::Devices | Cmd::Cp { .. } => unreachable!(),
     };
     connect::close(ep, &c).await;
     // Exit right here: tokio's stdin reader thread would block runtime shutdown until the

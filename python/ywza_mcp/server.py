@@ -1,5 +1,6 @@
 import json
 import sys
+from .files import COPY, copy
 from .local import YwzaError
 
 DEVICE_ARG = {
@@ -29,7 +30,7 @@ def mcp_result(devs, method, params):
     if method == "ping":
         return {}
     if method == "tools/list":
-        tools = [LIST_DEVICES]
+        tools = [LIST_DEVICES, COPY]
         for t in devs.tools():
             schema = t["parameters"]
             props = {**schema.get("properties", {}), "device": DEVICE_ARG}
@@ -48,6 +49,12 @@ def mcp_result(devs, method, params):
                 "content": [{"type": "text", "text": "\n".join(lines) or "no devices"}],
                 "isError": False,
             }
+        if params["name"] == "copy":
+            try:
+                ok, text = copy(args.get("src", ""), args.get("dst", ""), devs.names(), devs.cli)
+            except OSError as e:
+                ok, text = False, str(e)
+            return {"content": [{"type": "text", "text": text}], "isError": not ok}
         try:
             y = devs.get(args.pop("device", None))
         except YwzaError as e:

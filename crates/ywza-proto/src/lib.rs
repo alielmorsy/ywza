@@ -9,6 +9,7 @@ mod net;
 pub mod pair;
 mod paths;
 mod relay_trust;
+pub mod xfer;
 
 pub use config::{Config, Desktop, Llm, Ocr, OcrEngine, Peer, Permissions, Stream};
 pub use error::Error;
@@ -17,7 +18,7 @@ pub use frame::{read_frame, write_frame, MAX_FRAME};
 pub use log::init as init_log;
 pub use log::{Format, LogConfig};
 pub use msg::{
-    AgentMsg, ClientMsg, FrameHeader, InputEvent, MouseButton, SessionEvent, SessionId,
+    AgentMsg, ClientMsg, FileHeader, FrameHeader, InputEvent, MouseButton, SessionEvent, SessionId,
     SessionStatus, SessionSummary, Target, ToolInfo,
 };
 pub use net::{accept_control, bind, connect, dns_resolver, relay_mode, Control, Ticket, ALPN};

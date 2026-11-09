@@ -74,6 +74,27 @@ pub async fn open(device: Option<&str>) -> Result<(Endpoint, Control)> {
     handshake(&dir.join(key), &ticket, relay.as_deref()).await
 }
 
+/// One endpoint (`cli.key`) for talking to several paired devices; the first paired relay wins.
+pub async fn bind_devices(names: &[&str]) -> Result<Endpoint> {
+    let mut relay = None;
+    for name in names {
+        if relay.is_none() {
+            relay = load_device(name)?.1;
+        }
+    }
+    let relay = match relay {
+        Some(r) => Some(r),
+        None => relay_url()?,
+    };
+    let key = load_or_create_secret_key(&config_dir().join("cli.key"))?;
+    Ok(ywza_proto::bind(key, relay.as_deref()).await?)
+}
+
+/// Connects to a paired device on `ep` and completes the handshake.
+pub async fn dial(ep: &Endpoint, name: &str) -> Result<Control> {
+    exchange(ep, &load_device(name)?.0).await
+}
+
 async fn handshake(key: &Path, ticket: &Ticket, relay: Option<&str>) -> Result<(Endpoint, Control)> {
     let key = load_or_create_secret_key(key)?;
     let ep = ywza_proto::bind(key, relay).await?;

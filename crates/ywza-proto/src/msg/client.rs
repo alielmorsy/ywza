@@ -51,6 +51,26 @@ pub enum ClientMsg {
         #[serde(default)]
         args: Value,
     },
+    /// Sends `path` (relative and `~` paths are under the agent user's home): `XferStart`,
+    /// one uni stream per entry, then `XferDone`.
+    Pull {
+        xfer: u64,
+        path: String,
+        #[serde(default)]
+        recursive: bool,
+    },
+    /// Readies `dest` for the entry streams of `xfer` (`name` is the source's file name),
+    /// answered with `XferReady`.
+    Push {
+        xfer: u64,
+        dest: String,
+        name: String,
+    },
+    /// The client opened all `files` streams of a push; `XferDone` follows once they are written.
+    PushEnd {
+        xfer: u64,
+        files: u64,
+    },
 }
 
 impl ClientMsg {
@@ -71,6 +91,9 @@ impl ClientMsg {
             Self::CreatePairing => "create_pairing",
             Self::ListTools => "list_tools",
             Self::CallTool { .. } => "call_tool",
+            Self::Pull { .. } => "pull",
+            Self::Push { .. } => "push",
+            Self::PushEnd { .. } => "push_end",
         }
     }
 }
@@ -147,6 +170,26 @@ mod tests {
                 args: json!({"ms":1}),
             },
             json!({"type":"call_tool","call":4,"name":"wait","args":{"ms":1}}),
+        );
+        check(
+            Pull {
+                xfer: 2,
+                path: "~/d".into(),
+                recursive: true,
+            },
+            json!({"type":"pull","xfer":2,"path":"~/d","recursive":true}),
+        );
+        check(
+            Push {
+                xfer: 2,
+                dest: "/tmp".into(),
+                name: "d".into(),
+            },
+            json!({"type":"push","xfer":2,"dest":"/tmp","name":"d"}),
+        );
+        check(
+            PushEnd { xfer: 2, files: 3 },
+            json!({"type":"push_end","xfer":2,"files":3}),
         );
         check(
             Input {

@@ -66,7 +66,10 @@ impl Agent {
             | ClientMsg::LiveStart { .. }
             | ClientMsg::LiveStop
             | ClientMsg::Input { .. }
-            | ClientMsg::CallTool { .. } => err("not handled here"),
+            | ClientMsg::CallTool { .. }
+            | ClientMsg::Pull { .. }
+            | ClientMsg::Push { .. }
+            | ClientMsg::PushEnd { .. } => err("not handled here"),
         }
     }
 

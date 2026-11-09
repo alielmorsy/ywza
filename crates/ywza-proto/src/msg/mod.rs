@@ -2,11 +2,13 @@ mod agent;
 mod client;
 mod session;
 mod stream;
+mod xfer;
 
 pub use agent::{AgentMsg, ToolInfo};
 pub use client::ClientMsg;
 pub use session::{SessionEvent, SessionId, SessionStatus, SessionSummary};
 pub use stream::{FrameHeader, InputEvent, MouseButton, Target};
+pub use xfer::FileHeader;
 
 #[cfg(test)]
 pub(crate) mod testutil {
