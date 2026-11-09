@@ -4,7 +4,7 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::{
-    self, Atom, ClientMessageEvent, ConfigureWindowAux, ConnectionExt as _, EventMask, StackMode,
+    self, Atom, AtomEnum, ClientMessageEvent, ConfigureWindowAux, ConnectionExt as _, EventMask, StackMode,
     Window,
 };
 use x11rb::CURRENT_TIME;
@@ -53,10 +53,13 @@ impl X {
     fn close_window(&self, id: WindowId) -> Result<()> {
         self.window_info(id)?;
         let w = id as Window;
-        if self.supported(self.a._NET_CLOSE_WINDOW) {
+        let deletable = self
+            .prop32(w, self.a.WM_PROTOCOLS, AtomEnum::ATOM)
+            .contains(&self.a.WM_DELETE_WINDOW);
+        if !deletable && self.supported(self.a._NET_CLOSE_WINDOW) {
             return self.client_message(w, self.a._NET_CLOSE_WINDOW, [CURRENT_TIME, 2, 0, 0, 0]);
         }
-        // No EWMH window manager: ask politely through ICCCM.
+        // Deliver the ICCCM close request straight to the client; window managers may drop the EWMH one.
         let ev = ClientMessageEvent::new(
             32,
             w,
