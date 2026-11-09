@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
+    time::Instant,
 };
 
 use serde_json::Value;
@@ -66,10 +67,20 @@ impl Ctx {
 
     /// Runs a registered tool by name; unknown names and bad arguments are error outputs.
     pub async fn call(&self, name: &str, args: Value) -> ToolOutput {
-        match self.shared.entries.iter().find(|e| e.name == name) {
-            Some(e) => (e.call)(args, self).await,
-            None => ToolOutput::err(format!("unknown tool `{name}`")),
-        }
+        let Some(e) = self.shared.entries.iter().find(|e| e.name == name) else {
+            tracing::warn!(tool = name, "unknown tool");
+            return ToolOutput::err(format!("unknown tool `{name}`"));
+        };
+        let start = Instant::now();
+        let out = (e.call)(args, self).await;
+        tracing::debug!(
+            tool = name,
+            ms = start.elapsed().as_millis() as u64,
+            ok = out.ok,
+            quiet = self.quiet,
+            "tool call"
+        );
+        out
     }
 }
 

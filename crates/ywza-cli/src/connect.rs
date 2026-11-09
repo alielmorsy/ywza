@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    time::Instant,
+};
 
 use anyhow::{anyhow, bail, Context, Result};
 use iroh::{Endpoint, EndpointAddr};
@@ -29,7 +32,9 @@ pub fn relay_url() -> Result<Option<String>> {
 
 /// The device's ticket and the relay it was paired with, if any.
 fn load_device(name: &str) -> Result<(Ticket, Option<String>)> {
-    let text = std::fs::read_to_string(device_file(name))
+    let file = device_file(name);
+    tracing::debug!(device = name, file = %file.display(), "resolving the paired device");
+    let text = std::fs::read_to_string(&file)
         .with_context(|| format!("no paired device `{name}` (see `ywza devices`, `ywza pair`)"))?;
     let info: PairInfo = serde_json::from_str(&text).with_context(|| format!("device `{name}` file"))?;
     let addr = info.addr.unwrap_or_else(|| EndpointAddr::new(info.node_id));
@@ -38,6 +43,7 @@ fn load_device(name: &str) -> Result<(Ticket, Option<String>)> {
 
 fn load_local() -> Result<Ticket> {
     let path = config_dir().join("agent.ticket");
+    tracing::debug!(file = %path.display(), "resolving the local agent");
     let text = std::fs::read_to_string(&path)
         .with_context(|| format!("no {} (has ywza-agent run here?)", path.display()))?;
     Ok(text.parse()?)
@@ -58,21 +64,45 @@ pub async fn open(device: Option<&str>) -> Result<(Endpoint, Control)> {
         Some(r) => Some(r),
         None => relay_url()?,
     };
+    tracing::debug!(
+        device = device.unwrap_or("local"),
+        key,
+        relay = relay.as_deref().unwrap_or("default"),
+        agent = %ticket.addr.id,
+        "connecting"
+    );
     handshake(&dir.join(key), &ticket, relay.as_deref()).await
 }
 
 async fn handshake(key: &Path, ticket: &Ticket, relay: Option<&str>) -> Result<(Endpoint, Control)> {
     let key = load_or_create_secret_key(key)?;
     let ep = ywza_proto::bind(key, relay).await?;
+    let start = Instant::now();
     let mut c = connect(&ep, ticket).await?;
+    tracing::debug!(ms = start.elapsed().as_millis() as u64, "connected");
     let hello = ClientMsg::Hello {
         client_name: "ywza-cli".into(),
         token: None,
     };
     write_frame(&mut c.send, &hello).await?;
     match read_frame(&mut c.recv).await? {
-        AgentMsg::Welcome { .. } => Ok((ep, c)),
-        AgentMsg::Error { message } => bail!("agent: {message}"),
+        AgentMsg::Welcome {
+            agent_version,
+            permissions,
+            ..
+        } => {
+            tracing::debug!(
+                %agent_version,
+                ?permissions,
+                ms = start.elapsed().as_millis() as u64,
+                "handshake done"
+            );
+            Ok((ep, c))
+        }
+        AgentMsg::Error { message } => {
+            tracing::debug!(%message, "agent refused the handshake");
+            bail!("agent: {message}")
+        }
         other => bail!("expected welcome, got {other:?}"),
     }
 }

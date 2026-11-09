@@ -30,10 +30,16 @@ impl Agent {
                 config: self.config.get().masked(),
             }),
             ClientMsg::SetConfig { config } => match self.config.set(config) {
-                Ok(()) => Some(AgentMsg::Config {
-                    config: self.config.get().masked(),
-                }),
-                Err(e) => err(&format!("saving config: {e}")),
+                Ok(()) => {
+                    tracing::debug!("settings changed by a client");
+                    Some(AgentMsg::Config {
+                        config: self.config.get().masked(),
+                    })
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "saving config failed");
+                    err(&format!("saving config: {e}"))
+                }
             },
             ClientMsg::ListSessions => Some(AgentMsg::Sessions {
                 list: self.sessions.list(),
@@ -75,7 +81,12 @@ impl Agent {
         history.push(llm::Msg::new(
             serde_json::json!({"role":"user","content":text}),
         ));
+        tracing::info!(session = %sid.0, prompt_chars = text.chars().count(), "session started");
         let result = llm::run(&self, sid, &mut history, &cancel).await;
+        match &result {
+            Ok(_) => tracing::info!(session = %sid.0, "session finished"),
+            Err(e) => tracing::info!(session = %sid.0, error = %e, "session ended with an error"),
+        }
         // Free the session before announcing the end, so an immediate follow-up prompt is accepted.
         self.sessions.finish(sid, history);
         self.emit(

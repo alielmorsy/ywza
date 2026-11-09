@@ -18,4 +18,5 @@ openh264 = "0.9"
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-util", "io-std", "time"] }
 toml = "0.8"
-ywza-proto = { path = "../ywza-proto" }
+tracing = "0.1"
+ywza-proto = { path = "../ywza-proto", features = ["log"] }

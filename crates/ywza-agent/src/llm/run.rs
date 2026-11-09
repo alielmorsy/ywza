@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use data_encoding::BASE64;
 use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
@@ -19,11 +21,25 @@ pub async fn run(
         history.insert(0, Msg::new(json!({"role":"system","content":prompt})));
     }
     let llm = agent.config.get().llm;
-    for _ in 0..llm.max_steps {
+    for step in 0..llm.max_steps {
+        let started = Instant::now();
         let msg = tokio::select! {
-            r = complete(&agent.http, &llm, &agent.tools, history) => r?,
+            r = complete(&agent.http, &llm, &agent.tools, history) => match r {
+                Ok(m) => m,
+                Err(e) => {
+                    tracing::error!(session = %sid.0, error = %e, "LLM request failed");
+                    return Err(e);
+                }
+            },
             _ = cancel.cancelled() => return Err("cancelled".into()),
         };
+        tracing::debug!(
+            session = %sid.0,
+            step,
+            model = %llm.model,
+            ms = started.elapsed().as_millis() as u64,
+            "LLM request"
+        );
         let text = msg["content"].as_str().unwrap_or_default().to_string();
         let calls = msg["tool_calls"].as_array().cloned().unwrap_or_default();
         let mut stored = json!({"role":"assistant","content":msg["content"].clone()});
@@ -49,7 +65,10 @@ pub async fn run(
             } else {
                 let raw = call["function"]["arguments"].as_str().unwrap_or("{}");
                 match serde_json::from_str::<Value>(raw) {
-                    Err(e) => ToolOutput::err(format!("arguments are not valid JSON: {e}")),
+                    Err(e) => {
+                        tracing::warn!(session = %sid.0, tool = name, error = %e, "tool arguments are not valid JSON");
+                        ToolOutput::err(format!("arguments are not valid JSON: {e}"))
+                    }
                     Ok(args) => {
                         agent.emit_tool_call(sid, &id, name, &args);
                         tokio::select! {
@@ -76,5 +95,6 @@ pub async fn run(
             history.push(Msg::new(json!({"role":"user","content":content})));
         }
     }
+    tracing::warn!(session = %sid.0, max_steps = llm.max_steps, "step limit reached");
     Err(format!("step limit ({}) reached", llm.max_steps))
 }

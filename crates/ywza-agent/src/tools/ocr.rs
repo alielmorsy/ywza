@@ -29,6 +29,7 @@ pub async fn snapshot_with_ocr(
     let mut lines = ocr_lines(w, engine(ocr, accurate)).await;
     if lines.is_err() && accurate {
         // Paddle may not be built in; the configured engine is better than nothing.
+        tracing::warn!("accurate OCR failed, using the configured engine");
         lines = ocr_lines(w, engine(ocr, false)).await;
     }
     let note = match lines {
@@ -37,7 +38,10 @@ pub async fn snapshot_with_ocr(
             carry_ocr_ids(prev.as_ref(), &mut snap);
             String::new()
         }
-        Err(e) => format!("(OCR unavailable: {e})\n"),
+        Err(e) => {
+            tracing::warn!(error = %e, "OCR unavailable");
+            format!("(OCR unavailable: {e})\n")
+        }
     };
     Ok((snap, note))
 }
@@ -123,6 +127,7 @@ pub async fn check_ocr(w: WindowId, rect: Rect, want: String, ocr: OcrEngine) ->
     if ocr_matches(&norm(&got), &norm(&want)) {
         Ok(())
     } else {
+        tracing::warn!(want = %want, got = %got.trim(), "OCR element text changed");
         Err(format!("text there is now {:?}", got.trim()))
     }
 }

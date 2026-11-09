@@ -31,7 +31,7 @@ fn greeter_session() -> Option<String> {
 
 pub fn activate_greeter() {
     if let Some(g) = greeter_session() {
-        eprintln!("ywza-agent service: no active session, activating greeter {g}");
+        tracing::info!(greeter = %g, "service: no active session, activating the greeter");
         let _ = Command::new("loginctl").args(["activate", &g]).status();
     }
 }

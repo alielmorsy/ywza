@@ -13,6 +13,16 @@ pub enum CertMode {
     SelfSigned,
 }
 
+impl CertMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Letsencrypt => "letsencrypt",
+            Self::Manual => "manual",
+            Self::SelfSigned => "self-signed",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -36,7 +46,7 @@ pub struct Config {
     #[serde(default = "yes")]
     pub quic_addr_discovery: bool,
     #[serde(default)]
-    pub log: crate::log::LogConfig,
+    pub log: ywza_proto::LogConfig,
 }
 
 fn default_cert_dir() -> PathBuf {

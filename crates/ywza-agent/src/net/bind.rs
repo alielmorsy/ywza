@@ -31,10 +31,11 @@ pub async fn bind(
     }
     let path = dir.join("agent.port");
     let saved = saved_port(&path);
+    tracing::debug!(saved_port = saved, relay = relay.unwrap_or("default"), "binding the endpoint");
     let ep = match bind_port(key.clone(), saved, relay).await {
         Ok(ep) => ep,
         Err(e) if saved != 0 => {
-            eprintln!("ywza-agent: UDP port {saved} unavailable ({e:#}); taking a new one");
+            tracing::warn!(port = saved, error = %format!("{e:#}"), "saved UDP port unavailable, taking a new one");
             bind_port(key, 0, relay).await?
         }
         Err(e) => return Err(e),

@@ -12,7 +12,7 @@ const EVERY: Duration = Duration::from_millis(50);
 pub fn watch(ctl: &Ctl, to_client: &mpsc::UnboundedSender<AgentMsg>) {
     let mut w = match ywza_desktop::CursorWatch::new() {
         Ok(w) => w,
-        Err(e) => return eprintln!("ywza-agent: cursor shape: {e}"),
+        Err(e) => return tracing::warn!(error = %e, "cursor shape unavailable"),
     };
     while !ctl.stop.load(Ordering::Relaxed) {
         if let Ok(Some(s)) = w.poll() {

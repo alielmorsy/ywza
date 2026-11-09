@@ -6,6 +6,8 @@ mod stream;
 
 use serde::{Deserialize, Serialize};
 
+use crate::LogConfig;
+
 pub use desktop::Desktop;
 pub use llm::Llm;
 pub use ocr::{Ocr, OcrEngine};
@@ -29,6 +31,7 @@ pub struct Config {
     pub ocr: Ocr,
     pub desktop: Desktop,
     pub stream: Stream,
+    pub log: LogConfig,
 }
 
 impl Config {

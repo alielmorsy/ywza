@@ -20,7 +20,7 @@ pub async fn accept_loop(agent: Arc<Agent>) {
         let agent = agent.clone();
         tokio::spawn(async move {
             if let Err(e) = serve_client(agent, incoming).await {
-                eprintln!("ywza-agent: client: {e}");
+                tracing::warn!(error = %e, "client connection failed");
             }
         });
     }
@@ -33,6 +33,7 @@ async fn serve_client(agent: Arc<Agent>, incoming: Incoming) -> anyhow::Result<(
     )
     .await??;
     let peer_id = c.conn.remote_id();
+    tracing::debug!(peer = %peer_id, "control connection accepted");
     let hello = tokio::time::timeout(Duration::from_secs(30), read_frame(&mut c.recv)).await??;
     let ClientMsg::Hello { client_name, .. } = hello else {
         c.conn.close(1u32.into(), b"expected hello");
@@ -43,7 +44,8 @@ async fn serve_client(agent: Arc<Agent>, incoming: Incoming) -> anyhow::Result<(
     let local = peer_id == agent.local_client;
     let Some(mut perms) = peer::permissions(&agent, peer_id) else {
         c.conn.close(2u32.into(), b"not paired");
-        anyhow::bail!("{peer_id} ({client_name}) rejected: not paired");
+        tracing::warn!(peer = %peer_id, client = %client_name, "refused an unpaired device");
+        return Ok(());
     };
 
     // Subscribe before Welcome so no event falls in between.
@@ -60,6 +62,7 @@ async fn serve_client(agent: Arc<Agent>, incoming: Incoming) -> anyhow::Result<(
         },
         permissions: (!local).then_some(perms),
     })?;
+    tracing::info!(peer = %peer_id, client = %client_name, local, ?perms, "peer connected");
     let writer = tokio::spawn(write_loop(c.send, events, direct_rx, see_sessions.clone()));
     // Frames are read in their own task: a read cut short by a config change would lose bytes.
     let (frames_tx, mut frames) = mpsc::channel(16);
@@ -89,8 +92,12 @@ async fn serve_client(agent: Arc<Agent>, incoming: Incoming) -> anyhow::Result<(
                 }
                 let Some(now) = peer::permissions(&agent, peer_id) else {
                     c.conn.close(2u32.into(), b"not paired");
+                    tracing::info!(peer = %peer_id, client = %client_name, "peer is no longer paired");
                     break;
                 };
+                if now != perms {
+                    tracing::debug!(peer = %peer_id, perms = ?now, "permissions changed");
+                }
                 perms = now;
                 see_sessions.store(perms.chat || perms.tools, Ordering::Relaxed);
                 if !perms.view {
@@ -106,6 +113,7 @@ async fn serve_client(agent: Arc<Agent>, incoming: Incoming) -> anyhow::Result<(
         let msg = match frame {
             Ok(msg) => msg,
             Err(ywza_proto::Error::Json(e)) => {
+                tracing::warn!(peer = %peer_id, error = %e, "unreadable client message");
                 let _ = direct.send(AgentMsg::Error {
                     message: format!("bad message: {e}"),
                 });
@@ -115,14 +123,25 @@ async fn serve_client(agent: Arc<Agent>, incoming: Incoming) -> anyhow::Result<(
         };
         match peer::denied(&perms, &msg) {
             Some(reply) => {
+                tracing::warn!(peer = %peer_id, client = %client_name, kind = msg.kind(), "permission denied");
                 let _ = direct.send(reply);
             }
-            None => client.handle(msg),
+            None => {
+                // Pointer input arrives at mouse rate.
+                if matches!(msg, ClientMsg::Input { .. }) {
+                    tracing::trace!(peer = %peer_id, kind = msg.kind(), "client message");
+                } else {
+                    tracing::debug!(peer = %peer_id, kind = msg.kind(), "client message");
+                }
+                client.handle(msg)
+            }
         }
     }
-    if let Some(why) = c.conn.close_reason() {
-        eprintln!("ywza-agent: {client_name} ({peer_id}) disconnected: {why}");
-    }
+    let why = c
+        .conn
+        .close_reason()
+        .map_or_else(|| "stream ended".into(), |w| w.to_string());
+    tracing::info!(peer = %peer_id, client = %client_name, %why, "peer disconnected");
     client.finish();
     drop(direct);
     reader.abort();

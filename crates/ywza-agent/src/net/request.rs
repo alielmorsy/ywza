@@ -13,6 +13,7 @@ pub async fn watch_pairing_requests(agent: Arc<Agent>) {
     loop {
         tokio::time::sleep(Duration::from_millis(500)).await;
         if std::fs::remove_file(&req).is_ok() {
+            tracing::debug!("pairing requested through the config dir");
             let answer = match pair::create(&agent).await {
                 AgentMsg::PairingCode {
                     code,
@@ -22,7 +23,7 @@ pub async fn watch_pairing_requests(agent: Arc<Agent>) {
                 _ => continue,
             };
             if let Err(e) = write_atomic(&agent.dir.join("pairing.code"), &answer) {
-                eprintln!("ywza-agent: writing pairing.code: {e}");
+                tracing::error!(error = %e, "writing pairing.code failed");
             }
         }
     }

@@ -130,6 +130,7 @@ pub fn downscale(img: Image, max: u32) -> Image {
 
 /// `stale: element N (reason)` plus the fresh snapshot.
 pub fn stale(w: WindowId, id: u32, reason: &str, fresh: desk::Result<Snapshot>) -> ToolOutput {
+    tracing::warn!(id, reason, "stale element");
     let tail = match fresh {
         Ok(s) => format!("Fresh element list:\n{}", s.render()),
         Err(e) => format!("Could not re-read the window: {e}"),

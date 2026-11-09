@@ -8,6 +8,7 @@ use crate::Agent;
 
 pub fn session(agent: &Agent, client_name: &str) -> SessionId {
     let sid = agent.sessions.create(&format!("MCP: {client_name}"));
+    tracing::info!(session = %sid.0, client = client_name, "tool session started");
     agent.emit(
         sid,
         SessionEvent::User {
@@ -18,6 +19,7 @@ pub fn session(agent: &Agent, client_name: &str) -> SessionId {
 }
 
 pub fn end_session(agent: &Agent, sid: SessionId) {
+    tracing::info!(session = %sid.0, "tool session ended");
     agent.emit(
         sid,
         SessionEvent::Done {

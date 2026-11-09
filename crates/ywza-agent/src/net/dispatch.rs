@@ -102,9 +102,12 @@ impl Client {
         );
         match started {
             Ok(l) => self.live = Some(l),
-            Err(e) => self.send(AgentMsg::Error {
-                message: format!("live view: {e}"),
-            }),
+            Err(e) => {
+                tracing::error!(client = %self.name, monitor, error = %e, "live view failed to start");
+                self.send(AgentMsg::Error {
+                    message: format!("live view: {e}"),
+                })
+            }
         }
     }
 
@@ -116,6 +119,7 @@ impl Client {
         // A failing move would repeat at mouse rate; its button/key events report it.
         let is_move = matches!(event, InputEvent::MouseMove { .. });
         if let (Err(e), false) = (r, is_move) {
+            tracing::warn!(client = %self.name, error = %e, "input failed");
             self.send(AgentMsg::Error {
                 message: format!("input: {e}"),
             });

@@ -53,6 +53,28 @@ pub enum ClientMsg {
     },
 }
 
+impl ClientMsg {
+    /// The `type` tag, for logs (the payload can hold typed text).
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Hello { .. } => "hello",
+            Self::Prompt { .. } => "prompt",
+            Self::Cancel { .. } => "cancel",
+            Self::Screenshot { .. } => "screenshot",
+            Self::GetConfig => "get_config",
+            Self::SetConfig { .. } => "set_config",
+            Self::ListSessions => "list_sessions",
+            Self::GetSession { .. } => "get_session",
+            Self::LiveStart { .. } => "live_start",
+            Self::LiveStop => "live_stop",
+            Self::Input { .. } => "input",
+            Self::CreatePairing => "create_pairing",
+            Self::ListTools => "list_tools",
+            Self::CallTool { .. } => "call_tool",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

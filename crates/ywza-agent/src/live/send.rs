@@ -40,10 +40,11 @@ pub async fn send_loop(
     while let Some(f) = rx.recv().await {
         let now = Instant::now();
         while let Ok((latency, key)) = acks.try_recv() {
+            tracing::trace!(latency_ms = latency.as_millis() as u64, key, "frame acked");
             rate.on_ack(now, latency, key);
         }
         if adaptive {
-            ctl.set_bitrate(rate.bitrate());
+            apply_rate(&ctl, &rate);
         }
         inflight.retain(|fl| !fl.task.is_finished());
         if f.keyframe {
@@ -55,6 +56,7 @@ pub async fn send_loop(
         } else if need_key || is_stale(&inflight, now, rate.base()) {
             // P-frames reference their predecessor: after a drop, wait for a keyframe.
             if !need_key {
+                tracing::debug!(inflight = inflight.len(), "link behind, waiting for a keyframe");
                 for fl in inflight.iter().filter(|fl| !fl.key) {
                     fl.token.cancel();
                 }
@@ -62,7 +64,7 @@ pub async fn send_loop(
                 need_key = true;
                 rate.on_stall(now);
                 if adaptive {
-                    ctl.set_bitrate(rate.bitrate());
+                    apply_rate(&ctl, &rate);
                 }
             }
             if last_forced.is_none_or(|t| now.duration_since(t) >= KEY_GAP) {
@@ -82,8 +84,10 @@ pub async fn send_loop(
         seq += 1;
         let sent = Instant::now();
         let Ok(mut send) = conn.open_uni().await else {
+            tracing::debug!("connection closed, ending the frame sender");
             break;
         };
+        tracing::trace!(seq = header.seq, bytes = f.data.len(), key = f.keyframe, "frame sent");
         let token = CancellationToken::new();
         let cancelled = token.clone();
         let ack = ack_tx.clone();
@@ -119,6 +123,14 @@ pub async fn send_loop(
     }
     for fl in inflight {
         fl.token.cancel();
+    }
+}
+
+fn apply_rate(ctl: &Ctl, rate: &RateCtl) {
+    let bps = rate.bitrate();
+    if bps != ctl.bitrate() {
+        tracing::debug!(from = ctl.bitrate(), to = bps, "bitrate changed");
+        ctl.set_bitrate(bps);
     }
 }
 

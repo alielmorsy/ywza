@@ -27,7 +27,7 @@ pub fn main(args: &[String]) -> anyhow::Result<()> {
     identity::prepare(args)?;
     let exe = std::env::current_exe()?;
     process::stop_stale(&exe);
-    eprintln!("ywza-agent service: following seat0");
+    tracing::info!("service following seat0");
 
     let mut cur: Option<(String, Child)> = None;
     let mut last_note = String::new();
@@ -45,7 +45,7 @@ pub fn main(args: &[String]) -> anyhow::Result<()> {
             Err(e) => {
                 let note = format!("session {id}: {e:#}");
                 if note != last_note {
-                    eprintln!("ywza-agent service: {note}");
+                    tracing::warn!("service: {note}");
                     last_note = note;
                 }
                 None
@@ -54,6 +54,7 @@ pub fn main(args: &[String]) -> anyhow::Result<()> {
         if let Some((id, child)) = &mut cur {
             let exited = !matches!(child.try_wait(), Ok(None));
             if exited || want.as_ref().map(|(w, _)| w) != Some(id) {
+                tracing::info!(session = %id, exited, "service stopping the agent");
                 process::stop(child);
                 chown_config(0, 0);
                 cur = None;
@@ -62,13 +63,13 @@ pub fn main(args: &[String]) -> anyhow::Result<()> {
         if let (None, Some((id, t))) = (&cur, want) {
             match process::spawn(&exe, t) {
                 Ok(c) => {
-                    eprintln!("ywza-agent service: agent {} on session {id}", c.id());
+                    tracing::info!(pid = c.id(), session = %id, "service started an agent");
                     last_note.clear();
                     cur = Some((id, c));
                 }
                 Err(e) => {
                     chown_config(0, 0);
-                    eprintln!("ywza-agent service: start on session {id}: {e:#}");
+                    tracing::error!(session = %id, error = %format!("{e:#}"), "service could not start an agent");
                 }
             }
         }

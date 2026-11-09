@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+log = ["dep:tracing-appender", "dep:tracing-subscriber"]
+
 [dependencies]
 data-encoding = "2"
 dirs = "7"
@@ -16,6 +19,8 @@ sha2 = "0.10"
 spake2 = "0.4"
 thiserror = "2"
 tokio = { version = "1", features = ["io-util"] }
+tracing-appender = { version = "0.2", optional = true }
+tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "json"] }
 uuid = { version = "1", features = ["serde", "v4"] }
 
 [dev-dependencies]

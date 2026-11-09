@@ -1,7 +1,6 @@
 //! ywza-relay: a small iroh relay server. Devices use it via `relay_url` in their config.
 
 mod config;
-mod log;
 mod selfsigned;
 mod tls;
 
@@ -27,7 +26,7 @@ struct Args {
 }
 
 /// Logging settings for early init; a bad config is reported by `build`.
-fn log_config(args: &Args) -> log::LogConfig {
+fn log_config(args: &Args) -> ywza_proto::LogConfig {
     args.config
         .as_ref()
         .filter(|_| !args.dev)
@@ -37,11 +36,12 @@ fn log_config(args: &Args) -> log::LogConfig {
         .unwrap_or_default()
 }
 
-fn build(args: &Args) -> Result<ServerConfig> {
+/// The server config and its TLS mode for the log: off, letsencrypt, manual or self-signed.
+fn build(args: &Args) -> Result<(ServerConfig, &'static str)> {
     let mut server = ServerConfig::default();
     if args.dev {
         server.relay = Some(RelayConfig::new((Ipv6Addr::UNSPECIFIED, DEV_HTTP_PORT)));
-        return Ok(server);
+        return Ok((server, "off"));
     }
     let Some(path) = &args.config else {
         bail!("pass --config <path> (see relay.example.toml) or --dev");
@@ -53,8 +53,9 @@ fn build(args: &Args) -> Result<ServerConfig> {
     let mut relay = RelayConfig::new((Ipv6Addr::UNSPECIFIED, cfg.http_port));
     if !cfg.tls {
         server.relay = Some(relay);
-        return Ok(server);
+        return Ok((server, "off"));
     }
+    let mode = cfg.tls_params()?.1.label();
     relay.tls = Some(TlsConfig::new(
         (Ipv6Addr::UNSPECIFIED, cfg.https_port),
         tls::cert_config(&cfg)?,
@@ -63,27 +64,27 @@ fn build(args: &Args) -> Result<ServerConfig> {
     server.quic = cfg
         .quic_addr_discovery
         .then(|| QuicConfig::new((Ipv6Addr::UNSPECIFIED, cfg.quic_port)));
-    Ok(server)
+    Ok((server, mode))
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
-    let _log_guard = log::init(&log_config(&args))?;
+    let _log_guard = ywza_proto::init_log(&log_config(&args), "ywza-relay", "info")?;
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("failed to set default crypto provider");
 
-    let config = build(&args)?;
+    let (config, tls_mode) = build(&args)?;
     let mut server = Server::spawn(config)
         .await
         .map_err(|e| anyhow!("starting relay: {e:#}"))?;
-    tracing::info!(version = env!("CARGO_PKG_VERSION"), "ywza-relay starting");
+    tracing::info!(version = env!("CARGO_PKG_VERSION"), tls = tls_mode, "ywza-relay starting");
     if let Some(addr) = server.http_addr() {
         tracing::info!("listening on http://{addr}");
     }
     match server.https_addr() {
-        Some(addr) => tracing::info!("listening on https://{addr} (tls on)"),
+        Some(addr) => tracing::info!("listening on https://{addr} (tls {tls_mode})"),
         None => tracing::info!("tls off"),
     }
     if let Some(addr) = server.quic_addr() {

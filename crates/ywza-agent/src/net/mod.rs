@@ -5,10 +5,12 @@ mod bind;
 mod dispatch;
 pub mod pair;
 mod peer;
+mod relay_log;
 mod request;
 mod writer;
 
 pub use accept::accept_loop;
 pub use bind::{bind, bind_rendezvous, local_addr, saved_port};
+pub use relay_log::watch as watch_relay;
 pub use request::watch_pairing_requests;
 pub(crate) use writer::write_loop;

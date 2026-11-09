@@ -113,7 +113,7 @@ impl Sessions {
             writeln!(f, "{line}")
         });
         if let Err(e) = r {
-            eprintln!("ywza-agent: writing {}: {e}", path.display());
+            tracing::warn!(path = %path.display(), error = %e, "writing the session log failed");
         }
     }
 

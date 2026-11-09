@@ -47,6 +47,7 @@ pub async fn begin(agent: &Arc<Agent>) -> anyhow::Result<Started> {
     if let Some(old) = agent.pairing.0.lock().unwrap().replace(cancel.clone()) {
         old.cancel();
     }
+    tracing::info!(ttl_secs = PAIRING_TTL.as_secs(), "pairing code created");
     tokio::spawn(serve(agent.clone(), ep, code.clone(), cancel));
     Ok(Started { code, addr })
 }
@@ -58,9 +59,12 @@ pub async fn create(agent: &Arc<Agent>) -> AgentMsg {
             code: s.code,
             expires_in_secs: PAIRING_TTL.as_secs(),
         },
-        Err(e) => AgentMsg::Error {
-            message: format!("pairing: {e:#}"),
-        },
+        Err(e) => {
+            tracing::error!(error = %format!("{e:#}"), "creating a pairing code failed");
+            AgentMsg::Error {
+                message: format!("pairing: {e:#}"),
+            }
+        }
     }
 }
 
@@ -71,19 +75,30 @@ async fn serve(agent: Arc<Agent>, ep: Endpoint, code: String, cancel: Cancellati
     loop {
         let incoming = tokio::select! {
             i = ep.accept() => i,
-            _ = &mut deadline => break,
-            _ = cancel.cancelled() => break,
+            _ = &mut deadline => {
+                tracing::info!("pairing code expired unused");
+                break;
+            }
+            _ = cancel.cancelled() => {
+                tracing::debug!("pairing code replaced by a newer one");
+                break;
+            }
         };
         let Some(incoming) = incoming else { break };
         if used {
+            tracing::warn!("pairing attempt on a used code refused");
             tokio::spawn(refuse(incoming));
             continue;
         }
         used = true;
+        tracing::info!("pairing code used");
         match attempt(&agent, incoming, &code).await {
             Ok(()) => break,
             // The code is burnt; the endpoint stays up only to say so.
-            Err(e) => eprintln!("ywza-agent: pairing failed: {e:#}"),
+            Err(e) if matches!(e.downcast_ref::<ywza_proto::Error>(), Some(ywza_proto::Error::BadCode)) => {
+                tracing::warn!("pairing code wrong, the code is burnt")
+            }
+            Err(e) => tracing::warn!(error = %format!("{e:#}"), "pairing failed"),
         }
     }
     ep.close().await;
@@ -102,6 +117,7 @@ async fn attempt(agent: &Agent, incoming: Incoming, code: &str) -> anyhow::Resul
         anyhow::Ok((conn, send, recv))
     })
     .await??;
+    tracing::debug!("pairing peer connected, running the key exchange");
     let me = PairInfo {
         node_id: agent.endpoint.id(),
         name: host_name(),
@@ -138,7 +154,7 @@ fn trust(agent: &Agent, info: &PairInfo) -> anyhow::Result<()> {
         n => n,
     };
     agent.config.trust(info.node_id.to_string(), name.into())?;
-    eprintln!("ywza-agent: paired {name} ({})", info.node_id);
+    tracing::info!(client = name, peer = %info.node_id, "paired a device");
     Ok(())
 }
 

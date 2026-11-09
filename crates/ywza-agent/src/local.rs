@@ -43,7 +43,7 @@ pub async fn accept_loop(agent: Arc<Agent>, (listener, token): (TcpListener, Str
         let (agent, token) = (agent.clone(), token.clone());
         tokio::spawn(async move {
             if let Err(e) = serve(agent, stream, &token).await {
-                eprintln!("ywza-agent: local client: {e}");
+                tracing::warn!(error = %e, "local client failed");
             }
         });
     }
@@ -64,6 +64,7 @@ async fn serve(agent: Arc<Agent>, stream: TcpStream, token: &str) -> anyhow::Res
         anyhow::bail!("{client_name}: wrong token");
     }
 
+    tracing::info!(client = client_name, "local client connected");
     let events = agent.tx.subscribe();
     let (direct, direct_rx) = mpsc::unbounded_channel();
     direct.send(AgentMsg::Welcome {
@@ -78,7 +79,11 @@ async fn serve(agent: Arc<Agent>, stream: TcpStream, token: &str) -> anyhow::Res
     let mut session = None;
 
     loop {
-        let reply = match read_frame::<_, ClientMsg>(&mut recv).await {
+        let frame = read_frame::<_, ClientMsg>(&mut recv).await;
+        if let Ok(msg) = &frame {
+            tracing::debug!(client = client_name, kind = msg.kind(), "local client message");
+        }
+        let reply = match frame {
             Ok(ClientMsg::CallTool { call, name, args }) => {
                 let sid = *session.get_or_insert_with(|| mcp::session(&agent, &client_name));
                 let (agent, direct) = (agent.clone(), direct.clone());
@@ -111,6 +116,7 @@ async fn serve(agent: Arc<Agent>, stream: TcpStream, token: &str) -> anyhow::Res
             let _ = direct.send(r);
         }
     }
+    tracing::info!(client = client_name, "local client disconnected");
     if let Some(sid) = session {
         mcp::end_session(&agent, sid);
     }

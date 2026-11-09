@@ -3,6 +3,7 @@
 mod config;
 mod error;
 mod frame;
+mod log;
 mod msg;
 mod net;
 pub mod pair;
@@ -12,6 +13,9 @@ mod relay_trust;
 pub use config::{Config, Desktop, Llm, Ocr, OcrEngine, Peer, Permissions, Stream};
 pub use error::Error;
 pub use frame::{read_frame, write_frame, MAX_FRAME};
+#[cfg(feature = "log")]
+pub use log::init as init_log;
+pub use log::{Format, LogConfig};
 pub use msg::{
     AgentMsg, ClientMsg, FrameHeader, InputEvent, MouseButton, SessionEvent, SessionId,
     SessionStatus, SessionSummary, Target, ToolInfo,

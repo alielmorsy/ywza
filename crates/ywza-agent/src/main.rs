@@ -1,4 +1,4 @@
-//! `ywza-agent [run|pair|ticket|service]`
+//! `ywza-agent [-v|-vv|-q] [run|pair|ticket|service]`
 //!
 //! - `run` (default): the service.
 //! - `pair`: asks the running agent for a one-time 6-digit pairing code (via
@@ -7,17 +7,63 @@
 //! - `ticket`: prints `<config_dir>/agent.ticket` (address only; for local clients holding `local-client.key`).
 //! - `service [--user <name>]` (Linux, root): keeps a `run` agent on whatever X11 session seat0
 //!   shows; see `platform/linux/service`.
+//!
+//! Logging: `-v` debug, `-vv` trace, `-q` warn beat `[log]` in config.toml; `RUST_LOG` beats both.
+//! `run` also writes daily files to `<config_dir>/logs` unless `[log] dir` says otherwise.
 
 use std::{path::PathBuf, time::Duration};
 
 use anyhow::Context;
+use ywza_proto::{Config, LogConfig};
+
+/// Removes the verbosity flags from `args`; the level they ask for, if any.
+fn take_verbosity(args: &mut Vec<String>) -> Option<&'static str> {
+    let mut level = None;
+    args.retain(|a| {
+        let l = match a.as_str() {
+            "-v" => "debug",
+            "-vv" => "trace",
+            "-q" => "warn",
+            _ => return true,
+        };
+        level = Some(l);
+        false
+    });
+    level
+}
+
+/// `[log]` from the config file for early init; a bad file is reported when the agent loads it.
+fn log_config(dir: &std::path::Path, flag: Option<&str>, file_logs: bool) -> LogConfig {
+    let mut log = std::fs::read_to_string(dir.join("config.toml"))
+        .ok()
+        .and_then(|t| toml::from_str::<Config>(&t).ok())
+        .map(|c| c.log)
+        .unwrap_or_default();
+    if let Some(level) = flag {
+        log.level = level.into();
+    }
+    if !file_logs {
+        log.dir = None;
+    } else if log.dir.is_none() {
+        log.dir = Some(dir.join("logs"));
+    }
+    log
+}
 
 fn main() -> anyhow::Result<()> {
     // Console attach runs in a child copy of this binary; that copy exits here.
-    let args: Vec<String> = std::env::args().collect();
+    let mut args: Vec<String> = std::env::args().collect();
     if let Some(code) = ywza_term::helper_main(&args) {
         std::process::exit(code);
     }
+    let flag = take_verbosity(&mut args);
+    let dir = ywza_proto::config_dir();
+    let cmd = args.get(1).map_or("run", String::as_str).to_string();
+    let log = log_config(&dir, flag, cmd == "run");
+    let _log_guard = ywza_proto::init_log(&log, "ywza-agent", "info").or_else(|e| {
+        eprintln!("ywza-agent: {e}; logging to stderr only");
+        ywza_proto::init_log(&LogConfig { dir: None, ..log }, "ywza-agent", "info")
+    })?;
     if args.get(1).map(String::as_str) == Some("service") {
         if let Some(result) = ywza_agent::platform::service(&args) {
             return result;
@@ -25,20 +71,16 @@ fn main() -> anyhow::Result<()> {
     }
     // Before any window/capture call, so every rect is in physical pixels.
     if let Err(e) = ywza_desktop::set_dpi_awareness() {
-        eprintln!("ywza-agent: DPI awareness: {e}");
+        tracing::warn!(error = %e, "setting DPI awareness failed");
     }
-    let dir = ywza_proto::config_dir();
-    let cmd = args.get(1).map_or("run", String::as_str);
     let rt = tokio::runtime::Runtime::new()?;
-    match cmd {
+    match cmd.as_str() {
         "run" => rt.block_on(async {
-            let agent = ywza_agent::Agent::start(dir, false).await?;
-            eprintln!(
-                "ywza-agent {} listening as {}",
-                env!("CARGO_PKG_VERSION"),
-                agent.endpoint.id()
-            );
+            let agent = ywza_agent::Agent::start(dir, false).await.inspect_err(|e| {
+                tracing::error!(error = %format!("{e:#}"), "agent failed to start");
+            })?;
             tokio::signal::ctrl_c().await?;
+            tracing::info!("shutting down: Ctrl-C");
             agent.endpoint.close().await;
             Ok(())
         }),
@@ -51,7 +93,7 @@ fn main() -> anyhow::Result<()> {
             Ok(())
         }
         _ => {
-            eprintln!("usage: ywza-agent [run|pair|ticket|service [--user <name>]]");
+            eprintln!("usage: ywza-agent [-v|-vv|-q] [run|pair|ticket|service [--user <name>]]");
             std::process::exit(2);
         }
     }

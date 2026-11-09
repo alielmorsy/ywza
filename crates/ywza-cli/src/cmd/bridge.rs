@@ -12,7 +12,7 @@ pub async fn run(c: &mut Control) -> Result<()> {
     // client closes our stdin, so the client would never see EOF when the agent drops the
     // link (e.g. a login-screen switch) and its call would hang.
     if let Err(e) = &r {
-        eprintln!("ywza bridge: {e}");
+        tracing::error!(error = %e, "bridge stopped");
     }
     c.conn.close(0u32.into(), b"bye");
     std::process::exit(if r.is_ok() { 0 } else { 1 });

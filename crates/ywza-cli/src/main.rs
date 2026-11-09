@@ -21,6 +21,9 @@ struct Cli {
     /// Show full tool results.
     #[arg(short, long, global = true)]
     verbose: bool,
+    /// Diagnostics on stderr: error, warn, info, debug or trace. YWZA_LOG, then RUST_LOG, override it.
+    #[arg(long, global = true, default_value = "warn")]
+    log: String,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -94,6 +97,13 @@ fn parse_sid(s: &str) -> Result<SessionId, String> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+    // Stderr only: `bridge` speaks its protocol on stdout.
+    let level = std::env::var("YWZA_LOG").unwrap_or_else(|_| cli.log.clone());
+    let log = ywza_proto::LogConfig {
+        level,
+        ..Default::default()
+    };
+    ywza_proto::init_log(&log, "ywza", "warn")?;
     match &cli.cmd {
         Cmd::Devices => return cmd::devices::run(),
         Cmd::Pair { code, name } => return cmd::pair::run(code, name).await,

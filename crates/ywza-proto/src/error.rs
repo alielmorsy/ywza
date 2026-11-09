@@ -20,6 +20,8 @@ pub enum Error {
     BadCode,
     #[error("pairing failed: {0}")]
     Pair(String),
+    #[error("log: {0}")]
+    Log(String),
 }
 
 impl Error {

@@ -19,7 +19,7 @@ pub fn prepare(args: &[String]) -> anyhow::Result<()> {
         .and_then(|i| args.get(i + 1))
     {
         if let Err(e) = migrate(user) {
-            eprintln!("ywza-agent service: migrating {user}'s config: {e:#}");
+            tracing::warn!(user, error = %format!("{e:#}"), "service: migrating the user's config failed");
         }
     }
     Ok(())
@@ -46,10 +46,7 @@ fn migrate(user: &str) -> anyhow::Result<()> {
             fs::copy(e.path(), Path::new(CONFIG_DIR).join(e.file_name()))?;
         }
     }
-    eprintln!(
-        "ywza-agent service: copied {} to {CONFIG_DIR}",
-        src.display()
-    );
+    tracing::info!(from = %src.display(), to = CONFIG_DIR, "service migrated the user's config");
     Ok(())
 }
 

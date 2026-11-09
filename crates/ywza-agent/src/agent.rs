@@ -45,6 +45,15 @@ impl Agent {
             addr: net::local_addr(&endpoint),
         };
         write_atomic(&dir.join("agent.ticket"), &ticket.to_string())?;
+        tracing::info!(
+            version = env!("CARGO_PKG_VERSION"),
+            dir = %dir.display(),
+            id = %endpoint.id(),
+            port = endpoint.bound_sockets().iter().find(|a| a.is_ipv4()).map(|a| a.port()),
+            relay = relay.as_deref().unwrap_or("default"),
+            local_only,
+            "agent listening"
+        );
 
         let agent = Arc::new(Self {
             sessions: Sessions::new(dir.join("logs")),
@@ -58,11 +67,15 @@ impl Agent {
             local_client,
             local_only,
         });
+        tokio::spawn(net::watch_relay(agent.endpoint.clone()));
         tokio::spawn(net::accept_loop(agent.clone()));
         tokio::spawn(net::watch_pairing_requests(agent.clone()));
         match local::bind(&agent.dir).await {
-            Ok(listener) => drop(tokio::spawn(local::accept_loop(agent.clone(), listener))),
-            Err(e) => eprintln!("ywza-agent: local TCP port: {e}"),
+            Ok(listener) => {
+                tracing::info!(port = listener.0.local_addr().map_or(0, |a| a.port()), "local TCP port open");
+                drop(tokio::spawn(local::accept_loop(agent.clone(), listener)))
+            }
+            Err(e) => tracing::error!(error = %e, "local TCP port unavailable"),
         }
         Ok(agent)
     }

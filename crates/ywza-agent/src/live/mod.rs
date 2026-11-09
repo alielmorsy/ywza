@@ -26,6 +26,7 @@ pub struct Live {
 
 impl Drop for Live {
     fn drop(&mut self) {
+        tracing::info!(monitor = self.monitor, "live view stopped");
         self.ctl.stop.store(true, Ordering::Relaxed);
         self.sender.abort();
     }
@@ -57,7 +58,7 @@ impl Live {
                 tx.blocking_send(f).is_ok()
             });
             if let Err(e) = r {
-                eprintln!("ywza-agent: live capture: {e}");
+                tracing::error!(monitor, error = %e, "live capture failed");
             }
         });
         if !cursor {
@@ -71,6 +72,7 @@ impl Live {
             ctl.clone(),
             fixed_bps.is_none(),
         ));
+        tracing::info!(monitor, fps, adaptive = fixed_bps.is_none(), cursor, "live view started");
         Ok(Self {
             monitor,
             rect,

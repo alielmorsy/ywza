@@ -21,9 +21,10 @@ serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 tokio-util = "0.7"
 toml = "0.8"
+tracing = "0.1"
 ywza-desktop = { path = "../ywza-desktop" }
 ywza-ocr = { path = "../ywza-ocr" }
-ywza-proto = { path = "../ywza-proto" }
+ywza-proto = { path = "../ywza-proto", features = ["log"] }
 ywza-stream = { path = "../ywza-stream" }
 ywza-term = { path = "../ywza-term" }
 
