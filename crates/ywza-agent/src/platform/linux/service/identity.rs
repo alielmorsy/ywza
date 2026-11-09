@@ -31,6 +31,23 @@ pub fn chown_config(uid: u32, gid: u32) {
         .status();
 }
 
+/// Creates the log file (and its directory) if missing and hands it to `uid:gid`.
+pub fn chown_log(file: Option<&Path>, uid: u32, gid: u32) {
+    let Some(file) = file else {
+        return;
+    };
+    let result = (|| {
+        if let Some(dir) = file.parent() {
+            fs::create_dir_all(dir)?;
+        }
+        fs::OpenOptions::new().create(true).append(true).open(file)?;
+        std::os::unix::fs::chown(file, Some(uid), Some(gid))
+    })();
+    if let Err(e) = result {
+        tracing::warn!(file = %file.display(), error = %e, "service: preparing the log file failed");
+    }
+}
+
 /// Copies `user`'s per-user config into `CONFIG_DIR` once, so it keeps its identity and pairings.
 fn migrate(user: &str) -> anyhow::Result<()> {
     if Path::new(CONFIG_DIR).join("agent.key").exists() {

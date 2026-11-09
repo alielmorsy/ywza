@@ -10,7 +10,7 @@ use std::{
 use anyhow::Context;
 
 use super::{
-    identity::{chown_config, passwd},
+    identity::{chown_config, chown_log, passwd},
     seat::Target,
     xauth::xserver_auth,
     CONFIG_DIR,
@@ -52,13 +52,19 @@ fn stale_agents(exe: &Path) -> Vec<String> {
         })
         .filter(|e| {
             fs::read(e.path().join("cmdline"))
-                .is_ok_and(|c| c.split(|&b| b == 0).nth(1) == Some(b"run"))
+                .is_ok_and(|c| c.split(|&b| b == 0).rfind(|a| !a.is_empty()) == Some(b"run"))
         })
         .filter_map(|e| e.file_name().into_string().ok())
         .collect()
 }
 
-pub fn spawn(exe: &Path, t: Target) -> anyhow::Result<Child> {
+/// `verbosity` and `log_file` become the agent's own `-v`/`-vv`/`-q` and `--log-file`.
+pub fn spawn(
+    exe: &Path,
+    t: Target,
+    verbosity: Option<&str>,
+    log_file: Option<&Path>,
+) -> anyhow::Result<Child> {
     let Target { user, mut env } = t;
     let (uid, gid, home) = passwd(&user)?;
     let cookie = match env.get("XAUTHORITY") {
@@ -81,7 +87,11 @@ pub fn spawn(exe: &Path, t: Target) -> anyhow::Result<Child> {
     ] {
         env.insert(k.into(), v.into());
     }
+    if let Ok(v) = std::env::var("RUST_LOG") {
+        env.insert("RUST_LOG".into(), v);
+    }
     chown_config(uid, gid);
+    chown_log(log_file, uid, gid);
     // Greeter users often have no home directory.
     let cwd = if Path::new(&home).is_dir() {
         &home
@@ -89,8 +99,17 @@ pub fn spawn(exe: &Path, t: Target) -> anyhow::Result<Child> {
         "/"
     };
     use std::os::unix::process::CommandExt;
-    Command::new(exe)
-        .arg("run")
+    let mut cmd = Command::new(exe);
+    cmd.args(match verbosity {
+        Some("debug") => Some("-v"),
+        Some("trace") => Some("-vv"),
+        Some("warn") => Some("-q"),
+        _ => None,
+    });
+    if let Some(f) = log_file {
+        cmd.arg("--log-file").arg(f);
+    }
+    cmd.arg("run")
         .env_clear()
         .envs(env)
         .current_dir(cwd)

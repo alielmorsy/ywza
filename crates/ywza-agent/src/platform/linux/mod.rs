@@ -13,6 +13,10 @@ pub fn os_description() -> String {
 }
 
 /// `ywza-agent service [--user <name>]`: the seat0 follower, run as root.
-pub fn service(args: &[String]) -> Option<anyhow::Result<()>> {
-    Some(service::main(args))
+pub fn service(
+    args: &[String],
+    verbosity: Option<&str>,
+    log_file: Option<&std::path::Path>,
+) -> Option<anyhow::Result<()>> {
+    Some(service::main(args, verbosity, log_file))
 }

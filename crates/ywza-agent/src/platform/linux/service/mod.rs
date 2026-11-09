@@ -16,14 +16,22 @@ mod process;
 mod seat;
 mod xauth;
 
-use std::process::Child;
+use std::{path::Path, process::Child};
 use std::time::Duration;
 
-use identity::chown_config;
+use identity::{chown_config, chown_log};
 
 const CONFIG_DIR: &str = "/var/lib/ywza";
 
-pub fn main(args: &[String]) -> anyhow::Result<()> {
+/// `verbosity` and `log_file` are the service's own flags, forwarded to every agent.
+pub fn main(
+    args: &[String],
+    verbosity: Option<&str>,
+    log_file: Option<&Path>,
+) -> anyhow::Result<()> {
+    // Agents start in the user's home, so a relative path must be fixed now.
+    let log_file = log_file.map(std::path::absolute).transpose()?;
+    let log_file = log_file.as_deref();
     identity::prepare(args)?;
     let exe = std::env::current_exe()?;
     process::stop_stale(&exe);
@@ -57,11 +65,12 @@ pub fn main(args: &[String]) -> anyhow::Result<()> {
                 tracing::info!(session = %id, exited, "service stopping the agent");
                 process::stop(child);
                 chown_config(0, 0);
+                chown_log(log_file, 0, 0);
                 cur = None;
             }
         }
         if let (None, Some((id, t))) = (&cur, want) {
-            match process::spawn(&exe, t) {
+            match process::spawn(&exe, t, verbosity, log_file) {
                 Ok(c) => {
                     tracing::info!(pid = c.id(), session = %id, "service started an agent");
                     last_note.clear();
@@ -69,6 +78,7 @@ pub fn main(args: &[String]) -> anyhow::Result<()> {
                 }
                 Err(e) => {
                     chown_config(0, 0);
+                    chown_log(log_file, 0, 0);
                     tracing::error!(session = %id, error = %format!("{e:#}"), "service could not start an agent");
                 }
             }

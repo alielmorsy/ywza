@@ -11,6 +11,10 @@ pub fn os_description() -> String {
 }
 
 /// `ywza-agent service` exists on Linux only.
-pub fn service(_args: &[String]) -> Option<anyhow::Result<()>> {
+pub fn service(
+    _args: &[String],
+    _verbosity: Option<&str>,
+    _log_file: Option<&std::path::Path>,
+) -> Option<anyhow::Result<()>> {
     None
 }

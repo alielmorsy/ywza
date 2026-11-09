@@ -8,8 +8,10 @@ After=systemd-logind.service display-manager.service
 
 [Service]
 # To keep an identity from a per-user install, add --user <name> once (copied to /var/lib/ywza).
-# One log file instead of daily ones: put --log-file <path> before `service`.
-ExecStart=/home/cadence/ywza/target/release/ywza-agent service
+# One log file for the service and every session agent (/var/log/ywza/agent.log). Add -v for
+# debug before `service`; `journalctl -u ywza-agent` still shows the service's stderr.
+LogsDirectory=ywza
+ExecStart=/home/cadence/ywza/target/release/ywza-agent --log-file /var/log/ywza/agent.log service
 Restart=always
 # Keep apps the agent launched alive across service restarts.
 KillMode=process

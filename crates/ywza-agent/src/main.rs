@@ -11,6 +11,7 @@
 //! Logging: `-v` debug, `-vv` trace, `-q` warn beat `[log]` in config.toml; `RUST_LOG` beats both.
 //! `run` also writes daily files to `<config_dir>/logs` unless `[log] dir` says otherwise.
 //! `--log-file <path>` (any subcommand) appends to that one file instead; so does `[log] file`.
+//! `service` passes its own `-v`/`-vv`/`-q`, `--log-file` and `RUST_LOG` on to every agent it starts.
 
 use std::{path::PathBuf, time::Duration};
 
@@ -97,13 +98,13 @@ fn main() -> anyhow::Result<()> {
     };
     let dir = ywza_proto::config_dir();
     let cmd = args.get(1).map_or("run", String::as_str).to_string();
-    let log = log_config(&dir, flag, log_file, cmd == "run");
+    let log = log_config(&dir, flag, log_file.clone(), cmd == "run");
     let _log_guard = ywza_proto::init_log(&log, "ywza-agent", "info").or_else(|e| {
         eprintln!("ywza-agent: {e}; logging to stderr only");
         ywza_proto::init_log(&LogConfig { dir: None, file: None, ..log }, "ywza-agent", "info")
     })?;
     if args.get(1).map(String::as_str) == Some("service") {
-        if let Some(result) = ywza_agent::platform::service(&args) {
+        if let Some(result) = ywza_agent::platform::service(&args, flag, log_file.as_deref()) {
             return result;
         }
     }
