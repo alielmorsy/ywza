@@ -49,9 +49,17 @@ impl Permissions {
         use ClientMsg::*;
         let (ok, name) = match msg {
             Hello { .. } => return None,
-            Screenshot { .. } | LiveStart { .. } | LiveStop => (self.view, "view"),
+            WindowInfo { elements: true, .. } => (self.tools, "tools"),
+            Screenshot { .. } | LiveStart { .. } | LiveStop | ListMonitors | WindowInfo { .. } => {
+                (self.view, "view")
+            }
             Input { .. } | Pull { .. } | Push { .. } | PushEnd { .. } => (self.control, "control"),
-            Prompt { .. } | Cancel { .. } | ListSessions | GetSession { .. } => (self.chat, "chat"),
+            Prompt { .. }
+            | Approve { .. }
+            | Cancel { .. }
+            | ListSessions
+            | GetSession { .. }
+            | ListModels => (self.chat, "chat"),
             ListTools | CallTool { .. } => (self.tools, "tools"),
             GetConfig | SetConfig { .. } | CreatePairing => (self.settings, "settings"),
         };
@@ -98,8 +106,36 @@ mod tests {
                 Prompt {
                     session: None,
                     text: "t".into(),
+                    device: None,
+                    model: None,
+                    effort: None,
+                    approval: None,
                 },
                 Some("chat"),
+            ),
+            (
+                Approve {
+                    request: 1,
+                    allow: true,
+                    remember: false,
+                },
+                Some("chat"),
+            ),
+            (ListModels, Some("chat")),
+            (ListMonitors, Some("view")),
+            (
+                WindowInfo {
+                    window: "w1".into(),
+                    elements: false,
+                },
+                Some("view"),
+            ),
+            (
+                WindowInfo {
+                    window: "w1".into(),
+                    elements: true,
+                },
+                Some("tools"),
             ),
             (Cancel { session: sid }, Some("chat")),
             (ListSessions, Some("chat")),

@@ -1,0 +1,63 @@
+/*
+  Theme: colors from mockup-ui/index.html.
+  Change the app's colors here and nowhere else. Every Tailwind color class
+  (bg-ground, bg-surface-2, text-text-2, border-line, bg-accent-soft, ...) reads these values.
+*/
+:root {
+  --c-backdrop: #0c0c09;
+  --c-chrome: #13130f;       /* title bar, status bar, inset fields */
+  --c-ground: #1d1d19;       /* app background */
+  --c-surface: #262622;      /* cards, buttons */
+  --c-surface-2: #2e2e29;    /* hover */
+  --c-surface-3: #34342f;    /* active, tiles */
+  --c-line: #3c3c37;
+  --c-line-soft: #2c2c27;
+  --c-line-hover: #4a4a45;
+  --c-text: #eeeeea;
+  --c-text-2: #9b9b97;
+  --c-text-3: #878782;
+  --c-faint: #696965;
+  --c-primary: #c0c1b2;
+  --c-secondary: #454f55;
+  --c-accent: #87849a;       /* focus, active, caret */
+  --c-accent-bg: #c0c1b2;    /* primary button fill, toggles on */
+  --c-accent-bg-hover: #d3d4c8;
+  --c-accent-soft: rgba(135, 132, 154, 0.18);
+  --c-ink: #13130f;          /* text on accent-bg */
+  --c-ok: #c0c1b2;
+  --c-warn: #c0c1b2;
+  --c-warn-soft: rgba(192, 193, 178, 0.1);
+  --c-bad: #d6667e;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-backdrop: var(--c-backdrop);
+  --color-chrome: var(--c-chrome);
+  --color-ground: var(--c-ground);
+  --color-surface: var(--c-surface);
+  --color-surface-2: var(--c-surface-2);
+  --color-surface-3: var(--c-surface-3);
+  --color-line: var(--c-line);
+  --color-line-soft: var(--c-line-soft);
+  --color-line-hover: var(--c-line-hover);
+  --color-text: var(--c-text);
+  --color-text-2: var(--c-text-2);
+  --color-text-3: var(--c-text-3);
+  --color-faint: var(--c-faint);
+  --color-primary: var(--c-primary);
+  --color-secondary: var(--c-secondary);
+  --color-accent: var(--c-accent);
+  --color-accent-bg: var(--c-accent-bg);
+  --color-accent-bg-hover: var(--c-accent-bg-hover);
+  --color-accent-soft: var(--c-accent-soft);
+  --color-ink: var(--c-ink);
+  --color-ok: var(--c-ok);
+  --color-warn: var(--c-warn);
+  --color-warn-soft: var(--c-warn-soft);
+  --color-bad: var(--c-bad);
+  --ease-out-expo: var(--ease);
+  --font-sans: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+}

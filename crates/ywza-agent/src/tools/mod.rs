@@ -30,7 +30,8 @@ pub use args::{parse_window, ElementArg, TermArg, WindowArg};
 pub use batch::{format_steps, parse_batch, Step, StepResult, BATCH_TOOLS};
 pub use ctx::{Ctx, ToolSpec, Tools};
 pub use output::{downscale, ToolOutput, MODEL_IMAGE_MAX};
-pub use screen::{capture, monitors_text};
+pub use screen::{capture, monitor_info, monitor_line, monitors_text};
+pub use util::blocking;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -169,7 +170,10 @@ mod tests {
             async move { t.call(name, &args, OcrEngine::Auto).await }
         };
         let out = call("click", json!({"window":"w1"})).await;
-        assert!(!out.ok && out.text.contains("missing field `element`"), "{out:?}");
+        assert!(
+            !out.ok && out.text.contains("missing field `element`"),
+            "{out:?}"
+        );
         let out = call("click", json!({"window":"w1","element":"x"})).await;
         assert!(!out.ok && out.text.contains("`element`"), "{out:?}");
         let out = call("wait", json!({"ms":"soon"})).await;

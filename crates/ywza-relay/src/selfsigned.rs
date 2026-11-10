@@ -86,7 +86,9 @@ mod tests {
             "https://203.0.113.7:443#pin=4oymiquy7qobjgx36tejs35zeqt24qpemsnzgtfeswmrw6csxbkq"
         );
         assert!(relay_url("2001:db8::1", 8443, b"").starts_with("https://[2001:db8::1]:8443#pin="));
-        assert!(relay_url("relay.example.com", 443, b"").starts_with("https://relay.example.com:443#"));
+        assert!(
+            relay_url("relay.example.com", 443, b"").starts_with("https://relay.example.com:443#")
+        );
     }
 
     #[test]

@@ -1,7 +1,5 @@
 use anyhow::{bail, Result};
-use ywza_proto::{AgentMsg, ClientMsg, Control};
-
-use crate::connect::ask;
+use ywza_proto::{client::ask, AgentMsg, ClientMsg, Control};
 
 pub async fn run(c: &mut Control) -> Result<()> {
     match ask(c, ClientMsg::ListSessions).await? {

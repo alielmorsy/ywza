@@ -71,8 +71,12 @@ async fn serve(agent: Arc<Agent>, stream: TcpStream, token: &str) -> anyhow::Res
         agent_version: env!("CARGO_PKG_VERSION").into(),
         node_id: agent.endpoint.id().to_string(),
         session_list: agent.sessions.list(),
+        os: Some(crate::llm::os_description().into()),
         permissions: None,
     })?;
+    for request in agent.approvals.requests(None) {
+        direct.send(request)?;
+    }
     // The local user: every permission.
     let see_sessions = Arc::new(AtomicBool::new(true));
     let writer = tokio::spawn(net::write_loop(send, events, direct_rx, see_sessions));
@@ -81,7 +85,11 @@ async fn serve(agent: Arc<Agent>, stream: TcpStream, token: &str) -> anyhow::Res
     loop {
         let frame = read_frame::<_, ClientMsg>(&mut recv).await;
         if let Ok(msg) = &frame {
-            tracing::debug!(client = client_name, kind = msg.kind(), "local client message");
+            tracing::debug!(
+                client = client_name,
+                kind = msg.kind(),
+                "local client message"
+            );
         }
         let reply = match frame {
             Ok(ClientMsg::CallTool { call, name, args }) => {
@@ -92,11 +100,26 @@ async fn serve(agent: Arc<Agent>, stream: TcpStream, token: &str) -> anyhow::Res
                 });
                 None
             }
+            Ok(ClientMsg::Approve {
+                request,
+                allow,
+                remember,
+            }) => agent.approve(request, allow, remember),
             Ok(ClientMsg::Screenshot { target }) => Some(agent.screenshot(target).await),
             Ok(ClientMsg::CreatePairing) => {
                 let (agent, direct) = (agent.clone(), direct.clone());
                 tokio::spawn(async move {
                     let _ = direct.send(net::pair::create(&agent).await);
+                });
+                None
+            }
+            Ok(
+                m
+                @ (ClientMsg::ListMonitors | ClientMsg::ListModels | ClientMsg::WindowInfo { .. }),
+            ) => {
+                let (agent, direct) = (agent.clone(), direct.clone());
+                tokio::spawn(async move {
+                    let _ = direct.send(agent.inspect(m, true).await);
                 });
                 None
             }
@@ -108,12 +131,15 @@ async fn serve(agent: Arc<Agent>, stream: TcpStream, token: &str) -> anyhow::Res
                 | ClientMsg::Pull { .. }
                 | ClientMsg::Push { .. }
                 | ClientMsg::PushEnd { .. },
-            ) => {
-                Some(AgentMsg::Error {
-                    message: "not available on the local TCP port".into(),
-                })
+            ) => Some(AgentMsg::Error {
+                message: "not available on the local TCP port".into(),
+            }),
+            Ok(msg) => {
+                for r in agent.handle(msg, true) {
+                    let _ = direct.send(r);
+                }
+                None
             }
-            Ok(msg) => agent.handle(msg),
             Err(ywza_proto::Error::Json(e)) => Some(AgentMsg::Error {
                 message: format!("bad message: {e}"),
             }),

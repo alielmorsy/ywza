@@ -101,7 +101,15 @@ fn main() -> anyhow::Result<()> {
     let log = log_config(&dir, flag, log_file.clone(), cmd == "run");
     let _log_guard = ywza_proto::init_log(&log, "ywza-agent", "info").or_else(|e| {
         eprintln!("ywza-agent: {e}; logging to stderr only");
-        ywza_proto::init_log(&LogConfig { dir: None, file: None, ..log }, "ywza-agent", "info")
+        ywza_proto::init_log(
+            &LogConfig {
+                dir: None,
+                file: None,
+                ..log
+            },
+            "ywza-agent",
+            "info",
+        )
     })?;
     if args.get(1).map(String::as_str) == Some("service") {
         if let Some(result) = ywza_agent::platform::service(&args, flag, log_file.as_deref()) {
@@ -115,9 +123,11 @@ fn main() -> anyhow::Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
     match cmd.as_str() {
         "run" => rt.block_on(async {
-            let agent = ywza_agent::Agent::start(dir, false).await.inspect_err(|e| {
-                tracing::error!(error = %format!("{e:#}"), "agent failed to start");
-            })?;
+            let agent = ywza_agent::Agent::start(dir, false)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error = %format!("{e:#}"), "agent failed to start");
+                })?;
             tokio::signal::ctrl_c().await?;
             tracing::info!("shutting down: Ctrl-C");
             agent.endpoint.close().await;

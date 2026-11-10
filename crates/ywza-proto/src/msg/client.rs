@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{Config, InputEvent, SessionId, Target};
+use crate::{ApprovalMode, Config, InputEvent, SessionId, Target};
 
 /// Client to agent.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -10,14 +10,38 @@ pub enum ClientMsg {
     Hello {
         client_name: String,
         /// Local TCP clients authenticate with the token from `local-tcp.json`.
-        #[serde(default, alias = "pairing_code", skip_serializing_if = "Option::is_none")]
+        #[serde(
+            default,
+            alias = "pairing_code",
+            skip_serializing_if = "Option::is_none"
+        )]
         token: Option<String>,
     },
-    /// Starts a new session when `session` is absent.
+    /// Starts a new session when `session` is absent; an id the agent does not know creates a
+    /// session with that id. `device` (local clients only) runs our AI on a paired device: every
+    /// tool call goes to it. `model` and `effort` override the configured ones for this run.
+    /// `approval` (local clients only) is sent by the desktop app: it gates the session's tool
+    /// calls and is kept for the session. Without it, tools run with no approval step.
     Prompt {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         session: Option<SessionId>,
         text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        device: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        effort: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        approval: Option<ApprovalMode>,
+    },
+    /// Answers an `ApprovalRequest`. `remember` with `allow` always allows the tool from now on
+    /// (local clients and peers with `settings` only; for others it is a plain allow).
+    Approve {
+        request: u64,
+        allow: bool,
+        #[serde(default)]
+        remember: bool,
     },
     Cancel {
         session: SessionId,
@@ -44,12 +68,25 @@ pub enum ClientMsg {
     CreatePairing,
     /// The agent's AI tools (answered with `Tools`), for driving them with your own AI.
     ListTools,
-    /// Runs one tool directly. Answered with `ToolResult` carrying the same `call`.
+    /// Runs one tool directly, with no approval step. Answered with `ToolResult` carrying the
+    /// same `call`.
     CallTool {
         call: u64,
         name: String,
         #[serde(default)]
         args: Value,
+    },
+    /// The monitors (answered with `Monitors`).
+    ListMonitors,
+    /// Model ids of the configured LLM endpoint (answered with `Models`; local clients only).
+    ListModels,
+    /// A window's title, monitor and rect, and with `elements` its UI elements (answered with
+    /// `WindowInfo`). `window` is `w<id>` as in `list_windows`. The elements are the window's
+    /// latest `get_elements` list (same ids); a fresh one is taken if there is none yet.
+    WindowInfo {
+        window: String,
+        #[serde(default)]
+        elements: bool,
     },
     /// Sends `path` (relative and `~` paths are under the agent user's home): `XferStart`,
     /// one uni stream per entry, then `XferDone`.
@@ -79,6 +116,7 @@ impl ClientMsg {
         match self {
             Self::Hello { .. } => "hello",
             Self::Prompt { .. } => "prompt",
+            Self::Approve { .. } => "approve",
             Self::Cancel { .. } => "cancel",
             Self::Screenshot { .. } => "screenshot",
             Self::GetConfig => "get_config",
@@ -91,6 +129,9 @@ impl ClientMsg {
             Self::CreatePairing => "create_pairing",
             Self::ListTools => "list_tools",
             Self::CallTool { .. } => "call_tool",
+            Self::ListMonitors => "list_monitors",
+            Self::ListModels => "list_models",
+            Self::WindowInfo { .. } => "window_info",
             Self::Pull { .. } => "pull",
             Self::Push { .. } => "push",
             Self::PushEnd { .. } => "push_end",
@@ -118,6 +159,10 @@ mod tests {
             Prompt {
                 session: None,
                 text: "hi".into(),
+                device: None,
+                model: None,
+                effort: None,
+                approval: None,
             },
             json!({"type":"prompt","text":"hi"}),
         );
@@ -125,8 +170,41 @@ mod tests {
             Prompt {
                 session: Some(sid()),
                 text: "hi".into(),
+                device: Some("vm".into()),
+                model: Some("m".into()),
+                effort: Some("high".into()),
+                approval: Some(ApprovalMode::Always),
             },
-            json!({"type":"prompt","session":SID,"text":"hi"}),
+            json!({"type":"prompt","session":SID,"text":"hi","device":"vm","model":"m",
+                   "effort":"high","approval":"always"}),
+        );
+        check(
+            Approve {
+                request: 7,
+                allow: true,
+                remember: true,
+            },
+            json!({"type":"approve","request":7,"allow":true,"remember":true}),
+        );
+        assert_eq!(
+            serde_json::from_value::<ClientMsg>(
+                json!({"type":"approve","request":7,"allow":false})
+            )
+            .unwrap(),
+            Approve {
+                request: 7,
+                allow: false,
+                remember: false
+            }
+        );
+        check(ListMonitors, json!({"type":"list_monitors"}));
+        check(ListModels, json!({"type":"list_models"}));
+        check(
+            WindowInfo {
+                window: "w3".into(),
+                elements: true,
+            },
+            json!({"type":"window_info","window":"w3","elements":true}),
         );
         check(
             Cancel { session: sid() },
@@ -170,6 +248,17 @@ mod tests {
                 args: json!({"ms":1}),
             },
             json!({"type":"call_tool","call":4,"name":"wait","args":{"ms":1}}),
+        );
+        assert_eq!(
+            serde_json::from_value::<ClientMsg>(
+                json!({"type":"call_tool","call":4,"name":"wait","args":{}})
+            )
+            .unwrap(),
+            CallTool {
+                call: 4,
+                name: "wait".into(),
+                args: json!({}),
+            }
         );
         check(
             Pull {

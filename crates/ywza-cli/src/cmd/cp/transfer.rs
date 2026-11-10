@@ -22,7 +22,13 @@ fn reported_elsewhere(e: &anyhow::Error) -> bool {
 }
 
 /// Starts a pull on `p`; returns the source's file name.
-async fn start_pull(p: &mut Peer, xfer: u64, path: &str, recursive: bool, st: &mut Stats) -> Result<String> {
+async fn start_pull(
+    p: &mut Peer,
+    xfer: u64,
+    path: &str,
+    recursive: bool,
+    st: &mut Stats,
+) -> Result<String> {
     let path = path.to_string();
     p.tell(&ClientMsg::Pull {
         xfer,
@@ -58,7 +64,12 @@ async fn end_push(p: &mut Peer, xfer: u64, files: u64, st: &mut Stats) -> Result
 
 /// Runs `handle` on every entry stream the agent sends for a pull, until `XferDone` and all
 /// handled. Returns (streams arrived, bytes the handlers reported).
-async fn each_stream<F, Fut>(p: &mut Peer, xfer: u64, st: &mut Stats, handle: F) -> Result<(u64, u64)>
+async fn each_stream<F, Fut>(
+    p: &mut Peer,
+    xfer: u64,
+    st: &mut Stats,
+    handle: F,
+) -> Result<(u64, u64)>
 where
     F: Fn(RecvStream) -> Fut,
     Fut: std::future::Future<Output = Result<u64>> + Send + 'static,
@@ -102,7 +113,14 @@ where
 }
 
 /// device:path to a local destination.
-pub async fn pull(p: &mut Peer, xfer: u64, path: &str, recursive: bool, dst: &Path, st: &mut Stats) -> Result<()> {
+pub async fn pull(
+    p: &mut Peer,
+    xfer: u64,
+    path: &str,
+    recursive: bool,
+    dst: &Path,
+    st: &mut Stats,
+) -> Result<()> {
     let name = start_pull(p, xfer, path, recursive, st).await?;
     let sink = Arc::new(Sink::new(dst, &name)?);
     let shown = sink.root().display().to_string();
@@ -122,7 +140,14 @@ pub async fn pull(p: &mut Peer, xfer: u64, path: &str, recursive: bool, dst: &Pa
 }
 
 /// A local source to device:dest.
-pub async fn push(p: &mut Peer, xfer: u64, src: &Path, recursive: bool, dest: &str, st: &mut Stats) -> Result<()> {
+pub async fn push(
+    p: &mut Peer,
+    xfer: u64,
+    src: &Path,
+    recursive: bool,
+    dest: &str,
+    st: &mut Stats,
+) -> Result<()> {
     let src = src.to_path_buf();
     let w = tokio::task::spawn_blocking(move || xfer::walk(&src, recursive)).await??;
     for (rel, e) in &w.errors {
@@ -130,7 +155,10 @@ pub async fn push(p: &mut Peer, xfer: u64, src: &Path, recursive: bool, dest: &s
     }
     start_push(p, xfer, dest, &w.name, st).await?;
     let conn = p.conn.clone();
-    let (files, _) = xfer::send_all(&conn, xfer, w.entries, |rel, e| st.error(format!("{rel}: {e}"))).await?;
+    let (files, _) = xfer::send_all(&conn, xfer, w.entries, |rel, e| {
+        st.error(format!("{rel}: {e}"))
+    })
+    .await?;
     end_push(p, xfer, files, st).await
 }
 

@@ -47,7 +47,9 @@ pub fn cert_config(cfg: &Config) -> Result<CertConfig> {
         CertMode::SelfSigned => {
             let (crt, key) = selfsigned::ensure(&cfg.cert_dir, hostname)?;
             let certs = load_certs(&crt)?;
-            let first = certs.first().context("self-signed certificate file is empty")?;
+            let first = certs
+                .first()
+                .context("self-signed certificate file is empty")?;
             tracing::info!(
                 "self-signed certificate {}; set on every device: relay_url = \"{}\"",
                 crt.display(),

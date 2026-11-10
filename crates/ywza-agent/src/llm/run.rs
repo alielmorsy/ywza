@@ -5,26 +5,43 @@ use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 use ywza_proto::{SessionEvent, SessionId};
 
-use super::{client::complete, prompt::system_prompt, push_tool_result, Msg};
+use super::{client::complete, push_tool_result, Executor, Msg};
 use crate::{tools::ToolOutput, Agent};
+
+/// Per-run overrides of the configured model and reasoning effort.
+#[derive(Debug, Default, Clone)]
+pub struct Opts {
+    pub model: Option<String>,
+    pub effort: Option<String>,
+}
 
 /// Runs the loop until the model answers without tool calls (Ok(summary)), the step limit,
 /// an error, or cancellation (Err). `history` stays valid for a follow-up prompt either way.
+/// Tool calls and the system prompt come from `exec`.
 pub async fn run(
     agent: &Agent,
     sid: SessionId,
     history: &mut Vec<Msg>,
     cancel: &CancellationToken,
+    opts: &Opts,
+    exec: &impl Executor,
 ) -> Result<String, String> {
     if history.first().is_none_or(|m| m.value["role"] != "system") {
-        let prompt = system_prompt(&crate::tools::monitors_text().await);
+        let prompt = exec.system_prompt().await;
         history.insert(0, Msg::new(json!({"role":"system","content":prompt})));
     }
-    let llm = agent.config.get().llm;
+    let mut llm = agent.config.get().llm;
+    if let Some(m) = opts.model.as_ref().filter(|m| !m.is_empty()) {
+        llm.model = m.clone();
+    }
+    if opts.effort.is_some() {
+        llm.effort = opts.effort.clone();
+    }
+    let tools = exec.tools();
     for step in 0..llm.max_steps {
         let started = Instant::now();
         let msg = tokio::select! {
-            r = complete(&agent.http, &llm, &agent.tools, history) => match r {
+            r = complete(&agent.http, &llm, &tools, history) => match r {
                 Ok(m) => m,
                 Err(e) => {
                     tracing::error!(session = %sid.0, error = %e, "LLM request failed");
@@ -71,9 +88,16 @@ pub async fn run(
                     }
                     Ok(args) => {
                         agent.emit_tool_call(sid, &id, name, &args);
-                        tokio::select! {
-                            o = agent.run_tool(name, &args) => o,
-                            _ = cancel.cancelled() => ToolOutput::err("cancelled"),
+                        let gated = match agent.sessions.approval(sid) {
+                            Some(mode) => agent.gate(sid, mode, name, &args, cancel).await,
+                            None => Ok(()),
+                        };
+                        match gated {
+                            Err(why) => ToolOutput::err(why),
+                            Ok(()) => tokio::select! {
+                                o = exec.call(name, &args) => o,
+                                _ = cancel.cancelled() => ToolOutput::err("cancelled"),
+                            },
                         }
                     }
                 }

@@ -28,7 +28,7 @@ pub fn end_session(agent: &Agent, sid: SessionId) {
     );
 }
 
-/// Runs a tool for an external client, logging it in `sid` like the agent's own calls.
+/// Runs a tool for an external client, logging it in `sid` like the agent's own calls. No approval step.
 pub async fn call_tool(
     agent: &Agent,
     sid: SessionId,

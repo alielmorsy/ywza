@@ -25,7 +25,11 @@ fn directives(level: &str) -> String {
     if level.contains(['=', ',']) {
         return level.into();
     }
-    let others = if matches!(level, "debug" | "trace") { "info" } else { level };
+    let others = if matches!(level, "debug" | "trace") {
+        "info"
+    } else {
+        level
+    };
     let own = OWN_CRATES.map(|c| format!("{c}={level}")).join(",");
     format!("{others},{own}")
 }
@@ -38,7 +42,11 @@ pub fn init(
     file_prefix: &str,
     default_level: &str,
 ) -> Result<Option<WorkerGuard>, Error> {
-    let level = if cfg.level.is_empty() { default_level } else { &cfg.level };
+    let level = if cfg.level.is_empty() {
+        default_level
+    } else {
+        &cfg.level
+    };
     let filter = match EnvFilter::try_from_default_env() {
         Ok(f) => f,
         Err(_) => EnvFilter::try_new(directives(level))
@@ -49,9 +57,9 @@ pub fn init(
         (Some(path), _) => {
             let parent = path.parent().filter(|p| !p.as_os_str().is_empty());
             let parent = parent.unwrap_or(std::path::Path::new("."));
-            let name = path
-                .file_name()
-                .ok_or_else(|| Error::Log(format!("log file {} has no file name", path.display())))?;
+            let name = path.file_name().ok_or_else(|| {
+                Error::Log(format!("log file {} has no file name", path.display()))
+            })?;
             std::fs::create_dir_all(parent)
                 .map_err(|e| Error::Log(format!("creating {}: {e}", parent.display())))?;
             let (w, g) = tracing_appender::non_blocking(rolling::never(parent, name));

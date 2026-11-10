@@ -1,0 +1,31 @@
+{
+  "name": "ywza-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "vite": "vite",
+    "build": "tsc --noEmit && vite build",
+    "tauri": "tauri",
+    "preview:ui": "vite --mode preview --port 5199 --open"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.5",
+    "@tauri-apps/cli": "^2.12.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "tailwindcss": "^4.3.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-opener": "^2.5.0",
+    "qrcode-generator": "^2.0.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  }
+}

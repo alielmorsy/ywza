@@ -102,7 +102,12 @@ fn carry_ocr_ids(prev: Option<&Snapshot>, snap: &mut Snapshot) {
 }
 
 /// Before acting on an OCR element: re-capture, re-OCR its box and compare the text.
-pub async fn check_ocr(w: WindowId, rect: Rect, want: String, ocr: OcrEngine) -> Result<(), String> {
+pub async fn check_ocr(
+    w: WindowId,
+    rect: Rect,
+    want: String,
+    ocr: OcrEngine,
+) -> Result<(), String> {
     let norm = |s: &str| s.split_whitespace().collect::<String>().to_lowercase();
     let got = blocking(move || {
         let img = desk::capture_window(w).map_err(|e| e.to_string())?;

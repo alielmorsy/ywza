@@ -81,7 +81,9 @@ impl Config {
         let mode = match self.cert_mode {
             Some(mode) => mode,
             None if host.parse::<IpAddr>().is_ok() => CertMode::SelfSigned,
-            None => bail!("cert_mode is required when tls = true and hostname is not an IP address"),
+            None => {
+                bail!("cert_mode is required when tls = true and hostname is not an IP address")
+            }
         };
         Ok((host, mode))
     }
@@ -106,8 +108,12 @@ mod tests {
     #[test]
     fn minimal_file_gets_the_defaults() {
         let c: Config =
-            toml::from_str("hostname = \"relay.example.com\"\ncert_mode = \"letsencrypt\"").unwrap();
-        assert_eq!(c.tls_params().unwrap(), ("relay.example.com", CertMode::Letsencrypt));
+            toml::from_str("hostname = \"relay.example.com\"\ncert_mode = \"letsencrypt\"")
+                .unwrap();
+        assert_eq!(
+            c.tls_params().unwrap(),
+            ("relay.example.com", CertMode::Letsencrypt)
+        );
         assert!(c.tls);
         assert_eq!(c.cert_dir, PathBuf::from("./certs"));
         assert!(c.letsencrypt_prod && c.quic_addr_discovery);
@@ -146,8 +152,11 @@ mod tests {
 
     #[test]
     fn plain_http_needs_no_hostname_but_tls_does() {
-        let c: Config = toml::from_str("tls = false
-http_port = 3340").unwrap();
+        let c: Config = toml::from_str(
+            "tls = false
+http_port = 3340",
+        )
+        .unwrap();
         assert!(!c.tls);
         assert_eq!(c.http_port, 3340);
         let c: Config = toml::from_str("cert_mode = \"manual\"").unwrap();
@@ -157,11 +166,18 @@ http_port = 3340").unwrap();
     #[test]
     fn an_ip_hostname_defaults_to_self_signed() {
         let c: Config = toml::from_str("hostname = \"203.0.113.7\"").unwrap();
-        assert_eq!(c.tls_params().unwrap(), ("203.0.113.7", CertMode::SelfSigned));
+        assert_eq!(
+            c.tls_params().unwrap(),
+            ("203.0.113.7", CertMode::SelfSigned)
+        );
         let c: Config = toml::from_str("hostname = \"::1\"\ncert_mode = \"self-signed\"").unwrap();
         assert_eq!(c.tls_params().unwrap().1, CertMode::SelfSigned);
         let c: Config = toml::from_str("hostname = \"relay.example.com\"").unwrap();
-        assert!(c.tls_params().unwrap_err().to_string().contains("cert_mode"));
+        assert!(c
+            .tls_params()
+            .unwrap_err()
+            .to_string()
+            .contains("cert_mode"));
     }
 
     #[test]

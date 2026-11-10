@@ -40,7 +40,10 @@ pub fn chown_log(file: Option<&Path>, uid: u32, gid: u32) {
         if let Some(dir) = file.parent() {
             fs::create_dir_all(dir)?;
         }
-        fs::OpenOptions::new().create(true).append(true).open(file)?;
+        fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(file)?;
         std::os::unix::fs::chown(file, Some(uid), Some(gid))
     })();
     if let Err(e) = result {

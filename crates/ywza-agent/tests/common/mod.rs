@@ -11,7 +11,8 @@ use tokio::{
 };
 use ywza_agent::Agent;
 use ywza_proto::{
-    read_frame, write_frame, AgentMsg, ClientMsg, Config, Control, SessionEvent, Ticket, ALPN,
+    read_frame, write_frame, AgentMsg, ApprovalMode, ClientMsg, Config, Control, SessionEvent,
+    Ticket, ALPN,
 };
 
 /// Stateless mock: tool call first, final text once a tool result is in the history.
@@ -152,17 +153,31 @@ pub async fn start(llm: bool) -> (tempfile::TempDir, Endpoint, Control) {
     (dir, client, c)
 }
 
-/// Sends a prompt and collects session events until done/failed, plus the other messages.
+/// Sends a prompt without an approval mode (no gate), and collects session events until done/failed,
+/// plus the other messages.
 pub async fn run_prompt(c: &mut Control, text: &str) -> (Vec<SessionEvent>, Vec<AgentMsg>) {
+    send_prompt(c, text, None).await;
+    collect(c).await
+}
+
+pub async fn send_prompt(c: &mut Control, text: &str, approval: Option<ApprovalMode>) {
     write_frame(
         &mut c.send,
         &ClientMsg::Prompt {
             session: None,
             text: text.into(),
+            device: None,
+            model: None,
+            effort: None,
+            approval,
         },
     )
     .await
     .unwrap();
+}
+
+/// Session events until done/failed, plus the other messages.
+pub async fn collect(c: &mut Control) -> (Vec<SessionEvent>, Vec<AgentMsg>) {
     let mut events = Vec::new();
     let mut others = Vec::new();
     loop {

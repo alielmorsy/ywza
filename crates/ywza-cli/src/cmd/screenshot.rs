@@ -1,9 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::{bail, Result};
-use ywza_proto::{AgentMsg, ClientMsg, Control, Target};
-
-use crate::connect::ask;
+use ywza_proto::{client::ask, AgentMsg, ClientMsg, Control, Target};
 
 pub async fn run(
     c: &mut Control,
@@ -23,7 +21,10 @@ pub async fn run(
             width,
             height,
         } => {
-            std::fs::write(&output, data_encoding::BASE64.decode(png_base64.as_bytes())?)?;
+            std::fs::write(
+                &output,
+                data_encoding::BASE64.decode(png_base64.as_bytes())?,
+            )?;
             println!("{} ({width}x{height})", output.display());
             Ok(())
         }

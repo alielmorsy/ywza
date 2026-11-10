@@ -10,8 +10,7 @@ use serde::Deserialize;
 use ywza_desktop::{self as desk, WindowId};
 
 use super::{
-    act::settle_diff, ocr::check_ocr, util::blocking, Ctx, ElementArg, Tool, ToolOutput,
-    WindowArg,
+    act::settle_diff, ocr::check_ocr, util::blocking, Ctx, ElementArg, Tool, ToolOutput, WindowArg,
 };
 
 const SLEEP_MAX: u64 = 60_000;
@@ -144,9 +143,11 @@ $f.Add_Shown({ $t.Start() }); [Windows.Forms.Application]::Run($f)
         let mut w = None;
         for _ in 0..50 {
             let out = call("list_windows", json!({})).await;
-            w = out.text.lines().find(|l| l.contains("ywza-wait-test")).map(|l| {
-                l[1..l.find(']').unwrap()].to_string()
-            });
+            w = out
+                .text
+                .lines()
+                .find(|l| l.contains("ywza-wait-test"))
+                .map(|l| l[1..l.find(']').unwrap()].to_string());
             if w.is_some() {
                 break;
             }
@@ -163,7 +164,11 @@ $f.Add_Shown({ $t.Start() }); [Windows.Forms.Application]::Run($f)
         assert!(out.ok && out.text.contains("\"Start\""), "{}", out.text);
 
         let out = call("wait", json!({"window": w, "element": extra, "ms": 10_000})).await;
-        assert!(out.ok && out.text.contains(&format!("-[{extra}]")), "{}", out.text);
+        assert!(
+            out.ok && out.text.contains(&format!("-[{extra}]")),
+            "{}",
+            out.text
+        );
 
         let out = call("wait", json!({"window": w, "element": stop, "ms": 10_000})).await;
         assert!(out.ok && out.text.contains("closed"), "{}", out.text);

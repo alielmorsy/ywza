@@ -31,7 +31,11 @@ pub async fn bind(
     }
     let path = dir.join("agent.port");
     let saved = saved_port(&path);
-    tracing::debug!(saved_port = saved, relay = relay.unwrap_or("default"), "binding the endpoint");
+    tracing::debug!(
+        saved_port = saved,
+        relay = relay.unwrap_or("default"),
+        "binding the endpoint"
+    );
     let ep = match bind_port(key.clone(), saved, relay).await {
         Ok(ep) => ep,
         Err(e) if saved != 0 => {
@@ -48,11 +52,7 @@ pub async fn bind(
 
 /// The n0 defaults (public relays unless `relay` is set, address lookup) with the IP sockets on
 /// `port` (0 = random).
-async fn bind_port(
-    key: SecretKey,
-    port: u16,
-    relay: Option<&str>,
-) -> anyhow::Result<Endpoint> {
+async fn bind_port(key: SecretKey, port: u16, relay: Option<&str>) -> anyhow::Result<Endpoint> {
     let b = ywza_proto::with_relay(Endpoint::builder(presets::N0), relay)?;
     Ok(b.secret_key(key)
         .alpns(vec![ALPN.to_vec()])

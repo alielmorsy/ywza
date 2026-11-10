@@ -58,7 +58,10 @@ mod tests {
     #[test]
     fn defaults() {
         let c = LogConfig::default();
-        assert_eq!((c.level.as_str(), c.max_files, c.format), ("", 14, Format::Text));
+        assert_eq!(
+            (c.level.as_str(), c.max_files, c.format),
+            ("", 14, Format::Text)
+        );
         assert_eq!((c.dir, c.file), (None, None));
     }
 

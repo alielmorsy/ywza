@@ -8,6 +8,9 @@ pub struct Llm {
     pub model: String,
     pub max_steps: u32,
     pub vision: bool,
+    /// Sent as `reasoning_effort` when set (low, medium, high, xhigh, max).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
 }
 
 impl Default for Llm {
@@ -18,6 +21,7 @@ impl Default for Llm {
             model: "gpt-4.1".into(),
             max_steps: 60,
             vision: true,
+            effort: None,
         }
     }
 }

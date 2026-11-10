@@ -1,3 +1,4 @@
+mod approval;
 mod desktop;
 mod llm;
 mod ocr;
@@ -8,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::LogConfig;
 
+pub use approval::{glob, Action, Approval, ApprovalMode, Rule};
 pub use desktop::Desktop;
 pub use llm::Llm;
 pub use ocr::{Ocr, OcrEngine};
@@ -28,6 +30,8 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub relay_url: Option<String>,
     pub llm: Llm,
+    /// Which tool calls wait for the user's answer (`[[approval.rules]]`).
+    pub approval: Approval,
     pub ocr: Ocr,
     pub desktop: Desktop,
     pub stream: Stream,

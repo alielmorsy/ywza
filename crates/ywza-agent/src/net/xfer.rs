@@ -33,7 +33,13 @@ fn fail(xfer: u64, path: Option<String>, message: impl ToString) -> AgentMsg {
     }
 }
 
-pub async fn pull(conn: Connection, xfer: u64, path: String, recursive: bool, direct: UnboundedSender<AgentMsg>) {
+pub async fn pull(
+    conn: Connection,
+    xfer: u64,
+    path: String,
+    recursive: bool,
+    direct: UnboundedSender<AgentMsg>,
+) {
     let root = xfer::expand(&path);
     tracing::info!(xfer, path = %root.display(), recursive, "pull started");
     let walked = tokio::task::spawn_blocking(move || xfer::walk(&root, recursive)).await;

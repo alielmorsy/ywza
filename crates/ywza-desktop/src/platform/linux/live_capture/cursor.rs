@@ -62,7 +62,13 @@ fn argb_to_rgba(img: &[u32]) -> Vec<u8> {
     img.iter()
         .flat_map(|&p| {
             let a = p >> 24;
-            let un = |v: u32| if a == 0 { 0 } else { ((v & 255) * 255 / a).min(255) as u8 };
+            let un = |v: u32| {
+                if a == 0 {
+                    0
+                } else {
+                    ((v & 255) * 255 / a).min(255) as u8
+                }
+            };
             [un(p >> 16), un(p >> 8), un(p), a as u8]
         })
         .collect()
@@ -74,7 +80,10 @@ mod tests {
 
     #[test]
     fn cursor_argb_unpremultiplies() {
-        assert_eq!(argb_to_rgba(&[0x80_40_20_00, 0]), vec![127, 63, 0, 128, 0, 0, 0, 0]);
+        assert_eq!(
+            argb_to_rgba(&[0x80_40_20_00, 0]),
+            vec![127, 63, 0, 128, 0, 0, 0, 0]
+        );
     }
 
     #[test]

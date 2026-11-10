@@ -79,7 +79,11 @@ async fn main() -> Result<()> {
     let mut server = Server::spawn(config)
         .await
         .map_err(|e| anyhow!("starting relay: {e:#}"))?;
-    tracing::info!(version = env!("CARGO_PKG_VERSION"), tls = tls_mode, "ywza-relay starting");
+    tracing::info!(
+        version = env!("CARGO_PKG_VERSION"),
+        tls = tls_mode,
+        "ywza-relay starting"
+    );
     if let Some(addr) = server.http_addr() {
         tracing::info!("listening on http://{addr}");
     }

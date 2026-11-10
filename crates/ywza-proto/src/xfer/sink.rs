@@ -35,7 +35,11 @@ impl Sink {
 
     /// Writes one entry whose header was already read from `body`. Files go to a `.part`
     /// name first, so an interrupted copy never looks complete. Returns the bytes written.
-    pub async fn write<R: AsyncRead + Unpin>(&self, h: &FileHeader, body: &mut R) -> io::Result<u64> {
+    pub async fn write<R: AsyncRead + Unpin>(
+        &self,
+        h: &FileHeader,
+        body: &mut R,
+    ) -> io::Result<u64> {
         let rel = safe_rel(&h.rel)
             .ok_or_else(|| io::Error::other(format!("refused path `{}`", h.rel)))?;
         let path = self.root.join(rel);

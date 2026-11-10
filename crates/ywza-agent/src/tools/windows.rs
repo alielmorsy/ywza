@@ -83,7 +83,12 @@ impl Tool for MoveWindow {
         flat(async {
             let w = self.window.0;
             let Self {
-                monitor, x, y, w: ww, h: hh, ..
+                monitor,
+                x,
+                y,
+                w: ww,
+                h: hh,
+                ..
             } = self;
             let info = blocking(move || {
                 desk::move_window(w, monitor, x, y, ww, hh)?;
@@ -121,20 +126,22 @@ impl Tool for CloseWindow {
                 .map_err(desk_err)?;
             tokio::time::sleep(Duration::from_millis(700)).await;
             let prev = cx.snap(w);
-            Ok(match blocking(move || desk::snapshot(w, prev.as_ref())).await {
-                Err(_) => {
-                    cx.forget(w);
-                    ToolOutput::ok(format!("w{w} closed"))
-                }
-                Ok(snap) => {
-                    let text = format!(
-                        "w{w} is still open; it may be asking something:\n{}",
-                        snap.render()
-                    );
-                    cx.store(w, snap);
-                    ToolOutput::ok(text).elements(w)
-                }
-            })
+            Ok(
+                match blocking(move || desk::snapshot(w, prev.as_ref())).await {
+                    Err(_) => {
+                        cx.forget(w);
+                        ToolOutput::ok(format!("w{w} closed"))
+                    }
+                    Ok(snap) => {
+                        let text = format!(
+                            "w{w} is still open; it may be asking something:\n{}",
+                            snap.render()
+                        );
+                        cx.store(w, snap);
+                        ToolOutput::ok(text).elements(w)
+                    }
+                },
+            )
         })
         .await
     }

@@ -8,6 +8,7 @@ license.workspace = true
 log = ["dep:tracing-appender", "dep:tracing-subscriber"]
 
 [dependencies]
+anyhow = "1"
 data-encoding = "2"
 dirs = "7"
 hmac = "0.12"
@@ -18,7 +19,9 @@ serde_json = "1"
 sha2 = "0.10"
 spake2 = "0.4"
 thiserror = "2"
-tokio = { version = "1", features = ["fs", "io-util", "rt"] }
+toml = "0.8"
+tokio = { version = "1", features = ["fs", "io-util", "rt", "time"] }
+tracing = "0.1"
 tracing-appender = { version = "0.2", optional = true }
 tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "json"] }
 uuid = { version = "1", features = ["serde", "v4"] }
@@ -26,4 +29,3 @@ uuid = { version = "1", features = ["serde", "v4"] }
 [dev-dependencies]
 tempfile = "3"
 tokio = { version = "1", features = ["macros", "rt", "time"] }
-toml = "0.8"

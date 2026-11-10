@@ -1,8 +1,6 @@
 use anyhow::{bail, Result};
 use clap::Subcommand;
-use ywza_proto::{AgentMsg, ClientMsg, Control};
-
-use crate::connect::ask;
+use ywza_proto::{client::ask, AgentMsg, ClientMsg, Control};
 
 #[derive(Subcommand)]
 pub enum ConfigCmd {

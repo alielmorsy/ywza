@@ -7,9 +7,7 @@ use std::time::Duration;
 use common::{agent, endpoint, hello, ticket};
 use iroh::Endpoint;
 use ywza_agent::net::pair;
-use ywza_proto::{
-    client_side, read_frame, AgentMsg, Error, PairInfo, Permissions, PAIR_ALPN,
-};
+use ywza_proto::{client_side, read_frame, AgentMsg, Error, PairInfo, Permissions, PAIR_ALPN};
 
 /// Dials the rendezvous endpoint and runs the client side with `code`.
 async fn try_pair(
@@ -55,7 +53,9 @@ async fn the_right_code_pairs_and_the_peer_reconnects_without_one() {
     assert_eq!(started.code.len(), 6);
     let phone = endpoint(None).await;
 
-    let info = try_pair(&phone, &started.addr, &started.code).await.unwrap();
+    let info = try_pair(&phone, &started.addr, &started.code)
+        .await
+        .unwrap();
     assert_eq!(info.node_id, agent.endpoint.id());
 
     let peers = wait_for_peers(&agent).await;
@@ -81,12 +81,19 @@ async fn the_right_code_pairs_and_the_peer_reconnects_without_one() {
 async fn one_wrong_code_burns_it() {
     let (_dir, agent) = agent(false).await;
     let started = pair::begin(&agent).await.unwrap();
-    let wrong = if started.code == "000000" { "000001" } else { "000000" };
+    let wrong = if started.code == "000000" {
+        "000001"
+    } else {
+        "000000"
+    };
     let phone = endpoint(None).await;
 
     let err = try_pair(&phone, &started.addr, wrong).await.unwrap_err();
     assert!(
-        matches!(err, Error::BadCode | Error::Pair(_) | Error::Io(_) | Error::Transport(_)),
+        matches!(
+            err,
+            Error::BadCode | Error::Pair(_) | Error::Io(_) | Error::Transport(_)
+        ),
         "{err:?}"
     );
     assert!(agent.config.get().peers.is_empty());

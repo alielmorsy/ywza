@@ -34,6 +34,9 @@ pub struct SessionSummary {
     pub status: SessionStatus,
     /// Last activity, Unix milliseconds.
     pub updated_ms: u64,
+    /// The paired device this session operates with our AI; absent: this machine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device: Option<String>,
 }
 
 /// One entry in a session's history.

@@ -4,8 +4,8 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::{
-    self, Atom, AtomEnum, ClientMessageEvent, ConfigureWindowAux, ConnectionExt as _, EventMask, StackMode,
-    Window,
+    self, Atom, AtomEnum, ClientMessageEvent, ConfigureWindowAux, ConnectionExt as _, EventMask,
+    StackMode, Window,
 };
 use x11rb::CURRENT_TIME;
 

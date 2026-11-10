@@ -6,7 +6,7 @@ use std::{
 
 use serde_json::Value;
 use ywza_desktop::{Snapshot, WindowId};
-use ywza_proto::OcrEngine;
+use ywza_proto::{OcrEngine, ToolInfo};
 use ywza_term::TermManager;
 
 use super::{act::Report, registry, Entry, ToolOutput};
@@ -118,6 +118,34 @@ impl Tools {
                 parameters: e.schema.clone(),
             })
             .collect()
+    }
+
+    /// The tools as clients and models see them.
+    pub fn infos(&self) -> Vec<ToolInfo> {
+        self.specs()
+            .into_iter()
+            .map(|s| ToolInfo {
+                name: s.name.into(),
+                description: s.description,
+                parameters: s.parameters,
+            })
+            .collect()
+    }
+
+    /// The window's latest element list (the one `get_elements` ids refer to), kept as the
+    /// latest. A stored one whose window rect is not `rect` is stale: re-taken with its ids carried over.
+    pub async fn latest_snapshot(
+        &self,
+        w: WindowId,
+        rect: ywza_desktop::Rect,
+    ) -> ywza_desktop::Result<Snapshot> {
+        let cached = self.shared.snaps.lock().unwrap().get(&w).cloned();
+        if let Some(s) = cached.as_ref().filter(|s| s.window.rect == rect) {
+            return Ok(s.clone());
+        }
+        let s = super::util::blocking(move || ywza_desktop::snapshot(w, cached.as_ref())).await?;
+        self.shared.snaps.lock().unwrap().insert(w, s.clone());
+        Ok(s)
     }
 
     /// Runs a tool. `ocr` is the configured engine.

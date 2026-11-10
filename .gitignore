@@ -6,3 +6,6 @@ spikes/
 .ltt.json
 *.log
 __pycache__/
+node_modules/
+app/dist/
+target-linux/

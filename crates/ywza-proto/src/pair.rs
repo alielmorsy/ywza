@@ -147,7 +147,9 @@ fn mac_hex(key: &[u8], data: &[u8]) -> String {
 }
 
 fn check(key: &[u8], data: &[u8], hex: &str) -> Result<(), Error> {
-    let tag = HEXLOWER.decode(hex.as_bytes()).map_err(|_| Error::BadCode)?;
+    let tag = HEXLOWER
+        .decode(hex.as_bytes())
+        .map_err(|_| Error::BadCode)?;
     new_mac(key, data)
         .verify_slice(&tag)
         .map_err(|_| Error::BadCode)
@@ -162,9 +164,8 @@ mod tests {
         PairInfo {
             node_id: id,
             name: name.into(),
-            addr: addr.then(|| {
-                EndpointAddr::new(id).with_ip_addr("10.0.0.2:4433".parse().unwrap())
-            }),
+            addr: addr
+                .then(|| EndpointAddr::new(id).with_ip_addr("10.0.0.2:4433".parse().unwrap())),
             relay: None,
         }
     }

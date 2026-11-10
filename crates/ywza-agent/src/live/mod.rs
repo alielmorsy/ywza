@@ -72,7 +72,13 @@ impl Live {
             ctl.clone(),
             fixed_bps.is_none(),
         ));
-        tracing::info!(monitor, fps, adaptive = fixed_bps.is_none(), cursor, "live view started");
+        tracing::info!(
+            monitor,
+            fps,
+            adaptive = fixed_bps.is_none(),
+            cursor,
+            "live view started"
+        );
         Ok(Self {
             monitor,
             rect,

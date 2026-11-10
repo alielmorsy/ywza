@@ -1,16 +1,17 @@
 //! `ywza`: command-line client for the ywza agent.
 
 mod cmd;
-mod connect;
 mod render;
 
 use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use ywza_proto::SessionId;
+use ywza_proto::{client, SessionId};
 
 use cmd::config::ConfigCmd;
+
+const CLIENT_NAME: &str = "ywza-cli";
 
 #[derive(Parser)]
 #[command(name = "ywza", version)]
@@ -85,11 +86,8 @@ enum Cmd {
 
 /// Device names become file names (`devices/<name>.json`).
 fn parse_device(s: &str) -> Result<String, String> {
-    let ok = !s.is_empty()
-        && s != "local"
-        && s.chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
-    ok.then(|| s.to_string())
+    client::valid_device_name(s)
+        .then(|| s.to_string())
         .ok_or_else(|| "use letters, digits, - and _ (\"local\" means this machine)".into())
 }
 
@@ -120,7 +118,10 @@ async fn main() -> Result<()> {
         _ => {}
     }
 
-    let (ep, mut c) = connect::open(cli.device.as_deref()).await?;
+    let (ep, mut c, _) = match cli.device.as_deref() {
+        Some(name) => client::open_device(name, CLIENT_NAME).await?,
+        None => client::open_local(CLIENT_NAME).await?,
+    };
     let bridge = matches!(cli.cmd, Cmd::Bridge);
     let r = match cli.cmd {
         Cmd::Bridge => cmd::bridge::run(&mut c).await,
@@ -136,7 +137,7 @@ async fn main() -> Result<()> {
         Cmd::Config(sub) => cmd::config::run(&mut c, sub).await,
         Cmd::Pair { .. } | Cmd::Devices | Cmd::Cp { .. } => unreachable!(),
     };
-    connect::close(ep, &c).await;
+    client::close(ep, &c).await;
     // Exit right here: tokio's stdin reader thread would block runtime shutdown until the
     // client closes our stdin, so the client would never see EOF when the agent drops the
     // link (e.g. a login-screen switch) and its call would hang.

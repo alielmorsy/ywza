@@ -95,7 +95,12 @@ async fn serve(agent: Arc<Agent>, ep: Endpoint, code: String, cancel: Cancellati
         match attempt(&agent, incoming, &code).await {
             Ok(()) => break,
             // The code is burnt; the endpoint stays up only to say so.
-            Err(e) if matches!(e.downcast_ref::<ywza_proto::Error>(), Some(ywza_proto::Error::BadCode)) => {
+            Err(e)
+                if matches!(
+                    e.downcast_ref::<ywza_proto::Error>(),
+                    Some(ywza_proto::Error::BadCode)
+                ) =>
+            {
                 tracing::warn!("pairing code wrong, the code is burnt")
             }
             Err(e) => tracing::warn!(error = %format!("{e:#}"), "pairing failed"),
@@ -129,11 +134,8 @@ async fn attempt(agent: &Agent, incoming: Incoming, code: &str) -> anyhow::Resul
             .as_deref()
             .map(ywza_proto::shareable_relay),
     };
-    let result = tokio::time::timeout(
-        ATTEMPT_TIMEOUT,
-        agent_side(&mut send, &mut recv, code, me),
-    )
-    .await;
+    let result =
+        tokio::time::timeout(ATTEMPT_TIMEOUT, agent_side(&mut send, &mut recv, code, me)).await;
     if let Ok(Ok(info)) = &result {
         trust(agent, info)?;
     }

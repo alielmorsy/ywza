@@ -45,8 +45,7 @@ impl MonitorCapture {
         let item: GraphicsCaptureItem = unsafe { interop.CreateForMonitor(m)? };
         let (device, ctx, winrt_device) = d3d::create_device()?;
         let size = item.Size()?;
-        let pool =
-            Direct3D11CaptureFramePool::CreateFreeThreaded(&winrt_device, FORMAT, 2, size)?;
+        let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(&winrt_device, FORMAT, 2, size)?;
         let session = pool.CreateCaptureSession(&item)?;
         let _ = session.SetIsBorderRequired(false);
         let _ = session.SetIsCursorCaptureEnabled(cursor);

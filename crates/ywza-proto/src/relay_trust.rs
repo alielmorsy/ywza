@@ -130,8 +130,13 @@ impl ServerCertVerifier for Verifier {
         now: UnixTime,
     ) -> Result<ServerCertVerified, rustls::Error> {
         let normal = || {
-            self.inner
-                .verify_server_cert(end_entity, intermediates, server_name, ocsp_response, now)
+            self.inner.verify_server_cert(
+                end_entity,
+                intermediates,
+                server_name,
+                ocsp_response,
+                now,
+            )
         };
         if !self.target.matches(server_name) {
             return normal();
@@ -147,9 +152,7 @@ impl ServerCertVerifier for Verifier {
             }
             // A CA-signed certificate (a renewed Let's Encrypt one) needs no recorded fingerprint.
             None if normal().is_ok() => {}
-            None => {
-                remember(&self.store, &self.target.key, &fp).map_err(rustls::Error::General)?
-            }
+            None => remember(&self.store, &self.target.key, &fp).map_err(rustls::Error::General)?,
         }
         Ok(ServerCertVerified::assertion())
     }

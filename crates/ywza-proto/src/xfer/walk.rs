@@ -67,7 +67,8 @@ fn visit(w: &mut Walk, seen: &mut HashSet<PathBuf>, path: PathBuf, rel: String, 
     match fs::canonicalize(&path) {
         Ok(real) => {
             if !seen.insert(real) {
-                w.errors.push((rel, io::Error::other("symlink loop, skipped")));
+                w.errors
+                    .push((rel, io::Error::other("symlink loop, skipped")));
                 return;
             }
         }

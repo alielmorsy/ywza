@@ -71,7 +71,10 @@ async fn folder_round_trip() {
     assert_eq!(fs::read(out.join("a.txt")).unwrap(), b"hello");
     assert_eq!(fs::read(out.join("sub/b.bin")).unwrap().len(), 300_000);
     assert!(out.join("sub/empty").is_dir());
-    let src_mtime = fs::metadata(root.join("a.txt")).unwrap().modified().unwrap();
+    let src_mtime = fs::metadata(root.join("a.txt"))
+        .unwrap()
+        .modified()
+        .unwrap();
     let dst_mtime = fs::metadata(out.join("a.txt")).unwrap().modified().unwrap();
     let diff = src_mtime
         .duration_since(dst_mtime)

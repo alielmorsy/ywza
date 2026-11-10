@@ -7,8 +7,8 @@ use std::{path::PathBuf, time::Instant};
 
 use anyhow::{bail, Result};
 
-use crate::connect;
 use peer::Peer;
+use ywza_proto::client;
 
 #[derive(Debug, PartialEq)]
 enum Loc {
@@ -54,7 +54,10 @@ pub async fn run(paths: &[String], recursive: bool) -> Result<()> {
     let srcs: Vec<Loc> = srcs.iter().map(|s| parse_loc(s)).collect();
     if let (Loc::Local(d), true) = (&dst, srcs.len() > 1) {
         if !d.is_dir() {
-            bail!("{} is not a folder (needed for several sources)", d.display());
+            bail!(
+                "{} is not a folder (needed for several sources)",
+                d.display()
+            );
         }
     }
     let mut names: Vec<&str> = Vec::new();
@@ -70,7 +73,7 @@ pub async fn run(paths: &[String], recursive: bool) -> Result<()> {
     }
 
     let start = Instant::now();
-    let ep = connect::bind_devices(&names).await?;
+    let ep = client::bind_devices(&names).await?;
     let mut st = Stats::default();
     let mut r = Ok(());
     for (i, src) in srcs.iter().enumerate() {
@@ -79,7 +82,7 @@ pub async fn run(paths: &[String], recursive: bool) -> Result<()> {
             break;
         }
     }
-    connect::shut(ep).await;
+    client::shut(ep).await;
     r?;
     println!(
         "copied {} entries, {} in {:.1}s",
@@ -104,7 +107,12 @@ async fn copy_one(
 ) -> Result<()> {
     let dial = |name: &str| {
         let name = name.to_string();
-        async move { Ok::<_, anyhow::Error>(Peer::new(&name, connect::dial(ep, &name).await?)) }
+        async move {
+            Ok::<_, anyhow::Error>(Peer::new(
+                &name,
+                client::dial(ep, &name, "ywza-cli").await?.0,
+            ))
+        }
     };
     match (src, dst) {
         (Loc::Local(_), Loc::Local(_)) => bail!("both sides are on this machine"),

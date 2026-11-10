@@ -69,9 +69,24 @@ macro_rules! arg {
     };
 }
 
-arg!(WindowArg(WindowId), parse_window, "string", "bad `window` (e.g. \"w3412106\")");
-arg!(ElementArg(u32), parse_element, "integer", "bad `element` (a number)");
-arg!(TermArg(TermId), parse_term, "string", "bad `term` (e.g. \"t2\")");
+arg!(
+    WindowArg(WindowId),
+    parse_window,
+    "string",
+    "bad `window` (e.g. \"w3412106\")"
+);
+arg!(
+    ElementArg(u32),
+    parse_element,
+    "integer",
+    "bad `element` (a number)"
+);
+arg!(
+    TermArg(TermId),
+    parse_term,
+    "string",
+    "bad `term` (e.g. \"t2\")"
+);
 
 pub fn yes() -> bool {
     true

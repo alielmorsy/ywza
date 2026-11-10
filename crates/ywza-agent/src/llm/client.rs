@@ -1,30 +1,31 @@
 use serde_json::{json, Value};
-use ywza_proto::Llm;
+use ywza_proto::{Llm, ToolInfo};
 
 use super::Msg;
-use crate::tools::Tools;
 
 /// One OpenAI-compatible `/chat/completions` request; returns the assistant message.
 pub async fn complete(
     http: &reqwest::Client,
     llm: &Llm,
-    tools: &Tools,
+    tools: &[ToolInfo],
     history: &[Msg],
 ) -> Result<Value, String> {
     let tools: Vec<Value> = tools
-        .specs()
-        .into_iter()
+        .iter()
         .filter(|t| llm.vision || t.name != "screenshot")
         .map(|t| {
             json!({"type":"function","function":{
             "name":t.name,"description":t.description,"parameters":t.parameters}})
         })
         .collect();
-    let body = json!({
+    let mut body = json!({
         "model": llm.model,
         "messages": history.iter().map(|m| &m.value).collect::<Vec<_>>(),
         "tools": tools,
     });
+    if let Some(e) = llm.effort.as_deref().filter(|e| !e.is_empty()) {
+        body["reasoning_effort"] = e.into();
+    }
     let url = format!("{}/chat/completions", llm.base_url.trim_end_matches('/'));
     let mut req = http.post(url).json(&body);
     if !llm.api_key.is_empty() {

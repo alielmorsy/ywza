@@ -36,10 +36,8 @@ pub fn safe_rel(rel: &str) -> Option<PathBuf> {
         return Some(PathBuf::new());
     }
     rel.split('/').try_fold(PathBuf::new(), |mut p, c| {
-        let bad = c.is_empty()
-            || c == "."
-            || c == ".."
-            || (cfg!(windows) && c.contains(['\\', ':']));
+        let bad =
+            c.is_empty() || c == "." || c == ".." || (cfg!(windows) && c.contains(['\\', ':']));
         (!bad).then(|| {
             p.push(c);
             p

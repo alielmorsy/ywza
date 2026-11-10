@@ -43,8 +43,17 @@ fn area(src: &[u8], sw: usize, sh: usize, fw: usize, fh: usize, x: usize, y: usi
     sum.map(|s| (s + n / 2) / n)
 }
 
-fn bilinear(src: &[u8], sw: usize, sh: usize, fw: usize, fh: usize, x: usize, y: usize) -> [u32; 3] {
-    let pos = |d: usize, s: usize, f: usize| ((d as f32 + 0.5) * s as f32 / f as f32 - 0.5).max(0.0);
+fn bilinear(
+    src: &[u8],
+    sw: usize,
+    sh: usize,
+    fw: usize,
+    fh: usize,
+    x: usize,
+    y: usize,
+) -> [u32; 3] {
+    let pos =
+        |d: usize, s: usize, f: usize| ((d as f32 + 0.5) * s as f32 / f as f32 - 0.5).max(0.0);
     let (fx, fy) = (pos(x, sw, fw), pos(y, sh, fh));
     let (x0, y0) = (fx as usize, fy as usize);
     let (x1, y1) = ((x0 + 1).min(sw - 1), (y0 + 1).min(sh - 1));

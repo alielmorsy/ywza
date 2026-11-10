@@ -9,6 +9,18 @@ members = [
     "crates/ywza-agent",
     "crates/ywza-cli",
     "crates/ywza-relay",
+    "app/src-tauri",
+]
+# Plain `cargo build`/`test` at the root skips the desktop app; build it with `yarn tauri build` or `-p ywza-app`.
+default-members = [
+    "crates/ywza-proto",
+    "crates/ywza-desktop",
+    "crates/ywza-ocr",
+    "crates/ywza-term",
+    "crates/ywza-stream",
+    "crates/ywza-agent",
+    "crates/ywza-cli",
+    "crates/ywza-relay",
 ]
 
 [workspace.package]

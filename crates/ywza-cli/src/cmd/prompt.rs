@@ -15,6 +15,10 @@ pub async fn run(
     let msg = ClientMsg::Prompt {
         session,
         text: text.clone(),
+        device: None,
+        model: None,
+        effort: None,
+        approval: None,
     };
     write_frame(&mut c.send, &msg).await?;
     // Every client sees every session; a new session's id is learned from its first event.

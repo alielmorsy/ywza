@@ -82,7 +82,11 @@ mod tests {
     async fn run_command_echo_and_timeout() {
         let t = Tools::default();
         let out = t
-            .call("run_command", &json!({"command":"echo hi"}), OcrEngine::Auto)
+            .call(
+                "run_command",
+                &json!({"command":"echo hi"}),
+                OcrEngine::Auto,
+            )
             .await;
         assert!(out.ok && out.text.contains("hi"), "{out:?}");
         let slow = if cfg!(windows) {

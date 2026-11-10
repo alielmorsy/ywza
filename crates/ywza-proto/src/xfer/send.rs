@@ -11,7 +11,11 @@ use crate::{write_frame, Error};
 const PARALLEL: usize = 8;
 
 /// Writes one entry: its header, then the file's bytes. Returns the bytes sent.
-pub async fn send_entry<W: AsyncWrite + Unpin>(w: &mut W, e: &Entry, xfer: u64) -> Result<u64, Error> {
+pub async fn send_entry<W: AsyncWrite + Unpin>(
+    w: &mut W,
+    e: &Entry,
+    xfer: u64,
+) -> Result<u64, Error> {
     let mut h = e.header.clone();
     h.xfer = xfer;
     write_frame(w, &h).await?;

@@ -11,7 +11,8 @@
   <a href="#quick-start">Quick start</a> •
   <a href="#control-it-from-another-device">Pairing</a> •
   <a href="#use-it-from-an-mcp-client">MCP</a> •
-  <a href="#linux">Linux</a>
+  <a href="#linux">Linux</a> •
+  <a href="ROADMAP.md">Roadmap</a>
 </p>
 
 ---

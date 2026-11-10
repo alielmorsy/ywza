@@ -56,7 +56,10 @@ pub async fn send_loop(
         } else if need_key || is_stale(&inflight, now, rate.base()) {
             // P-frames reference their predecessor: after a drop, wait for a keyframe.
             if !need_key {
-                tracing::debug!(inflight = inflight.len(), "link behind, waiting for a keyframe");
+                tracing::debug!(
+                    inflight = inflight.len(),
+                    "link behind, waiting for a keyframe"
+                );
                 for fl in inflight.iter().filter(|fl| !fl.key) {
                     fl.token.cancel();
                 }
@@ -87,7 +90,12 @@ pub async fn send_loop(
             tracing::debug!("connection closed, ending the frame sender");
             break;
         };
-        tracing::trace!(seq = header.seq, bytes = f.data.len(), key = f.keyframe, "frame sent");
+        tracing::trace!(
+            seq = header.seq,
+            bytes = f.data.len(),
+            key = f.keyframe,
+            "frame sent"
+        );
         let token = CancellationToken::new();
         let cancelled = token.clone();
         let ack = ack_tx.clone();

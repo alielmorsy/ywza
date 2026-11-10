@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 use ywza_desktop::{self as desk, Image, Snapshot, WindowId};
-use ywza_proto::Target;
+use ywza_proto::{MonitorInfo, Target};
 
 use super::{
     output::{desk_err, downscale, flat, MODEL_IMAGE_MAX},
@@ -19,25 +19,40 @@ pub async fn capture(target: &Target) -> desk::Result<Image> {
     .await
 }
 
-/// `[0] DISPLAY1 2560x1440 at 0,0 scale 1.5 primary`, one per line.
+pub fn monitor_info(m: &desk::Monitor) -> MonitorInfo {
+    MonitorInfo {
+        index: m.index as u32,
+        name: m.name.clone(),
+        x: m.rect.x,
+        y: m.rect.y,
+        width: m.rect.w.max(0) as u32,
+        height: m.rect.h.max(0) as u32,
+        scale: m.scale,
+        primary: m.primary,
+    }
+}
+
+/// `[0] DISPLAY1 2560x1440 at 0,0 scale 1.5 primary`.
+pub fn monitor_line(m: &MonitorInfo) -> String {
+    format!(
+        "[{}] {} {}x{} at {},{} scale {}{}",
+        m.index,
+        m.name,
+        m.width,
+        m.height,
+        m.x,
+        m.y,
+        m.scale,
+        if m.primary { " primary" } else { "" }
+    )
+}
+
+/// One `monitor_line` per monitor.
 pub async fn monitors_text() -> String {
     match blocking(desk::list_monitors).await {
         Ok(list) => list
             .iter()
-            .map(|m| {
-                let r = m.rect;
-                format!(
-                    "[{}] {} {}x{} at {},{} scale {}{}",
-                    m.index,
-                    m.name,
-                    r.w,
-                    r.h,
-                    r.x,
-                    r.y,
-                    m.scale,
-                    if m.primary { " primary" } else { "" }
-                )
-            })
+            .map(|m| monitor_line(&monitor_info(m)))
             .collect::<Vec<_>>()
             .join("\n"),
         Err(e) => format!("(monitors unavailable: {e})"),

@@ -60,8 +60,14 @@ async fn serve_client(agent: Arc<Agent>, incoming: Incoming) -> anyhow::Result<(
         } else {
             Vec::new()
         },
+        os: Some(crate::llm::os_description().into()),
         permissions: (!local).then_some(perms),
     })?;
+    if local {
+        for request in agent.approvals.requests(None) {
+            direct.send(request)?;
+        }
+    }
     tracing::info!(peer = %peer_id, client = %client_name, local, ?perms, "peer connected");
     let writer = tokio::spawn(write_loop(c.send, events, direct_rx, see_sessions.clone()));
     // Frames are read in their own task: a read cut short by a config change would lose bytes.
@@ -80,6 +86,7 @@ async fn serve_client(agent: Arc<Agent>, incoming: Incoming) -> anyhow::Result<(
         agent.clone(),
         c.conn.clone(),
         client_name.clone(),
+        local,
         direct.clone(),
     );
     let pushes = tokio::spawn(client.pushes.clone().accept(c.conn.clone(), direct.clone()));

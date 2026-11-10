@@ -4,9 +4,11 @@ mod common;
 
 use std::time::Duration;
 
-use common::{agent, endpoint, hello, run_prompt, start, ticket};
+use common::{agent, collect, endpoint, hello, run_prompt, send_prompt, start, ticket};
 use serde_json::{json, Value};
-use ywza_proto::{read_frame, write_frame, AgentMsg, ClientMsg, Permissions, SessionEvent};
+use ywza_proto::{
+    read_frame, write_frame, AgentMsg, ApprovalMode, ClientMsg, Permissions, SessionEvent,
+};
 
 fn assert_full_run(events: &[SessionEvent]) {
     let has = |f: &dyn Fn(&SessionEvent) -> bool| events.iter().any(f);
@@ -51,7 +53,108 @@ async fn bad_tool_arguments_come_back_as_an_error_result_naming_the_field() {
                 if text.contains("missing field `element`"))),
         "{events:?}"
     );
-    assert!(matches!(events.last(), Some(SessionEvent::Done { .. })), "{events:?}");
+    assert!(
+        matches!(events.last(), Some(SessionEvent::Done { .. })),
+        "{events:?}"
+    );
+}
+
+/// Answers every approval request with `allow`; returns what was asked and the session events.
+async fn answer_asks(
+    c: &mut ywza_proto::Control,
+    allow: bool,
+    remember: bool,
+) -> (Vec<(String, String)>, Vec<SessionEvent>) {
+    let (mut asked, mut events) = (Vec::new(), Vec::new());
+    loop {
+        let msg: AgentMsg = tokio::time::timeout(Duration::from_secs(30), read_frame(&mut c.recv))
+            .await
+            .expect("timed out waiting for the agent")
+            .unwrap();
+        match msg {
+            AgentMsg::ApprovalRequest {
+                request,
+                tool,
+                summary,
+                ..
+            } => {
+                asked.push((tool, summary));
+                let answer = ClientMsg::Approve {
+                    request,
+                    allow,
+                    remember,
+                };
+                write_frame(&mut c.send, &answer).await.unwrap();
+            }
+            AgentMsg::Event { event, .. } => {
+                let end = matches!(
+                    event,
+                    SessionEvent::Done { .. } | SessionEvent::Failed { .. }
+                );
+                events.push(event);
+                if end {
+                    return (asked, events);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn run_command_asks_and_a_no_reaches_the_model_as_a_denied_result() {
+    let (_dir, _client, mut c) = start(true).await;
+    send_prompt(&mut c, "say hi", Some(ApprovalMode::Rules)).await;
+    let (asked, events) = answer_asks(&mut c, false, false).await;
+    assert_eq!(asked, [("run_command".to_string(), "echo hi".to_string())]);
+    assert!(
+        events.iter().any(|e| matches!(e,
+            SessionEvent::ToolResult { ok: false, text, .. } if text == "denied by the user")),
+        "{events:?}"
+    );
+    assert!(
+        matches!(events.last(), Some(SessionEvent::Done { .. })),
+        "{events:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_yes_with_remember_runs_the_call_and_saves_an_allow_rule() {
+    let (dir, _client, mut c) = start(true).await;
+    send_prompt(&mut c, "say hi", Some(ApprovalMode::Rules)).await;
+    let (asked, events) = answer_asks(&mut c, true, true).await;
+    assert_eq!(asked.len(), 1);
+    assert!(
+        events.iter().any(|e| matches!(e,
+            SessionEvent::ToolResult { ok: true, text, .. } if text.contains("hi"))),
+        "{events:?}"
+    );
+    let saved = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
+    let cfg: ywza_proto::Config = toml::from_str(&saved).unwrap();
+    let first = &cfg.approval.rules[0];
+    assert_eq!(
+        (first.tool.as_str(), first.action),
+        ("run_command", ywza_proto::Action::Allow)
+    );
+
+    // Allowed from now on: a second run does not ask.
+    send_prompt(&mut c, "say hi", Some(ApprovalMode::Rules)).await;
+    let (asked, _) = answer_asks(&mut c, false, false).await;
+    assert!(asked.is_empty(), "{asked:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn auto_mode_never_asks() {
+    let (_dir, _client, mut c) = start(true).await;
+    send_prompt(&mut c, "say hi", Some(ApprovalMode::Auto)).await;
+    let (events, others) = collect(&mut c).await;
+    assert_full_run(&events);
+    assert!(
+        !others
+            .iter()
+            .any(|m| matches!(m, AgentMsg::ApprovalRequest { .. })),
+        "{others:?}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -222,7 +325,10 @@ async fn local_tcp_port_lists_and_calls_tools() {
     write_frame(&mut s, &call(10, "wait", json!({"ms":"soon"})))
         .await
         .unwrap();
-    let AgentMsg::ToolResult { call: 10, ok, text, .. } = reply(&mut s).await else {
+    let AgentMsg::ToolResult {
+        call: 10, ok, text, ..
+    } = reply(&mut s).await
+    else {
         panic!("expected a tool result");
     };
     assert!(!ok && text.contains("`ms`"), "{text}");
@@ -232,9 +338,34 @@ async fn local_tcp_port_lists_and_calls_tools() {
 async fn local_tcp_port_creates_pairing_codes() {
     let (dir, _client, _c) = start(false).await;
     let mut s = tcp_session(dir.path()).await;
-    write_frame(&mut s, &ClientMsg::CreatePairing).await.unwrap();
+    write_frame(&mut s, &ClientMsg::CreatePairing)
+        .await
+        .unwrap();
     assert!(matches!(
         reply(&mut s).await,
-        AgentMsg::PairingCode { expires_in_secs: 600, .. }
+        AgentMsg::PairingCode {
+            expires_in_secs: 600,
+            ..
+        }
+    ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn direct_tool_calls_run_without_asking() {
+    let (dir, _client, _c) = start(false).await;
+    let mut s = tcp_session(dir.path()).await;
+    let msg = ClientMsg::CallTool {
+        call: 1,
+        name: "run_command".into(),
+        args: json!({"command":"echo hi"}),
+    };
+    write_frame(&mut s, &msg).await.unwrap();
+    assert!(matches!(
+        reply(&mut s).await,
+        AgentMsg::ToolResult {
+            call: 1,
+            ok: true,
+            ..
+        }
     ));
 }

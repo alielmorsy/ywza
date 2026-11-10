@@ -16,8 +16,8 @@ mod process;
 mod seat;
 mod xauth;
 
-use std::{path::Path, process::Child};
 use std::time::Duration;
+use std::{path::Path, process::Child};
 
 use identity::{chown_config, chown_log};
 

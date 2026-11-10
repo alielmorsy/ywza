@@ -171,7 +171,9 @@ mod tests {
                 let mut c = accept_control(incoming).await.unwrap();
                 assert_eq!(c.conn.remote_id(), client_id);
                 let msg: ClientMsg = read_frame(&mut c.recv).await.unwrap();
-                assert!(matches!(msg, ClientMsg::Hello { ref client_name, .. } if client_name == "t"));
+                assert!(
+                    matches!(msg, ClientMsg::Hello { ref client_name, .. } if client_name == "t")
+                );
                 let reply = AgentMsg::Error {
                     message: "hi".into(),
                 };

@@ -1,25 +1,18 @@
 use std::sync::OnceLock;
 
-fn os_description() -> &'static str {
+pub fn os_description() -> &'static str {
     static OS: OnceLock<String> = OnceLock::new();
     OS.get_or_init(crate::platform::os_description)
 }
 
-pub fn system_prompt(monitors: &str) -> String {
-    format!(
-        "You are ywza, an agent operating the user's own computer ({os}) on their behalf. \
-Use the tools to act; prefer the most direct tool (run_command for one-shot shell work).
-
-Work in one shot: carry the task through to the end without stopping to ask the user. \
+const WORK: &str =
+    "Work in one shot: carry the task through to the end without stopping to ask the user. \
 Replying without tool calls ends the task, so never reply to ask for confirmation, permission \
 or a choice (\"Shall I…?\", \"Do you want me to…?\"). When something is ambiguous, pick the most \
 reasonable option, act, and mention the assumption in the final summary. Stop early only when \
-the task is impossible or blocked, and then say why.
+the task is impossible or blocked, and then say why.";
 
-Monitors (index, name, physical pixels, scale):
-{monitors}
-
-Tool contract:
+const CONTRACT: &str = "Tool contract:
 - Windows are `w<number>` (from list_windows/launch), terminals `t<number>` (from term_list/term_start).
 - Element ids are numbers from get_elements and belong to that window's latest list only. \
 Call get_elements before click/type_text/scroll/long_press on a window.
@@ -38,9 +31,36 @@ Their approval prompts (Yes/No menus, \"Do you want to proceed?\") authorise rea
 confirm one only when the user's request clearly covers it, and read what it would run first.
 
 When the whole task is done, reply without tool calls with a short summary that fits a phone screen \
-(a few lines, no tables).",
-        os = os_description()
+(a few lines, no tables).";
+
+fn build(intro: &str, monitors: &str) -> String {
+    format!(
+        "{intro} Use the tools to act; prefer the most direct tool (run_command for one-shot shell work).
+
+{WORK}
+
+Monitors (index, name, physical pixels, scale):
+{monitors}
+
+{CONTRACT}"
     )
+}
+
+pub fn system_prompt(monitors: &str) -> String {
+    let intro = format!(
+        "You are ywza, an agent operating the user's own computer ({}) on their behalf.",
+        os_description()
+    );
+    build(&intro, monitors)
+}
+
+/// For a session that drives the paired device `device` from this machine.
+pub fn remote_system_prompt(device: &str, os: Option<&str>, monitors: &str) -> String {
+    let os = os.map_or(String::new(), |o| format!(" ({o})"));
+    let intro = format!(
+        "You are ywza, an agent operating a remote computer named `{device}`{os} on the user's behalf. You are NOT running on that machine: every tool call acts on `{device}`, never on the computer you run on. Windows, terminals, files, commands and monitors below all belong to `{device}`."
+    );
+    build(&intro, monitors)
 }
 
 #[cfg(test)]
@@ -52,5 +72,12 @@ mod tests {
         let p = system_prompt("[0] DISPLAY1");
         assert!(p.contains("[0] DISPLAY1"));
         assert!(!p.contains("the user approves") && !p.contains("approval system"));
+    }
+
+    #[test]
+    fn remote_prompt_names_the_device_and_denies_running_there() {
+        let p = remote_system_prompt("vm", Some("Ubuntu 24.04"), "[0] HDMI-1");
+        assert!(p.contains("`vm` (Ubuntu 24.04)") && p.contains("NOT running on that machine"));
+        assert!(p.contains("[0] HDMI-1") && !p.contains("the user's own computer"));
     }
 }

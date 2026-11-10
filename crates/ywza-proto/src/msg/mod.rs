@@ -4,7 +4,7 @@ mod session;
 mod stream;
 mod xfer;
 
-pub use agent::{AgentMsg, ToolInfo};
+pub use agent::{AgentMsg, ElementInfo, MonitorInfo, ScreenRect, ToolInfo};
 pub use client::ClientMsg;
 pub use session::{SessionEvent, SessionId, SessionStatus, SessionSummary};
 pub use stream::{FrameHeader, InputEvent, MouseButton, Target};

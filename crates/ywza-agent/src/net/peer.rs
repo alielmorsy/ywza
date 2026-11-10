@@ -20,9 +20,15 @@ pub fn denied(perms: &Permissions, msg: &ClientMsg) -> Option<AgentMsg> {
     })
 }
 
-/// Session events go only to clients allowed to see sessions (chat or tools).
+/// Session events and approval requests go only to clients allowed to see sessions (chat or tools).
 pub fn visible(msg: &AgentMsg, see_sessions: bool) -> bool {
-    see_sessions || !matches!(msg, AgentMsg::Event { .. })
+    see_sessions
+        || !matches!(
+            msg,
+            AgentMsg::Event { .. }
+                | AgentMsg::ApprovalRequest { .. }
+                | AgentMsg::ApprovalResolved { .. }
+        )
 }
 
 #[cfg(test)]
@@ -44,6 +50,11 @@ mod tests {
             message: String::new(),
         };
         assert!(visible(&err, false));
+        let resolved = AgentMsg::ApprovalResolved {
+            request: 1,
+            allowed: true,
+        };
+        assert!(visible(&resolved, true) && !visible(&resolved, false));
     }
 
     #[test]

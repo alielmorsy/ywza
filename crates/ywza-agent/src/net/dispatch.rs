@@ -6,13 +6,18 @@ use iroh::endpoint::Connection;
 use tokio::sync::mpsc::UnboundedSender;
 use ywza_proto::{AgentMsg, ClientMsg, InputEvent, SessionId};
 
-use super::xfer::{self, Pushes};
+use super::{
+    peer,
+    xfer::{self, Pushes},
+};
 use crate::{live::Live, mcp, net::pair, Agent};
 
 pub struct Client {
     agent: Arc<Agent>,
     conn: Connection,
     name: String,
+    /// This machine's own app: may list models and run sessions on paired devices.
+    local: bool,
     direct: UnboundedSender<AgentMsg>,
     /// Dropped (stopping capture) on live_stop, a new live_start, losing `view`, or disconnect.
     live: Option<Live>,
@@ -26,12 +31,14 @@ impl Client {
         agent: Arc<Agent>,
         conn: Connection,
         name: String,
+        local: bool,
         direct: UnboundedSender<AgentMsg>,
     ) -> Self {
         Self {
             agent,
             conn,
             name,
+            local,
             direct,
             live: None,
             mcp: None,
@@ -76,7 +83,21 @@ impl Client {
                 let sid = *self
                     .mcp
                     .get_or_insert_with(|| mcp::session(&agent, &self.name));
-                self.reply_later(async move { mcp::call_tool(&agent, sid, call, name, args).await });
+                self.reply_later(
+                    async move { mcp::call_tool(&agent, sid, call, name, args).await },
+                );
+            }
+            ClientMsg::Approve {
+                request,
+                allow,
+                remember,
+            } => {
+                let may_edit = self.local
+                    || peer::permissions(&self.agent, self.conn.remote_id())
+                        .is_some_and(|p| p.settings);
+                if let Some(reply) = self.agent.approve(request, allow, remember && may_edit) {
+                    self.send(reply);
+                }
             }
             ClientMsg::Pull {
                 xfer,
@@ -91,18 +112,25 @@ impl Client {
                     self.direct.clone(),
                 ));
             }
-            ClientMsg::Push { xfer, dest, name } => self.send(self.pushes.start(xfer, &dest, &name)),
+            ClientMsg::Push { xfer, dest, name } => {
+                self.send(self.pushes.start(xfer, &dest, &name))
+            }
             ClientMsg::PushEnd { xfer, files } => {
                 if let Some(reply) = self.pushes.end(xfer, files) {
                     self.send(reply);
                 }
+            }
+            m
+            @ (ClientMsg::ListMonitors | ClientMsg::ListModels | ClientMsg::WindowInfo { .. }) => {
+                let (agent, local) = (self.agent.clone(), self.local);
+                self.reply_later(async move { agent.inspect(m, local).await });
             }
             ClientMsg::Screenshot { target } => {
                 let agent = self.agent.clone();
                 self.reply_later(async move { agent.screenshot(target).await });
             }
             msg => {
-                if let Some(reply) = self.agent.handle(msg) {
+                for reply in self.agent.handle(msg, self.local) {
                     self.send(reply);
                 }
             }

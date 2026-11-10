@@ -6,9 +6,11 @@ use tokio::sync::broadcast;
 use ywza_proto::{AgentMsg, SessionEvent, SessionId, Ticket};
 
 use crate::{
+    approval::Pending,
     atomic::write_atomic,
     config::ConfigStore,
     local, net,
+    remote::Remotes,
     sessions::Sessions,
     tools::{ToolOutput, Tools},
 };
@@ -18,6 +20,8 @@ pub struct Agent {
     pub config: ConfigStore,
     pub sessions: Sessions,
     pub tools: Tools,
+    pub remotes: Remotes,
+    pub approvals: Pending,
     pub pairing: net::pair::Pairing,
     pub tx: broadcast::Sender<AgentMsg>,
     pub http: reqwest::Client,
@@ -60,6 +64,8 @@ impl Agent {
             dir,
             config,
             tools: Default::default(),
+            remotes: Default::default(),
+            approvals: Default::default(),
             pairing: Default::default(),
             tx: broadcast::channel(1024).0,
             http: reqwest::Client::new(),
@@ -72,7 +78,10 @@ impl Agent {
         tokio::spawn(net::watch_pairing_requests(agent.clone()));
         match local::bind(&agent.dir).await {
             Ok(listener) => {
-                tracing::info!(port = listener.0.local_addr().map_or(0, |a| a.port()), "local TCP port open");
+                tracing::info!(
+                    port = listener.0.local_addr().map_or(0, |a| a.port()),
+                    "local TCP port open"
+                );
                 drop(tokio::spawn(local::accept_loop(agent.clone(), listener)))
             }
             Err(e) => tracing::error!(error = %e, "local TCP port unavailable"),
