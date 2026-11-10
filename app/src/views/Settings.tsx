@@ -64,7 +64,8 @@ export default function Settings() {
   const invalid = problem(draft);
   const save = () => {
     if (!dirty || invalid) return;
-    const out = { ...draft, approval: { rules: trimRules(draft.approval.rules) } };
+    // Latest peers, so a save from an older page does not undo access edits made meanwhile.
+    const out = { ...draft, peers: local!.config!.peers, approval: { rules: trimRules(draft.approval.rules) } };
     saveConfig(out, "Settings saved");
     setDraft({ ...out, llm: { ...out.llm, api_key: "" } });
   };
@@ -109,9 +110,6 @@ export default function Settings() {
           </Section>
 
           <Section h="Desktop">
-            <Row t="Agent works on its own virtual desktop" d="Keeps it off the desktop you are using" w="w-auto">
-              <Tog on={draft.desktop.agent_virtual_desktop} set={(v) => up((c) => (c.desktop.agent_virtual_desktop = v))} />
-            </Row>
             <Row t="Idle before input" d="Milliseconds without your input before the agent clicks or types" w="w-[150px]">
               <Num value={draft.desktop.idle_before_input_ms} onChange={(v) => up((c) => (c.desktop.idle_before_input_ms = v))} />
             </Row>
@@ -137,7 +135,7 @@ export default function Settings() {
           </Section>
 
           <Section h="Network">
-            <Row t="Relay URL" d="Empty uses the public relays">
+            <Row t="Relay URL" d="Empty uses the public relays. Applies after the agent restarts">
               <input className="field mono" value={draft.relay_url ?? ""} placeholder="Public relays" spellCheck={false}
                 onChange={(e) => up((c) => (c.relay_url = e.target.value.trim() || null))} />
             </Row>

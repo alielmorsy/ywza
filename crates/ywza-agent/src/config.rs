@@ -45,7 +45,8 @@ impl ConfigStore {
         self.changed.subscribe()
     }
 
-    /// Replaces the config. A blank `api_key` keeps the stored one; legacy `trusted_peers` migrate.
+    /// Replaces the config. A blank `api_key` keeps the stored one, peers can only be edited (not
+    /// added or dropped), and legacy `trusted_peers` migrate.
     pub fn set(&self, new: Config) -> anyhow::Result<()> {
         self.update(|c| {
             *c = merge(c, new);
@@ -85,6 +86,12 @@ fn merge(old: &Config, mut new: Config) -> Config {
     if new.llm.api_key.trim().is_empty() {
         new.llm.api_key = old.llm.api_key.clone();
     }
+    // A client's copy can be older than a pairing; it must not drop or revive a peer.
+    new.peers = old
+        .peers
+        .iter()
+        .map(|p| new.peer(&p.id).unwrap_or(p).clone())
+        .collect();
     new
 }
 
@@ -128,6 +135,27 @@ mod tests {
         let reloaded = ConfigStore::load(dir.path().join("config.toml")).unwrap();
         assert_eq!(reloaded.get().llm.api_key, "sk-2");
         assert_eq!(reloaded.get().llm.model, "m2");
+    }
+
+    #[test]
+    fn stale_copy_keeps_peer_list() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ConfigStore::load(dir.path().join("config.toml")).unwrap();
+        store.trust("a".into(), "phone".into()).unwrap();
+        let mut stale = store.get();
+        store.trust("b".into(), "laptop".into()).unwrap();
+
+        stale.peers[0].perms.control = false;
+        stale.peers.push(Peer {
+            id: "ghost".into(),
+            name: String::new(),
+            perms: Permissions::all(),
+        });
+        store.set(stale).unwrap();
+        let c = store.get();
+        let ids: Vec<_> = c.peers.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, ["a", "b"]);
+        assert!(!c.peer("a").unwrap().perms.control, "edit applied");
     }
 
     #[test]

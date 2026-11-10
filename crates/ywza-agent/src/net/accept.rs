@@ -1,10 +1,7 @@
 //! Incoming control connections: handshake, permissions, then the message loop.
 
 use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -50,7 +47,7 @@ async fn serve_client(agent: Arc<Agent>, incoming: Incoming) -> anyhow::Result<(
 
     // Subscribe before Welcome so no event falls in between.
     let events = agent.tx.subscribe();
-    let see_sessions = Arc::new(AtomicBool::new(perms.chat || perms.tools));
+    let shared_perms = Arc::new(Mutex::new(perms));
     let (direct, direct_rx) = mpsc::unbounded_channel();
     direct.send(AgentMsg::Welcome {
         agent_version: env!("CARGO_PKG_VERSION").into(),
@@ -69,7 +66,7 @@ async fn serve_client(agent: Arc<Agent>, incoming: Incoming) -> anyhow::Result<(
         }
     }
     tracing::info!(peer = %peer_id, client = %client_name, local, ?perms, "peer connected");
-    let writer = tokio::spawn(write_loop(c.send, events, direct_rx, see_sessions.clone()));
+    let writer = tokio::spawn(write_loop(c.send, events, direct_rx, shared_perms.clone()));
     // Frames are read in their own task: a read cut short by a config change would lose bytes.
     let (frames_tx, mut frames) = mpsc::channel(16);
     let mut recv = c.recv;
@@ -107,7 +104,7 @@ async fn serve_client(agent: Arc<Agent>, incoming: Incoming) -> anyhow::Result<(
                     tracing::debug!(peer = %peer_id, perms = ?now, "permissions changed");
                 }
                 perms = now;
-                see_sessions.store(perms.chat || perms.tools, Ordering::Relaxed);
+                *shared_perms.lock().unwrap() = perms;
                 if !perms.view {
                     client.stop_live();
                 }

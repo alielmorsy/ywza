@@ -80,12 +80,14 @@ impl Agent {
             ClientMsg::GetConfig => Some(AgentMsg::Config {
                 config: self.config.get().masked(),
             }),
+            // The saver gets the stored config through the broadcast, like every other client.
             ClientMsg::SetConfig { config } => match self.config.set(config) {
                 Ok(()) => {
                     tracing::debug!("settings changed by a client");
-                    Some(AgentMsg::Config {
+                    self.broadcast(AgentMsg::Config {
                         config: self.config.get().masked(),
-                    })
+                    });
+                    None
                 }
                 Err(e) => {
                     tracing::error!(error = %e, "saving config failed");

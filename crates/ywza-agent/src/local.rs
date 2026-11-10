@@ -7,7 +7,7 @@
 
 use std::{
     path::Path,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -17,7 +17,7 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::mpsc,
 };
-use ywza_proto::{read_frame, AgentMsg, ClientMsg};
+use ywza_proto::{read_frame, AgentMsg, ClientMsg, Permissions};
 
 use crate::{atomic::write_atomic, mcp, net, Agent};
 
@@ -78,8 +78,8 @@ async fn serve(agent: Arc<Agent>, stream: TcpStream, token: &str) -> anyhow::Res
         direct.send(request)?;
     }
     // The local user: every permission.
-    let see_sessions = Arc::new(AtomicBool::new(true));
-    let writer = tokio::spawn(net::write_loop(send, events, direct_rx, see_sessions));
+    let perms = Arc::new(Mutex::new(Permissions::all()));
+    let writer = tokio::spawn(net::write_loop(send, events, direct_rx, perms));
     let mut session = None;
 
     loop {

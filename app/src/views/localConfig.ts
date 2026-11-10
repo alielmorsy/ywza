@@ -15,11 +15,10 @@ export const trimRules = (rules: ApprovalRule[]): ApprovalRule[] =>
 
 let confirmation: string | null = null;
 
-/** Sends the config; the confirmation shows once the agent answers with the stored config (App calls takeSaved). */
+/** Sends the config; the confirmation shows once the agent broadcasts the stored config, an error drops it (App calls takeSaved). */
 export function saveConfig(config: Config, message: string) {
   confirmation = message;
   send(LOCAL, { type: "set_config", config });
-  send(LOCAL, { type: "get_config" });
   flash("Saving...");
 }
 

@@ -20,15 +20,15 @@ pub fn denied(perms: &Permissions, msg: &ClientMsg) -> Option<AgentMsg> {
     })
 }
 
-/// Session events and approval requests go only to clients allowed to see sessions (chat or tools).
-pub fn visible(msg: &AgentMsg, see_sessions: bool) -> bool {
-    see_sessions
-        || !matches!(
-            msg,
-            AgentMsg::Event { .. }
-                | AgentMsg::ApprovalRequest { .. }
-                | AgentMsg::ApprovalResolved { .. }
-        )
+/// Which broadcasts a client gets: sessions and approvals need chat or tools, config needs settings.
+pub fn visible(msg: &AgentMsg, perms: &Permissions) -> bool {
+    match msg {
+        AgentMsg::Event { .. }
+        | AgentMsg::ApprovalRequest { .. }
+        | AgentMsg::ApprovalResolved { .. } => perms.chat || perms.tools,
+        AgentMsg::Config { .. } => perms.settings,
+        _ => true,
+    }
 }
 
 #[cfg(test)]
@@ -36,36 +36,44 @@ mod tests {
     use super::*;
     use ywza_proto::{SessionEvent, SessionId};
 
+    const NONE: Permissions = Permissions {
+        view: false,
+        chat: false,
+        control: false,
+        tools: false,
+        settings: false,
+    };
+
     #[test]
-    fn events_need_session_access() {
+    fn broadcasts_follow_permissions() {
+        let all = Permissions::all();
         let event = AgentMsg::Event {
             session: SessionId::new(),
             event: SessionEvent::Done {
                 summary: String::new(),
             },
         };
-        assert!(visible(&event, true));
-        assert!(!visible(&event, false));
+        assert!(visible(&event, &all));
+        assert!(!visible(&event, &NONE));
         let err = AgentMsg::Error {
             message: String::new(),
         };
-        assert!(visible(&err, false));
+        assert!(visible(&err, &NONE));
         let resolved = AgentMsg::ApprovalResolved {
             request: 1,
             allowed: true,
         };
-        assert!(visible(&resolved, true) && !visible(&resolved, false));
+        assert!(visible(&resolved, &all) && !visible(&resolved, &NONE));
+        let config = AgentMsg::Config {
+            config: Default::default(),
+        };
+        let chat_only = Permissions { chat: true, ..NONE };
+        assert!(visible(&config, &all) && !visible(&config, &chat_only));
     }
 
     #[test]
     fn gate_names_the_missing_permission() {
-        let none = Permissions {
-            view: false,
-            chat: false,
-            control: false,
-            tools: false,
-            settings: false,
-        };
+        let none = NONE;
         let reply = denied(&none, &ClientMsg::CreatePairing);
         assert_eq!(
             reply,
