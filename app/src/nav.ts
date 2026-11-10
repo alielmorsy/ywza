@@ -23,13 +23,15 @@ export interface Nav {
   effort?: Effort;
   approval?: ApprovalMode;
   status: { text: string; tone: "" | "warn" | "bad"; pulse: boolean };
+  /** Pair dialog open. */
+  pairing: boolean;
 }
 
 const READY: Nav["status"] = { text: "Ready", tone: "", pulse: false };
 const DEFAULT_UI: DeviceUi = { view: "chat", session: null, split: false, debug: false, dock: false };
 const saved = (() => { try { return JSON.parse(localStorage.getItem("ywza.composer") ?? "{}"); } catch { return {}; } })();
 
-let nav: Nav = { selected: LOCAL, ui: {}, model: saved.model, effort: saved.effort, approval: saved.approval, status: READY };
+let nav: Nav = { selected: LOCAL, ui: {}, model: saved.model, effort: saved.effort, approval: saved.approval, status: READY, pairing: false };
 const subs = new Set<() => void>();
 const set = (n: Partial<Nav>) => { nav = { ...nav, ...n }; subs.forEach((f) => f()); };
 
@@ -43,6 +45,7 @@ onRemoved.add((name) => {
 });
 export const uiOf = (n: Nav, dev: string): DeviceUi => n.ui[dev] ?? DEFAULT_UI;
 export const select = (selected: string) => set({ selected });
+export const setPairing = (pairing: boolean) => set({ pairing });
 export const setUi = (dev: string, p: Partial<DeviceUi>) => set({ ui: { ...nav.ui, [dev]: { ...uiOf(nav, dev), ...p } } });
 /** Opens `dev` in `view`, optionally on `session`. */
 export const openDevice = (dev: string, view?: View, session?: string | null) =>

@@ -18,6 +18,7 @@ export function Access({ dev }: { dev: string }) {
   const config = local?.config;
   const error = useStore((s) => s.error);
   const [removing, setRemoving] = useState(false);
+  const [granting, setGranting] = useState(false);
   const [pending, setPending] = useState<Partial<Record<PermKey, boolean>>>({});
 
   useEffect(() => setPending({}), [config, error]);
@@ -28,6 +29,7 @@ export function Access({ dev }: { dev: string }) {
   const peer = config?.peers.find((p) => (d?.nodeId && p.id === d.nodeId) || p.name === dev);
   const toggle = (k: PermKey, v: boolean) => {
     if (!config || !peer) return;
+    if (k === "settings" && v && !granting) { setGranting(true); return; }
     setPending((p) => ({ ...p, [k]: v }));
     saveConfig({ ...config, llm: { ...config.llm, api_key: "" }, peers: config.peers.map((p) => (p === peer ? { ...p, ...pending, [k]: v } : p)) }, `Updated access for ${dev}`);
   };
@@ -36,7 +38,8 @@ export function Access({ dev }: { dev: string }) {
     <div className="h-full overflow-auto px-6 py-5">
       <div className="mx-auto grid max-w-[820px] grid-cols-1 items-start gap-8">
         <section className="order-2">
-          <h2 className="mb-2">What you can do there</h2>
+          <h2>What this PC may do on {dev}</h2>
+          <p className="mb-2 text-xs text-text-2">Set on {dev}. Change it there.</p>
           {perms === undefined ? (
             <p className="text-text-3">Shown once {dev} is online.</p>
           ) : (
@@ -50,20 +53,20 @@ export function Access({ dev }: { dev: string }) {
         </section>
 
         <section>
-          <h2 className="mb-2">What {dev} may do on this PC</h2>
+          <h2>What {dev} may do on this PC</h2>
+          {peer && <p className="text-xs text-text-2">You decide. Changes save right away.</p>}
           {!config ? (
             <p className="text-text-3">{local?.connected ? "Loading access..." : "This PC's agent is not running, so access cannot be edited."}</p>
+          ) : !peer ? (
+            <p className="text-text-3">{dev} is not in this PC's peer list, so it has no access here and there is nothing to edit.</p>
           ) : (
-            <>
-              <div className="rounded-md border border-line bg-surface">
-                {PERMS.map((p) => (
-                  <Row key={p.k} t={p.n} d={p.d} w="w-auto">
-                    <Tog on={pending[p.k] ?? !!peer?.[p.k]} disabled={!peer} set={(v) => toggle(p.k, v)} />
-                  </Row>
-                ))}
-              </div>
-              {!peer && <p className="mt-2 text-xs text-text-3">{dev} is not in this PC's peer list, so there is nothing to edit.</p>}
-            </>
+            <div className="mt-2 rounded-md border border-line bg-surface">
+              {PERMS.map((p) => (
+                <Row key={p.k} t={p.n} d={p.d} w="w-auto">
+                  <Tog on={pending[p.k] ?? !!peer[p.k]} set={(v) => toggle(p.k, v)} />
+                </Row>
+              ))}
+            </div>
           )}
         </section>
       </div>
@@ -72,6 +75,9 @@ export function Access({ dev }: { dev: string }) {
         <p className="flex-1 text-text-3">Removing unpairs {dev}. It needs a new code to connect again.</p>
         <button className="btn danger" onClick={() => setRemoving(true)}>Remove device</button>
       </div>
+      <Confirm open={granting} title={`Let ${dev} change settings?`} action="Allow"
+        body={`${dev} could change this PC's AI and approval rules, pair new devices and edit everyone's access, its own included.`}
+        onConfirm={async () => toggle("settings", true)} onClose={() => setGranting(false)} />
       <Confirm open={removing} title={`Remove ${dev}?`} action="Remove"
         body="It is unpaired and loses all access to this PC. To use it again you pair it with a new code."
         onConfirm={() => removeDevice(dev)} onClose={() => setRemoving(false)} />

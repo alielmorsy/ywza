@@ -15,7 +15,7 @@
   --c-line-hover: #4a4a45;
   --c-text: #eeeeea;
   --c-text-2: #9b9b97;
-  --c-text-3: #878782;
+  --c-text-3: #91918c;       /* 4.5:1 on surface and the selected rail item */
   --c-faint: #696965;
   --c-primary: #c0c1b2;
   --c-secondary: #454f55;
@@ -25,8 +25,8 @@
   --c-accent-soft: rgba(135, 132, 154, 0.18);
   --c-ink: #13130f;          /* text on accent-bg */
   --c-ok: #c0c1b2;
-  --c-warn: #c0c1b2;
-  --c-warn-soft: rgba(192, 193, 178, 0.1);
+  --c-warn: #c9a46a;         /* needs you: approvals, auto-approve */
+  --c-warn-soft: rgba(201, 164, 106, 0.12);
   --c-bad: #d6667e;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   color-scheme: dark;

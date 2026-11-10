@@ -30,11 +30,10 @@ export function DeviceView({ dev, selected }: { dev: string; selected: boolean }
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-10 flex-none items-center gap-3 border-b border-line-soft px-4">
-        <h1 className="min-w-0 truncate text-sm font-semibold">{deviceLabel(dev)}</h1>
-        <span className="flex min-w-0 items-center gap-2 text-xs text-text-2">
+        <h1 className="min-w-0 truncate">{deviceLabel(dev)}</h1>
+        <span className="flex min-w-0 items-center gap-2 text-xs text-text-2" title={d?.version ? `ywza ${d.version}` : undefined}>
           <span className={`dot ${dotClass(d)}`} />
           <span className="truncate">{statusText(d)}</span>
-          {d?.version && <span className="mono flex-none text-text-3">ywza {d.version}</span>}
         </span>
         <span className="flex-1" />
         <div className="seg" role="group" aria-label="View">

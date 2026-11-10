@@ -38,7 +38,7 @@ async function start(dev: string, s: Stream) {
   ch.onmessage = (b) => { try { dec.push(b); } catch (e) { console.warn("live frame:", e); } };
   s.stopDecoding = () => { ch.onmessage = () => {}; dec.close(); };
   try { await invoke("live_channel", { device: dev, channel: ch }); } catch (e) {
-    reportError(dev, String(e));
+    reportError(dev, String(e), true);
     if (s.gen === gen) { s.stopDecoding?.(); s.stopDecoding = undefined; }
     return;
   }

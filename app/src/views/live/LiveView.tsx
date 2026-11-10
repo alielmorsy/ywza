@@ -82,7 +82,7 @@ export function LiveView({ dev, active }: { dev: string; active: boolean }) {
           <div className="pointer-events-none absolute inset-0 grid place-items-center text-center" role="status">
             <div>
               <p className="text-text-2">Waiting for the screen of {name}</p>
-              {d?.lastError && <p className="mt-1 max-w-[360px] text-xs text-bad">{d.lastError}</p>}
+              {d?.liveError && <p className="mt-1 max-w-[360px] text-xs text-bad">{d.liveError}</p>}
             </div>
           </div>
         )}

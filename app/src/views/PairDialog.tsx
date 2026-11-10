@@ -25,7 +25,13 @@ function Qr({ text }: { text: string }) {
   );
 }
 
-function LetIn() {
+/** Backend pairing errors speak to CLI users ("run `ywza-agent pair` again"); say what to do here instead. */
+const pairError = (e: string) =>
+  /no agent answered|could not reach/i.test(e) ? "Could not reach the other device. Check the code, or make a new one there and try again."
+  : /wrong or expired code|code expired/i.test(e) ? "Wrong or expired code. Make a new one on the other device and try again."
+  : e;
+
+export function LetIn() {
   const connected = useStore((s) => !!s.devices[LOCAL]?.connected);
   const detail = useStore((s) => s.devices[LOCAL]?.detail);
   const pairing = useStore((s) => s.pairing);
@@ -55,7 +61,7 @@ function LetIn() {
     <section className="flex flex-col gap-3 p-5">
       <div>
         <h2>Let a device in</h2>
-        <p className="mt-0.5 text-text-2">Enter this code on the other device. It works once.</p>
+        <p className="mt-0.5 text-text-2">When the other device asks for a code, enter this one there. It works once.</p>
       </div>
       {!connected ? (
         <p className="text-text-3">This PC's agent is not running{detail ? `: ${detail}` : ""}, so it cannot create a code.</p>
@@ -111,7 +117,7 @@ function Connect({ onClose }: { onClose: () => void }) {
       flash(`Paired with ${name}`);
       onClose();
     } catch (err) {
-      setError(String(err).replace(/^Error:\s*/, "") || "Pairing failed");
+      setError(pairError(String(err).replace(/^Error:\s*/, "")) || "Pairing failed");
       setBusy(false);
     }
   };
@@ -120,7 +126,7 @@ function Connect({ onClose }: { onClose: () => void }) {
     <form className="flex flex-col gap-3 p-5" onSubmit={submit}>
       <div>
         <h2>Connect to a device</h2>
-        <p className="mt-0.5 text-text-2">Type the code the other device shows.</p>
+        <p className="mt-0.5 text-text-2">When the other device shows a code, type it here.</p>
       </div>
       <label className="flex flex-col gap-1">
         <span className="text-xs text-text-2">Name for it here</span>
@@ -145,7 +151,7 @@ export function PairDialog({ open, onClose }: { open: boolean; onClose: () => vo
   return (
     <Dialog open={open} onClose={onClose} label="Pair a device" className="w-[680px]">
       <div className="flex h-10 items-center border-b border-line-soft pr-2 pl-5">
-        <h1 className="flex-1 text-sm font-semibold">Pair a device</h1>
+        <h1 className="flex-1">Pair a device</h1>
         <button className="btn ghost sm" aria-label="Close" onClick={onClose}><Icon name="x" className="!size-3" /></button>
       </div>
       <div className="grid grid-cols-2 divide-x divide-line-soft">

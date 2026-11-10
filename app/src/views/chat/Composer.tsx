@@ -71,8 +71,8 @@ export function Composer({ dev, session, running, compact, text, setText, inputR
           onChange={(e) => { setText(e.target.value); setHint(false); }}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} />
         {running && session
-          ? <button className="btn size-[30px] flex-none justify-center rounded-md p-0" title="Stop the agent" aria-label="Stop"
-              onClick={() => cancel(session)}><Icon name="stop" /></button>
+          ? <button className="btn danger h-[30px] flex-none rounded-md px-2.5" title="Stop the agent"
+              onClick={() => cancel(session)}><Icon name="stop" />Stop</button>
           : <button className="btn primary size-[30px] flex-none justify-center rounded-md p-0 aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
               title={blocked || "Send (Enter)"} aria-label="Send" aria-disabled={!!blocked || !text.trim()} onClick={submit}><Icon name="send" /></button>}
       </div>
@@ -94,7 +94,7 @@ export function Composer({ dev, session, running, compact, text, setText, inputR
           </label>
         </div></details>
         <label className="flex min-w-0 flex-wrap items-center gap-1.5">Approvals
-          <select className={sel} value={approval ?? "rules"} onChange={(e) => setComposer({ approval: e.target.value === "rules" ? undefined : (e.target.value as ApprovalMode) })}>
+          <select className={`${sel} ${approval === "auto" ? "!border-warn text-warn" : ""}`} value={approval ?? "rules"} onChange={(e) => setComposer({ approval: e.target.value === "rules" ? undefined : (e.target.value as ApprovalMode) })}>
             <option value="rules">Follow rules</option>
             <option value="auto">Auto: run without asking</option>
             <option value="always">Ask before every action</option>

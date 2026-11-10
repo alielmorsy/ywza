@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LOCAL, useStore, waitingOn } from "./api";
-import { flash, openDevice, select, useNav, type View } from "./nav";
+import { flash, openDevice, select, setPairing, useNav, type View } from "./nav";
 import { Icon, Sprite } from "./Icon";
 import { Rail } from "./views/Rail";
 import { DeviceView } from "./views/DeviceView";
@@ -18,13 +18,14 @@ const winBtn = "grid w-[46px] place-items-center text-text-2 transition-colors h
 export default function App() {
   const selected = useNav((n) => n.selected);
   const flashed = useNav((n) => n.status);
+  const pairOpen = useNav((n) => n.pairing);
+  const auto = useNav((n) => n.approval === "auto");
   const waiting = useStore((s) => waitingOn(s));
   const status = waiting && flashed.tone !== "bad" ? { text: `${deviceLabel(waiting)}: waiting for approval`, tone: "warn" as const, pulse: true } : flashed;
   const devices = useStore((s) => s.devices);
   const error = useStore((s) => s.error);
   const config = useStore((s) => s.devices[LOCAL]?.config);
   const order = useDeviceOrder();
-  const [pairOpen, setPairOpen] = useState(false);
   const [visited, setVisited] = useState<string[]>([]);
   // Grace period at startup so the first connect doesn't flash the "down" card.
   const [booted, setBooted] = useState(false);
@@ -82,8 +83,8 @@ export default function App() {
         </div>
       </header>
 
-      <div className="grid min-h-0 grid-cols-[200px_minmax(0,1fr)]">
-        <Rail onPair={() => setPairOpen(true)} />
+      <div className="grid min-h-0 grid-cols-[clamp(168px,22vw,200px)_minmax(0,1fr)]">
+        <Rail onPair={() => setPairing(true)} />
         <main className="relative min-w-0 overflow-hidden">
           {down && selected !== "settings" && <ServiceDown detail={local?.detail} />}
           {visited.map((name) => {
@@ -99,12 +100,13 @@ export default function App() {
           <span>{status.text}</span>
         </div>
         <span className="flex-1" />
+        {auto && <><span className="flex items-center gap-1.5 text-warn" title="Chats run tools without asking. Change it under the message box."><Icon name="shield" className="!size-3.5" />Auto-approve on</span><span className="h-3 w-px bg-line" /></>}
         <span>{paired.length ? `${paired.length} paired, ${online} online` : "No paired devices"}</span>
         <span className="h-3 w-px bg-line" />
-        <span title={local?.connected ? undefined : local?.detail}>{local?.connected ? "Agent running" : "Agent not running"}</span>
+        <span title={local?.connected ? undefined : local?.detail}>{local?.connected ? "Service running" : "Service not running"}</span>
       </footer>
 
-      <PairDialog open={pairOpen} onClose={() => setPairOpen(false)} />
+      <PairDialog open={pairOpen} onClose={() => setPairing(false)} />
     </div>
   );
 }

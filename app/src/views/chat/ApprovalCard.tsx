@@ -2,15 +2,16 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Icon } from "../../Icon";
 import { approve, type Approval } from "../../api";
 
-/** `newest`: the latest pending card; it focuses the group unless the user is typing. A hidden chat can't take focus. */
+/** `newest`: the latest pending card. It takes focus only when nothing else has it or focus is already in this chat,
+    so it never pulls the keyboard from a field or from a device being controlled. The status bar announces it. */
 export function ApprovalCard({ a, newest }: { a: Approval; newest: boolean }) {
   const group = useRef<HTMLDivElement>(null);
   const [remember, setRemember] = useState(false);
 
   useEffect(() => {
     const el = document.activeElement;
-    const typing = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
-    if (newest && !a.resolved && !typing) group.current?.focus();
+    const free = !el || el === document.body || (!!el.closest("[data-messages]") && el.tagName !== "TEXTAREA");
+    if (newest && !a.resolved && free) group.current?.focus();
   }, [newest, a.resolved]);
 
   if (a.resolved) {
@@ -33,7 +34,10 @@ export function ApprovalCard({ a, newest }: { a: Approval; newest: boolean }) {
       <div className="flex items-center gap-2 font-semibold text-warn"><Icon name="shield" /><span>Approval needed</span><span className="mono min-w-0 truncate">{a.tool}</span></div>
       <div className="mt-1 break-words text-text select-text">{a.summary}</div>
       {a.detail && (
-        <div className="mono mt-2 max-h-40 overflow-auto rounded-md bg-chrome px-2 py-1.5 text-xs leading-[1.6] whitespace-pre-wrap break-words text-text-2 select-text">{a.detail}</div>
+        <details className="mt-1.5">
+          <summary className="w-fit cursor-pointer text-xs text-text-2 hover:text-text">Show arguments</summary>
+          <div className="mono mt-1.5 max-h-40 overflow-auto rounded-md bg-chrome px-2 py-1.5 text-xs leading-[1.6] whitespace-pre-wrap break-words text-text-2 select-text">{a.detail}</div>
+        </details>
       )}
       <div className="mt-2.5 flex flex-wrap gap-1.5">
         <button className="btn sm" title="Deny (Esc)" onClick={() => approve(a.request, false)}>Deny</button>

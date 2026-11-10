@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getState, loadSession, sessionsOf, useStore, type Approval, type SEvent } from "../../api";
+import { LOCAL, getState, loadSession, sessionsOf, useStore, type Approval, type SEvent } from "../../api";
 import { setUi, uiOf, useNav } from "../../nav";
 import { Composer } from "./Composer";
 import { Messages } from "./Messages";
@@ -18,6 +18,7 @@ export function ChatPane({ dev, compact }: { dev: string; compact?: boolean }) {
     () => (session ? Object.values(all).filter((a) => a.session === session).sort((a, b) => a.request - b.request) : NO_APPROVALS),
     [all, session],
   );
+  const alone = useStore((s) => dev === LOCAL && Object.keys(s.devices).length <= 1);
   const [text, setText] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
 
@@ -28,7 +29,7 @@ export function ChatPane({ dev, compact }: { dev: string; compact?: boolean }) {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {compact && <Switcher dev={dev} session={session} />}
-      <Messages key={session ?? "new"} who={label(dev)} events={events} running={running} approvals={approvals} fresh={!session} compact={compact} onExample={fill} />
+      <Messages key={session ?? "new"} who={label(dev)} events={events} running={running} approvals={approvals} fresh={!session} alone={alone && !compact} compact={compact} onExample={fill} />
       <Composer dev={dev} session={session} running={running} compact={compact} text={text} setText={setText} inputRef={input} />
     </div>
   );

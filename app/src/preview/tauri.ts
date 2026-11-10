@@ -70,7 +70,7 @@ const config: any = {
   relay_url: null,
   llm: { base_url: "http://127.0.0.1:1234/v1", api_key: "", model: "qwen3-coder-30b", max_steps: 60, vision: true, effort: null },
   ocr: { engine: "auto" },
-  approval: { rules: ["close_window", "run_command", "term_write", "term_keys"].map((tool) => ({ tool, pattern: null, action: "ask" })) },
+  approval: { rules: [{ tool: "run_command", pattern: "git status*", action: "allow" }] },
   desktop: { agent_virtual_desktop: false, idle_before_input_ms: 1000 },
   peers: [
     { id: "7f3a9c2e41d0b5a8c91e", name: "Ali's phone", view: true, chat: true, control: true, tools: false, settings: false },
@@ -84,10 +84,10 @@ const rect = (x: number, y: number, width: number, height: number) => ({ x, y, w
 const monitors = (device: string) =>
   device === "berkeley"
     ? [
-        { index: 1, name: "DELL U2723QE", x: 0, y: 0, width: 2560, height: 1440, scale: 1.5, primary: true },
-        { index: 2, name: "LG 24MK430H", x: 2560, y: 0, width: 1920, height: 1080, scale: 1, primary: false },
+        { index: 0, name: "DELL U2723QE", x: 0, y: 0, width: 2560, height: 1440, scale: 1.5, primary: true },
+        { index: 1, name: "LG 24MK430H", x: 2560, y: 0, width: 1920, height: 1080, scale: 1, primary: false },
       ]
-    : [{ index: 1, name: "Built-in display", x: 0, y: 0, width: 1920, height: 1080, scale: 1.25, primary: true }];
+    : [{ index: 0, name: "Built-in display", x: 0, y: 0, width: 1920, height: 1080, scale: 1.25, primary: true }];
 const elements = [
   { id: 1, role: "menu_bar", name: "Application", rect: rect(220, 172, 1180, 28) },
   { id: 2, role: "menu_item", name: "File", rect: rect(228, 172, 40, 28) },
@@ -161,12 +161,12 @@ function agent(device: string, msg: any) {
     case "get_session": return out({ type: "session", session: msg.session, events: events[msg.session] ?? [] });
     case "get_config": return out({ type: "config", config });
     case "set_config": Object.assign(config, msg.config); return out({ type: "config", config });
-    case "list_tools": return out({ type: "tools", list: ["list_windows", "get_elements", "click", "type_text", "press_keys", "scroll", "wait", "launch", "close_window", "run_command", "term_start", "term_write", "term_keys", "term_read", "screenshot", "copy"].map((name) => ({ name, description: "", parameters: {} })) });
+    case "list_tools": return out({ type: "tools", list: ["list_windows", "get_elements", "click", "type_text", "press_keys", "scroll", "wait", "launch", "close_window", "run_command", "term_start", "term_write", "term_keys", "term_read", "screenshot", "copy"].map((name) => ({ name, description: "", parameters: {}, risky: ["close_window", "run_command", "term_write", "term_keys"].includes(name) })) });
     case "list_models": return out({ type: "models", list: ["qwen3-coder-30b", "gpt-5", "gpt-5-mini", "claude-sonnet-5"] });
     case "list_monitors": return out({ type: "monitors", list: monitors(device) });
     case "window_info":
       return out({
-        type: "window_info", window: msg.window, title: "Settings - Notepad", monitor: 1,
+        type: "window_info", window: msg.window, title: "Settings - Notepad", monitor: 0,
         rect: rect(220, 140, 1180, 760), ...(msg.elements ? { elements } : {}),
       });
     case "create_pairing": return out({ type: "pairing_code", code: "482913", expires_in_secs: 600 });

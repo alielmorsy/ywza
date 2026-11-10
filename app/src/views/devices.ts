@@ -3,7 +3,10 @@ import { LOCAL, useStore, type Device } from "../api";
 
 export const deviceLabel = (name: string) => (name === LOCAL ? "This PC" : name);
 
-export const statusText = (d?: Device) => (d?.connected ? "Online" : d?.detail || "Offline");
+/** Connection details come from the backend in lowercase ("no route to device (offline)"). */
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+export const statusText = (d?: Device) => (d?.connected ? "Online" : d?.detail ? sentence(d.detail) : "Offline");
 
 export const isConnecting = (d?: Device) => !d?.connected && /^connecting/i.test(d?.detail ?? "");
 
@@ -14,13 +17,8 @@ export const dotClass = (d?: Device) => (d?.connected ? "" : isConnecting(d) ? "
 export const liveBlock = (d?: Device) =>
   !d?.connected ? "Offline" : d.permissions?.view === false ? "This device does not let you view its screen" : null;
 
-/** Rail order: This PC, then paired devices with online ones first. */
+/** Rail order: This PC, then paired devices by name. Stable, so Ctrl+1..9 keep their device. */
 export function useDeviceOrder(): string[] {
-  const devices = useStore((s) => s.devices);
-  return useMemo(() => {
-    const rest = Object.values(devices)
-      .filter((d) => d.name !== LOCAL)
-      .sort((a, b) => Number(b.connected) - Number(a.connected) || a.name.localeCompare(b.name));
-    return [LOCAL, ...rest.map((d) => d.name)];
-  }, [devices]);
+  const names = useStore((s) => Object.keys(s.devices).filter((n) => n !== LOCAL).sort().join("\n"));
+  return useMemo(() => [LOCAL, ...(names ? names.split("\n") : [])], [names]);
 }

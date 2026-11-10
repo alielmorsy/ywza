@@ -34,7 +34,8 @@ export interface Config {
   stream: { fps: number; bitrate_kbps: number; cursor: boolean };
   log: Record<string, unknown>;
 }
-export interface ToolInfo { name: string; description: string }
+/** `risky`: asks before each call when no approval rule matches. */
+export interface ToolInfo { name: string; description: string; risky?: boolean }
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 export const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];
 /** Monitor rect in virtual-desktop physical pixels. */
@@ -102,6 +103,8 @@ export interface Device {
   monitors?: Monitor[];
   windows: Record<string, WindowInfo>;
   lastError?: string;
+  /** Latest live view error, kept apart so it does not show up in chats. */
+  liveError?: string;
   /** The device's agent is older and rejected a newer message (e.g. `list_monitors`). */
   outdated?: boolean;
   /** Live view: CSS cursor with the remote cursor's shape; unset until the agent sends one. */
@@ -136,8 +139,8 @@ export function useStore<T>(sel: (s: State) => T): T {
   return useSyncExternalStore(subscribe, () => sel(state));
 }
 /** Records an error for `device` and surfaces it in the status bar. */
-export function reportError(device: string, message: string) {
-  patch(device, () => ({ lastError: message }));
+export function reportError(device: string, message: string, live = false) {
+  patch(device, () => (live ? { liveError: message } : { lastError: message }));
   set((s) => ({ ...s, error: { device, message, at: Date.now() } }));
 }
 /** Sessions this app created this run; the agent may not know them yet, so never fetch them. */
@@ -157,9 +160,16 @@ export const waitingOn = (s: State, device?: string): string | undefined => {
 };
 
 // ---- commands ----------------------------------------------------------------------------
+/** When each device last got a live view message; an agent error soon after belongs to the live view. */
+const liveSent = new Map<string, number>();
+// ponytail: errors carry no request id, so a 3 s window attributes them; add ids to the protocol if this misfiles.
+const liveRecently = (device: string) => Date.now() - (liveSent.get(device) ?? 0) < 3000;
+
 export const send = (device: string, msg: ClientMsg) => {
-  if (msg.type === "live_start") patch(device, () => ({ cursor: undefined })); // the new stream sends its own
-  return invoke("send", { device, msg }).catch((e) => reportError(device, String(e)));
+  if (msg.type === "live_start") patch(device, () => ({ cursor: undefined, liveError: undefined })); // the new stream sends its own
+  const live = msg.type === "live_start" || msg.type === "live_stop" || msg.type === "input";
+  if (live) liveSent.set(device, Date.now());
+  return invoke("send", { device, msg }).catch((e) => reportError(device, String(e), live));
 };
 export const connectDevice = (name: string) => invoke("connect_device", { name });
 /** Pairs with another machine by the 6-digit code it shows; on success it shows up as device `name`. */
@@ -235,7 +245,7 @@ function onMsg(device: string, m: AgentMsg) {
     }
     case "error": {
       const unknown = /unknown variant `(\w+)`/.exec(m.message)?.[1];
-      if (!unknown) return reportError(device, m.message);
+      if (!unknown) return reportError(device, m.message, liveRecently(device));
       const first = !state.devices[device]?.outdated;
       // An older agent streams monitor 0 only and knows nothing newer; degrade instead of failing.
       patch(device, (d) => ({

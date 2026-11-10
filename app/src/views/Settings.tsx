@@ -7,6 +7,9 @@ import { cleanConfig, saveConfig, trimRules } from "./localConfig";
 
 const OTHER = "\0other";
 
+const SECTIONS = ["AI", "Approvals", "Desktop", "Screen sharing", "Network"];
+const sectionId = (name: string) => `settings-${name.toLowerCase().replaceAll(" ", "-")}`;
+
 /** Why the draft can't be saved, or null. */
 function problem(c: Config): string | null {
   try {
@@ -43,6 +46,12 @@ export default function Settings() {
   const [draft, setDraft] = useState<Config>();
   const prev = useRef<Config | undefined>(undefined);
   const [eye, setEye] = useState(false);
+  const [section, setSection] = useState(SECTIONS[0]);
+  const onScroll = (el: HTMLElement) => {
+    const top = el.getBoundingClientRect().top + 24;
+    const bottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
+    setSection(bottom ? SECTIONS[SECTIONS.length - 1] : [...SECTIONS].reverse().find((n) => (document.getElementById(sectionId(n))?.getBoundingClientRect().top ?? 0) <= top) ?? SECTIONS[0]);
+  };
 
   useEffect(() => {
     if (!connected) return;
@@ -73,17 +82,20 @@ export default function Settings() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-10 flex-none items-center gap-3 border-b border-line-soft px-4">
-        <h1 className="text-sm font-semibold">Settings</h1>
+        <h1>Settings</h1>
         <span className="text-xs text-text-2">For this PC. Every chat, on any device, uses this AI.</span>
       </header>
 
       <nav aria-label="Settings sections" className="flex flex-none flex-wrap gap-1 border-b border-line-soft px-4 py-2">
-        {["AI", "Approvals", "Desktop", "Screen sharing", "Network"].map((name) => <button key={name} className="btn ghost sm" onClick={() => document.getElementById(`settings-${name.toLowerCase().replaceAll(" ", "-")}`)?.scrollIntoView({ block: "start" })}>{name}</button>)}
+        {SECTIONS.map((name) => (
+          <button key={name} className={`btn ghost sm ${section === name ? "!bg-surface-3 !text-text" : ""}`} aria-current={section === name || undefined}
+            onClick={() => document.getElementById(sectionId(name))?.scrollIntoView({ block: "start" })}>{name}</button>
+        ))}
       </nav>
-      <div className="form-container min-h-0 flex-1 overflow-auto">
+      <div className="form-container min-h-0 flex-1 overflow-auto" onScroll={(e) => onScroll(e.currentTarget)}>
         <div className="mx-auto flex max-w-[700px] flex-col gap-5 px-6 py-5">
           <Section h="AI">
-            <Row t="Endpoint" d="OpenAI-compatible base URL">
+            <Row t="Endpoint" d="OpenAI-compatible base URL" err={invalid?.startsWith("Endpoint") ? invalid : null}>
               <input className="field mono" value={draft.llm.base_url} spellCheck={false} aria-invalid={invalid?.startsWith("Endpoint")} onChange={(e) => up((c) => (c.llm.base_url = e.target.value))} />
             </Row>
             <Row t="API key" d="Leave empty to keep the saved key">
@@ -91,7 +103,7 @@ export default function Settings() {
                 onChange={(e) => up((c) => (c.llm.api_key = e.target.value))} />
               <button type="button" className={`btn ghost sm ${eye ? "!bg-surface-3 !text-text" : ""}`} aria-label="Show key" title={eye ? "Hide key" : "Show key"} aria-pressed={eye} onClick={() => setEye(!eye)}><Icon name="eye" /></button>
             </Row>
-            <Row t="Default model" d="Chats use it unless you pick another" w="w-[320px]">
+            <Row t="Default model" d="Chats use it unless you pick another" err={invalid?.includes("model") ? invalid : null} w="w-[320px]">
               <ModelField value={draft.llm.model} models={models} onChange={(v) => up((c) => (c.llm.model = v))} />
             </Row>
             <Row t="Default effort" d="How hard the model thinks" w="w-[150px]">
@@ -100,7 +112,7 @@ export default function Settings() {
                 {EFFORTS.map((x) => <option key={x} value={x}>{x}</option>)}
               </select>
             </Row>
-            <Row t="Max steps" d="Tool calls allowed per prompt" w="w-[150px]">
+            <Row t="Max steps" d="Tool calls allowed per prompt" err={invalid?.startsWith("Max steps") ? invalid : null} w="w-[150px]">
               <Num value={draft.llm.max_steps} min={1} max={1000} onChange={(v) => up((c) => (c.llm.max_steps = v))} />
             </Row>
             <Row t="Model understands screenshots" d="Off hides the screenshot tool from the model" w="w-auto">
@@ -113,8 +125,8 @@ export default function Settings() {
           </Section>
 
           <Section h="Desktop">
-            <Row t="Idle before input" d="Milliseconds without your input before the agent clicks or types" w="w-[150px]">
-              <Num value={draft.desktop.idle_before_input_ms} onChange={(v) => up((c) => (c.desktop.idle_before_input_ms = v))} />
+            <Row t="Idle before input" d="How long you stay idle before the agent clicks or types" w="w-[150px]">
+              <Num value={draft.desktop.idle_before_input_ms} unit="ms" onChange={(v) => up((c) => (c.desktop.idle_before_input_ms = v))} />
             </Row>
             <Row t="Text recognition" w="w-[150px]">
               <select className="field" value={draft.ocr.engine} onChange={(e) => up((c) => (c.ocr.engine = e.target.value as Config["ocr"]["engine"]))}>
@@ -126,11 +138,11 @@ export default function Settings() {
           </Section>
 
           <Section h="Screen sharing">
-            <Row t="Frame rate" d="Frames per second" w="w-[150px]">
-              <Num value={draft.stream.fps} min={1} max={120} onChange={(v) => up((c) => (c.stream.fps = v))} />
+            <Row t="Frame rate" w="w-[150px]">
+              <Num value={draft.stream.fps} min={1} max={120} unit="fps" onChange={(v) => up((c) => (c.stream.fps = v))} />
             </Row>
-            <Row t="Bitrate" d="kbit/s, 0 adapts to the connection" w="w-[150px]">
-              <Num value={draft.stream.bitrate_kbps} onChange={(v) => up((c) => (c.stream.bitrate_kbps = v))} />
+            <Row t="Bitrate" d="0 adapts to the connection" w="w-[150px]">
+              <Num value={draft.stream.bitrate_kbps} unit="kbit/s" onChange={(v) => up((c) => (c.stream.bitrate_kbps = v))} />
             </Row>
             <Row t="Show mouse cursor" w="w-auto">
               <Tog on={draft.stream.cursor} set={(v) => up((c) => (c.stream.cursor = v))} />

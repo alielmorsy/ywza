@@ -20,7 +20,7 @@ function Item({ name, selected, onMenu }: { name: string; selected: boolean; onM
       <span className="min-w-0 flex-1">
         <span className="block truncate">{deviceLabel(name)}</span>
         {waiting
-          ? <span className="flex items-center gap-1.5 truncate text-xs text-text"><span className="dot warn pulse" aria-hidden />Waiting for you</span>
+          ? <span className="flex items-center gap-2 truncate pl-0.5 text-xs text-text"><span className="dot warn pulse" aria-hidden />Waiting for you</span>
           : <span className="block truncate text-xs text-text-3">{subline(d, self)}</span>}
       </span>
     </button>
@@ -60,7 +60,12 @@ export function Rail({ onPair }: { onPair: () => void }) {
       <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-2">
         {order.map((name) => (
           <Item key={name} name={name} selected={selected === name}
-            onMenu={(e, n) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, name: n }); }} />
+            onMenu={(e, n) => {
+              e.preventDefault();
+              // The context-menu key and Shift+F10 report no pointer position; open under the item.
+              const r = e.currentTarget.getBoundingClientRect();
+              setMenu(e.clientX || e.clientY ? { x: e.clientX, y: e.clientY, name: n } : { x: r.left + 12, y: r.bottom, name: n });
+            }} />
         ))}
         {order.length === 1 && <p className="px-2.5 pt-2 text-xs text-text-3">No paired devices yet. Pair one to chat with it or watch its screen.</p>}
       </div>

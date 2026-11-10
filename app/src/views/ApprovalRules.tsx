@@ -9,6 +9,7 @@ export function ApprovalRules({ rules, up }: Props) {
   const connected = useStore((s) => !!s.devices[LOCAL]?.connected);
   useEffect(() => { if (connected) send(LOCAL, { type: "list_tools" }); }, [connected]);
   const names = tools.map((t) => t.name).sort();
+  const risky = tools.filter((t) => t.risky).map((t) => t.name).sort();
   return (
     <>
       {rules.map((r, i) => (
@@ -37,7 +38,9 @@ export function ApprovalRules({ rules, up }: Props) {
         <button type="button" className="btn sm flex-none" onClick={() => up((l) => { l.push({ tool: "", pattern: null, action: "ask" }); })}>
           <Icon name="plus" />Add rule
         </button>
-        <span className="min-w-0 text-xs text-text-2">First matching rule wins. Unmatched tools run without asking.</span>
+        <span className="min-w-0 text-xs text-text-2">
+          First matching rule wins. Without a rule, {risky.length ? <><span className="mono">{risky.join(", ")}</span> ask</> : "risky tools ask"} and the rest run.
+        </span>
       </div>
     </>
   );
