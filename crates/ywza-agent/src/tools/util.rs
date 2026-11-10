@@ -26,6 +26,7 @@ pub struct RunCommand {
 
 impl Tool for RunCommand {
     const NAME: &'static str = "run_command";
+    const RISKY: bool = true;
 
     async fn run(self, _: &Ctx) -> ToolOutput {
         let mut c = crate::platform::shell(&self.command);

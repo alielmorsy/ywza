@@ -21,11 +21,22 @@ pub enum Verdict {
 }
 
 /// The strictest answer over the call and, for a batch, each of its actions: any deny denies,
-/// else the first ask asks, else allow.
-pub fn verdict(approval: &Approval, mode: ApprovalMode, tool: &str, args: &Value) -> Verdict {
+/// else the first ask asks, else allow. A call no rule matches asks when `risky(tool)`.
+pub fn verdict(
+    approval: &Approval,
+    mode: ApprovalMode,
+    tool: &str,
+    args: &Value,
+    risky: impl Fn(&str) -> bool,
+) -> Verdict {
     let mut ask = None;
     for (tool, summary) in calls(tool, args) {
-        match mode.apply(approval.decide(&tool, &summary)) {
+        let action = approval.decide(&tool, &summary).unwrap_or(if risky(&tool) {
+            Action::Ask
+        } else {
+            Action::Allow
+        });
+        match mode.apply(action) {
             Action::Deny => return Verdict::Deny,
             Action::Ask => {
                 ask.get_or_insert(Verdict::Ask { tool, summary });
@@ -48,7 +59,7 @@ impl Agent {
         cancel: &CancellationToken,
     ) -> Result<(), &'static str> {
         let rules = self.config.get().approval;
-        match verdict(&rules, mode, tool, args) {
+        match verdict(&rules, mode, tool, args, |t| self.tools.risky(t)) {
             Verdict::Allow => Ok(()),
             Verdict::Deny => {
                 tracing::info!(session = %sid.0, tool, "tool call blocked by an approval rule");
@@ -121,6 +132,11 @@ mod tests {
 
     use super::*;
 
+    /// Stands in for the registry: only run_command and unknown tools are risky here.
+    fn risky(tool: &str) -> bool {
+        matches!(tool, "run_command" | "mystery")
+    }
+
     fn rule(tool: &str, pattern: Option<&str>, action: Action) -> Rule {
         Rule {
             tool: tool.into(),
@@ -130,25 +146,32 @@ mod tests {
     }
 
     #[test]
-    fn modes_over_the_default_rules() {
+    fn unmatched_calls_follow_the_tool_risk() {
         let a = Approval::default();
         let run = json!({"command":"ls"});
         let ask = Verdict::Ask {
             tool: "run_command".into(),
             summary: "ls".into(),
         };
-        assert_eq!(verdict(&a, ApprovalMode::Rules, "run_command", &run), ask);
         assert_eq!(
-            verdict(&a, ApprovalMode::Auto, "run_command", &run),
+            verdict(&a, ApprovalMode::Rules, "run_command", &run, risky),
+            ask
+        );
+        assert_eq!(
+            verdict(&a, ApprovalMode::Auto, "run_command", &run, risky),
             Verdict::Allow
         );
         assert_eq!(
-            verdict(&a, ApprovalMode::Rules, "click", &json!({})),
+            verdict(&a, ApprovalMode::Rules, "click", &json!({}), risky),
             Verdict::Allow
         );
         assert!(matches!(
-            verdict(&a, ApprovalMode::Always, "click", &json!({})),
+            verdict(&a, ApprovalMode::Always, "click", &json!({}), risky),
             Verdict::Ask { tool, .. } if tool == "click"
+        ));
+        assert!(matches!(
+            verdict(&a, ApprovalMode::Rules, "mystery", &json!({}), risky),
+            Verdict::Ask { .. }
         ));
     }
 
@@ -163,7 +186,7 @@ mod tests {
             ApprovalMode::Auto,
             ApprovalMode::Always,
         ] {
-            assert_eq!(verdict(&a, mode, "run_command", &rm), Verdict::Deny);
+            assert_eq!(verdict(&a, mode, "run_command", &rm, risky), Verdict::Deny);
         }
     }
 
@@ -178,7 +201,7 @@ mod tests {
         let batch = |actions: Value| json!({"window":"w1","actions":actions});
         let ask = batch(json!([{"tool":"wait","ms":1},{"tool":"press_keys","keys":"enter"}]));
         assert_eq!(
-            verdict(&a, ApprovalMode::Rules, "batch", &ask),
+            verdict(&a, ApprovalMode::Rules, "batch", &ask, risky),
             Verdict::Ask {
                 tool: "press_keys".into(),
                 summary: "enter".into()
@@ -189,12 +212,12 @@ mod tests {
             {"tool":"type_text","text":"secret1"}
         ]));
         assert_eq!(
-            verdict(&a, ApprovalMode::Rules, "batch", &deny),
+            verdict(&a, ApprovalMode::Rules, "batch", &deny, risky),
             Verdict::Deny
         );
         let fine = batch(json!([{"tool":"wait","ms":1}]));
         assert_eq!(
-            verdict(&a, ApprovalMode::Rules, "batch", &fine),
+            verdict(&a, ApprovalMode::Rules, "batch", &fine, risky),
             Verdict::Allow
         );
     }

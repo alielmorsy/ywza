@@ -117,6 +117,7 @@ pub struct CloseWindow {
 
 impl Tool for CloseWindow {
     const NAME: &'static str = "close_window";
+    const RISKY: bool = true;
 
     async fn run(self, cx: &Ctx) -> ToolOutput {
         flat(async {

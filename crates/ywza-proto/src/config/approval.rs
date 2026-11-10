@@ -41,34 +41,20 @@ pub struct Rule {
     pub action: Action,
 }
 
-/// The first matching rule wins; a call no rule matches is allowed.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Overrides on top of each tool's own default (risky tools ask, the rest run).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Approval {
     pub rules: Vec<Rule>,
 }
 
-impl Default for Approval {
-    fn default() -> Self {
-        let ask = |tool: &str| Rule {
-            tool: tool.into(),
-            pattern: None,
-            action: Action::Ask,
-        };
-        Self {
-            rules: ["close_window", "run_command", "term_write", "term_keys"]
-                .map(ask)
-                .into(),
-        }
-    }
-}
-
 impl Approval {
-    pub fn decide(&self, tool: &str, summary: &str) -> Action {
+    /// The first matching rule's action; None when no rule matches.
+    pub fn decide(&self, tool: &str, summary: &str) -> Option<Action> {
         self.rules
             .iter()
             .find(|r| r.tool == tool && r.pattern.as_deref().is_none_or(|p| glob(p, summary)))
-            .map_or(Action::Allow, |r| r.action)
+            .map(|r| r.action)
     }
 
     /// "Always allow this tool": a pattern-less allow rule that goes before every other rule.
@@ -132,7 +118,7 @@ mod tests {
     }
 
     #[test]
-    fn first_match_wins_and_unmatched_is_allowed() {
+    fn first_match_wins_and_unmatched_is_none() {
         let a = Approval {
             rules: vec![
                 rule("run_command", Some("echo *"), Action::Allow),
@@ -140,19 +126,10 @@ mod tests {
                 rule("run_command", None, Action::Ask),
             ],
         };
-        assert_eq!(a.decide("run_command", "echo hi"), Action::Allow);
-        assert_eq!(a.decide("run_command", "RM -rf x"), Action::Deny);
-        assert_eq!(a.decide("run_command", "ls"), Action::Ask);
-        assert_eq!(a.decide("click", "rm x"), Action::Allow);
-    }
-
-    #[test]
-    fn default_rules_ask_for_the_risky_tools() {
-        let a = Approval::default();
-        for t in ["close_window", "run_command", "term_write", "term_keys"] {
-            assert_eq!(a.decide(t, "x"), Action::Ask, "{t}");
-        }
-        assert_eq!(a.decide("click", "x"), Action::Allow);
+        assert_eq!(a.decide("run_command", "echo hi"), Some(Action::Allow));
+        assert_eq!(a.decide("run_command", "RM -rf x"), Some(Action::Deny));
+        assert_eq!(a.decide("run_command", "ls"), Some(Action::Ask));
+        assert_eq!(a.decide("click", "rm x"), None);
     }
 
     #[test]
@@ -173,8 +150,8 @@ mod tests {
         let mut a = Approval::default();
         a.remember("run_command");
         a.remember("run_command");
-        assert_eq!(a.rules.len(), 5);
-        assert_eq!(a.decide("run_command", "ls"), Action::Allow);
+        assert_eq!(a.rules.len(), 1);
+        assert_eq!(a.decide("run_command", "ls"), Some(Action::Allow));
         assert_eq!(a.rules[0], rule("run_command", None, Action::Allow));
     }
 

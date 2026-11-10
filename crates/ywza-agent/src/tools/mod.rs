@@ -37,11 +37,15 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub trait Tool: DeserializeOwned + JsonSchema + Send + 'static {
     const NAME: &'static str;
+    /// Asks before each call unless an approval rule says otherwise: it runs commands, types
+    /// into terminals or destroys state.
+    const RISKY: bool = false;
     fn run(self, cx: &Ctx) -> impl Future<Output = ToolOutput> + Send;
 }
 
 pub struct Entry {
     pub name: &'static str,
+    pub risky: bool,
     pub description: String,
     pub schema: Value,
     pub call: for<'a> fn(Value, &'a Ctx) -> BoxFuture<'a, ToolOutput>,
@@ -51,6 +55,7 @@ pub fn entry<T: Tool>() -> Entry {
     let (description, schema) = schema::describe::<T>();
     Entry {
         name: T::NAME,
+        risky: T::RISKY,
         description,
         schema,
         call: call::<T>,
@@ -134,6 +139,22 @@ mod tests {
                 "notify",
             ]
         );
+    }
+
+    #[test]
+    fn risky_tools_are_flagged_and_unknown_tools_ask() {
+        let tools = Tools::default();
+        let risky: Vec<&str> = registry()
+            .iter()
+            .filter(|e| e.risky)
+            .map(|e| e.name)
+            .collect();
+        assert_eq!(
+            risky,
+            ["close_window", "term_write", "term_keys", "run_command"]
+        );
+        assert!(!tools.risky("click"));
+        assert!(tools.risky("not_a_tool"));
     }
 
     #[test]

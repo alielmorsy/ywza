@@ -94,6 +94,7 @@ pub struct TermWrite {
 
 impl Tool for TermWrite {
     const NAME: &'static str = "term_write";
+    const RISKY: bool = true;
 
     async fn run(self, cx: &Ctx) -> ToolOutput {
         flat(async {
@@ -119,6 +120,7 @@ pub struct TermKeys {
 
 impl Tool for TermKeys {
     const NAME: &'static str = "term_keys";
+    const RISKY: bool = true;
 
     async fn run(self, cx: &Ctx) -> ToolOutput {
         flat(async {

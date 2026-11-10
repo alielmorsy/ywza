@@ -6,6 +6,9 @@ use crate::{Config, Permissions, SessionEvent, SessionId, SessionSummary};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolInfo {
     pub name: String,
+    /// Asks before each call when no approval rule matches.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub risky: bool,
     pub description: String,
     /// JSON Schema of the arguments.
     pub parameters: Value,
@@ -276,6 +279,7 @@ mod tests {
             Tools {
                 list: vec![ToolInfo {
                     name: "wait".into(),
+                    risky: false,
                     description: "d".into(),
                     parameters: json!({"type":"object"}),
                 }],

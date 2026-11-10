@@ -86,6 +86,7 @@ impl Ctx {
 
 pub struct ToolSpec {
     pub name: &'static str,
+    pub risky: bool,
     pub description: String,
     pub parameters: Value,
 }
@@ -114,10 +115,20 @@ impl Tools {
             .iter()
             .map(|e| ToolSpec {
                 name: e.name,
+                risky: e.risky,
                 description: e.description.clone(),
                 parameters: e.schema.clone(),
             })
             .collect()
+    }
+
+    /// Whether a call to `name` asks when no approval rule matches. Unknown tools ask.
+    pub fn risky(&self, name: &str) -> bool {
+        self.shared
+            .entries
+            .iter()
+            .find(|e| e.name == name)
+            .is_none_or(|e| e.risky)
     }
 
     /// The tools as clients and models see them.
@@ -126,6 +137,7 @@ impl Tools {
             .into_iter()
             .map(|s| ToolInfo {
                 name: s.name.into(),
+                risky: s.risky,
                 description: s.description,
                 parameters: s.parameters,
             })
