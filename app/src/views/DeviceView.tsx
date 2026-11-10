@@ -23,7 +23,7 @@ export function DeviceView({ dev, selected }: { dev: string; selected: boolean }
 
   const segs: { v: View; label: string; key: string; off: string | null }[] = [
     { v: "chat", label: "Chat", key: "C", off: null },
-    { v: "live", label: "Live", key: "L", off: liveOff },
+    { v: "live", label: "View desktop", key: "L", off: liveOff },
     ...(local ? [] : [{ v: "access" as View, label: "Access", key: "A", off: null }]),
   ];
 

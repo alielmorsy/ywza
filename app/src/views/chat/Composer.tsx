@@ -67,7 +67,7 @@ export function Composer({ dev, session, running, compact, text, setText, inputR
       {hint && running && <div className="mb-1.5 text-xs text-text-2" role="status">{STOP_FIRST}</div>}
       <div className="flex items-end gap-1.5 rounded-md border border-line bg-surface py-1.5 pr-1.5 pl-3 transition-colors focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--c-accent-soft)]">
         <textarea ref={inputRef} rows={1} value={text} aria-label="Message" placeholder={`Ask ${label(dev)} to do something`}
-          className="min-h-[22px] flex-1 resize-none border-0 bg-transparent py-1 leading-[1.45] outline-none placeholder:text-text-3"
+          className="min-h-[22px] min-w-0 flex-1 resize-none border-0 bg-transparent py-1 leading-[1.45] outline-none placeholder:text-text-3"
           onChange={(e) => { setText(e.target.value); setHint(false); }}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} />
         {running && session
@@ -77,7 +77,9 @@ export function Composer({ dev, session, running, compact, text, setText, inputR
               title={blocked || "Send (Enter)"} aria-label="Send" aria-disabled={!!blocked || !text.trim()} onClick={submit}><Icon name="send" /></button>}
       </div>
       <div className="mt-1.5 flex flex-col gap-1.5 px-0.5 text-xs text-text-3">
-        <div className="flex items-center gap-3">
+        <details className="relative" onKeyDown={(e) => { if (e.key === "Escape") { e.currentTarget.open = false; e.currentTarget.querySelector("summary")?.focus(); } }}>
+          <summary className="btn ghost sm max-w-full"><span className="truncate">{model || "Default model"} / {effort || "Default effort"}</span></summary>
+          <div className="absolute bottom-full left-0 z-20 mb-1 flex max-w-full flex-col gap-2 rounded-md border border-line bg-chrome p-3">
           <label className="flex min-w-0 items-center gap-1.5">Model
             <select className={sel} value={model ?? ""} onChange={(e) => setComposer({ model: e.target.value || undefined })}>
               <option value="">Default ({localModel || "agent default"})</option>
@@ -90,8 +92,8 @@ export function Composer({ dev, session, running, compact, text, setText, inputR
               {EFFORTS.map((x) => <option key={x} value={x}>{x}</option>)}
             </select>
           </label>
-        </div>
-        <label className="flex min-w-0 items-center gap-1.5">Approvals
+        </div></details>
+        <label className="flex min-w-0 flex-wrap items-center gap-1.5">Approvals
           <select className={sel} value={approval ?? "rules"} onChange={(e) => setComposer({ approval: e.target.value === "rules" ? undefined : (e.target.value as ApprovalMode) })}>
             <option value="rules">Follow rules</option>
             <option value="auto">Auto: run without asking</option>

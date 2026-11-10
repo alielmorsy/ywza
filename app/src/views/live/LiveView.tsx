@@ -49,23 +49,8 @@ export function LiveView({ dev, active }: { dev: string; active: boolean }) {
   const toggleFull = () => (document.fullscreenElement ? document.exitFullscreen() : root.current!.requestFullscreen()).catch(() => {});
 
   return (
-    <div ref={root} className="flex h-full min-h-0 bg-ground">
-      <div className="relative min-w-0 flex-1 overflow-hidden bg-backdrop">
-        <canvas ref={canvas} aria-label={`Screen of ${name}`} tabIndex={-1}
-          className="absolute inset-0 size-full object-contain outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
-          style={controlling ? { cursor: d?.cursor ?? "none" } : undefined} {...input}
-          onFocus={() => setFocused(true)} onBlur={(e) => { setFocused(false); input.onBlur?.(e); }} />
-
-        {active && !live && (
-          <div className="pointer-events-none absolute inset-0 grid place-items-center text-center" role="status">
-            <div>
-              <p className="text-text-2">Waiting for the screen of {name}</p>
-              {d?.lastError && <p className="mt-1 max-w-[360px] text-xs text-bad">{d.lastError}</p>}
-            </div>
-          </div>
-        )}
-
-        <div role="toolbar" aria-label="Live view" className="absolute top-2 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-line bg-chrome p-1">
+    <div ref={root} className="flex h-full min-h-0 flex-col bg-ground">
+        <div role="toolbar" aria-label="Live view" className="z-10 flex flex-none flex-wrap items-center gap-1 border-b border-line bg-chrome p-1">
           <MonitorPicker dev={dev} value={monitor} onPick={(i) => setMonitor(dev, i)} />
           <Sep />
           {canControl
@@ -86,9 +71,27 @@ export function LiveView({ dev, active }: { dev: string; active: boolean }) {
             <span className={`dot size-1.5 ${live ? "pulse" : "idle"}`} />{live ? "Live" : "Connecting"}
           </span>
         </div>
+      <div className="flex min-h-0 flex-1">
+      <div className="relative min-w-0 flex-1 overflow-hidden bg-backdrop">
+        <canvas ref={canvas} aria-label={`Screen of ${name}`} tabIndex={controlling ? 0 : -1}
+          className="absolute inset-0 size-full object-contain outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+          style={controlling ? { cursor: d?.cursor ?? "none" } : undefined} {...input}
+          onFocus={() => setFocused(true)} onBlur={(e) => { setFocused(false); input.onBlur?.(e); }} />
+
+        {active && !live && (
+          <div className="pointer-events-none absolute inset-0 grid place-items-center text-center" role="status">
+            <div>
+              <p className="text-text-2">Waiting for the screen of {name}</p>
+              {d?.lastError && <p className="mt-1 max-w-[360px] text-xs text-bad">{d.lastError}</p>}
+            </div>
+          </div>
+        )}
+
+
       </div>
 
       {dock && <DockPanel><ChatPane dev={dev} compact /></DockPanel>}
+      </div>
     </div>
   );
 }

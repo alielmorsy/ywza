@@ -50,7 +50,7 @@ export function Rail({ onPair }: { onPair: () => void }) {
     const go = (v: View) => () => openDevice(name, v);
     return [
       { label: "Chat", run: go("chat") },
-      { label: "Live", run: go("live"), disabled: liveBlock(devices[name]) ?? false },
+      { label: "View desktop", run: go("live"), disabled: liveBlock(devices[name]) ?? false },
       ...(name === LOCAL ? [] : [{ label: "Access", run: go("access") }, { label: "Remove", run: () => setRemoving(name), danger: true }]),
     ];
   };

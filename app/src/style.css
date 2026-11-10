@@ -110,3 +110,14 @@
   .down-card, .down-sonar > span, .down-core { animation: none; }
   .down-sonar > span:first-child { opacity: .35; transform: scale(1.6); }
 }
+
+.form-container { container-type: inline-size; }
+.form-control { max-width: 60%; }
+@container (max-width: 560px) {
+  .form-row { flex-wrap: wrap; gap: 8px; }
+  .form-row > span:first-child { flex-basis: 100%; }
+  .form-control { max-width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

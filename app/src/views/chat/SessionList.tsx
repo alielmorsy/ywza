@@ -4,18 +4,18 @@ import { getState, loadSession, sessionsOf, useStore } from "../../api";
 import { setUi, uiOf, useNav } from "../../nav";
 import { ago, label } from "./util";
 
-export function SessionList({ dev }: { dev: string }) {
+export function SessionList({ dev, onPick }: { dev: string; onPick?: () => void }) {
   const sessions = useStore((s) => s.sessions);
   const list = useMemo(() => sessionsOf(getState(), dev), [sessions, dev]); // eslint-disable-line react-hooks/exhaustive-deps
   const approvals = useStore((s) => s.approvals);
   const waiting = useMemo(() => new Set(Object.values(approvals).filter((a) => !a.resolved).map((a) => a.session)), [approvals]);
   const current = useNav((n) => uiOf(n, dev).session);
 
-  const pick = (id: string) => { setUi(dev, { session: id }); loadSession(id); };
+  const pick = (id: string) => { setUi(dev, { session: id }); loadSession(id); onPick?.(); };
 
   return (
-    <aside className="flex min-h-0 flex-col gap-2 border-r border-line-soft bg-chrome p-2" aria-label="Chats">
-      <button className="btn sm justify-center" onClick={() => setUi(dev, { session: null })}><Icon name="plus" />New chat</button>
+    <aside className="flex min-h-0 flex-1 flex-col gap-2 border-r border-line-soft bg-chrome p-2" aria-label="Chats">
+      <button className="btn sm justify-center" onClick={() => { setUi(dev, { session: null }); onPick?.(); }}><Icon name="plus" />New chat</button>
       {list.length === 0
         ? <p className="px-2 pt-2 text-xs text-text-3">No chats with {label(dev)} yet</p>
         : <div className="flex min-h-0 flex-col gap-0.5 overflow-auto">

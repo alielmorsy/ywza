@@ -77,7 +77,10 @@ export default function Settings() {
         <span className="text-xs text-text-2">For this PC. Every chat, on any device, uses this AI.</span>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <nav aria-label="Settings sections" className="flex flex-none flex-wrap gap-1 border-b border-line-soft px-4 py-2">
+        {["AI", "Approvals", "Desktop", "Screen sharing", "Network"].map((name) => <button key={name} className="btn ghost sm" onClick={() => document.getElementById(`settings-${name.toLowerCase().replaceAll(" ", "-")}`)?.scrollIntoView({ block: "start" })}>{name}</button>)}
+      </nav>
+      <div className="form-container min-h-0 flex-1 overflow-auto">
         <div className="mx-auto flex max-w-[700px] flex-col gap-5 px-6 py-5">
           <Section h="AI">
             <Row t="Endpoint" d="OpenAI-compatible base URL">

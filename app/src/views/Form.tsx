@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 export const Section = ({ h, children }: { h: string; children: ReactNode }) => (
-  <section>
+  <section id={`settings-${h.toLowerCase().replaceAll(" ", "-")}`} className="scroll-mt-3">
     <h2 className="mb-1.5">{h}</h2>
     <div className="rounded-md border border-line bg-surface">{children}</div>
   </section>
@@ -9,12 +9,12 @@ export const Section = ({ h, children }: { h: string; children: ReactNode }) => 
 
 /** Label and hint on the left, control on the right. A wrapping label makes the whole row click through to the control. */
 export const Row = ({ t, d, w = "w-[320px]", children }: { t: string; d?: string; w?: string; children: ReactNode }) => (
-  <label className="flex min-h-[44px] items-center gap-4 border-t border-line-soft px-3.5 py-2 first:border-t-0">
+  <label className="form-row flex min-h-[44px] items-center gap-4 border-t border-line-soft px-3.5 py-2 first:border-t-0">
     <span className="min-w-0 flex-1">
       <b className="block font-medium">{t}</b>
       {d && <small className="block text-xs text-text-2">{d}</small>}
     </span>
-    <span className={`flex flex-none items-center justify-end gap-1.5 ${w}`}>{children}</span>
+    <span className={`form-control flex min-w-0 flex-none items-center justify-end gap-1.5 ${w}`}>{children}</span>
   </label>
 );
 

@@ -22,7 +22,7 @@ export function DockPanel({ children }: { children: ReactNode }) {
   };
 
   return (
-    <aside ref={panel} className="relative flex min-h-0 flex-none flex-col border-l border-line bg-ground" style={{ width: w }}>
+    <aside ref={panel} className="relative flex min-h-0 min-w-0 max-w-[55%] flex-none flex-col border-l border-line bg-ground" style={{ width: w }}>
       <div role="separator" aria-orientation="vertical" aria-label="Resize chat" aria-valuemin={MIN} aria-valuemax={MAX} aria-valuenow={w} tabIndex={0}
         className="group absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize touch-none"
         onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)} onPointerMove={drag} onKeyDown={key}>

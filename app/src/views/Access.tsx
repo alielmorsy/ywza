@@ -34,8 +34,8 @@ export function Access({ dev }: { dev: string }) {
 
   return (
     <div className="h-full overflow-auto px-6 py-5">
-      <div className="mx-auto grid max-w-[820px] grid-cols-[240px_1fr] items-start gap-8">
-        <section>
+      <div className="mx-auto grid max-w-[820px] grid-cols-1 items-start gap-8">
+        <section className="order-2">
           <h2 className="mb-2">What you can do there</h2>
           {perms === undefined ? (
             <p className="text-text-3">Shown once {dev} is online.</p>

@@ -70,7 +70,7 @@ export default function App() {
   const down = !local?.connected && booted;
 
   return (
-    <div className={`grid h-full bg-ground ${down ? "grid-rows-[32px_1fr]" : "grid-rows-[32px_1fr_24px]"}`}>
+    <div className="grid h-full bg-ground grid-rows-[32px_1fr_24px]">
       <Sprite />
       <header className="flex items-center border-b border-line-soft bg-chrome pl-3" data-tauri-drag-region>
         <span className="pointer-events-none font-semibold tracking-wide text-text">ywza</span>
@@ -82,18 +82,18 @@ export default function App() {
         </div>
       </header>
 
-      {down && <ServiceDown detail={local?.detail} />}
-      <div className="grid min-h-0 grid-cols-[200px_1fr]" hidden={down}>
+      <div className="grid min-h-0 grid-cols-[200px_minmax(0,1fr)]">
         <Rail onPair={() => setPairOpen(true)} />
         <main className="relative min-w-0 overflow-hidden">
+          {down && selected !== "settings" && <ServiceDown detail={local?.detail} />}
           {visited.map((name) => {
             const body = name === "settings" ? <Settings /> : devices[name] ? <DeviceView dev={name} selected={selected === name} /> : null;
-            return body && <div key={name} className="absolute inset-0" hidden={selected !== name}>{body}</div>;
+            return body && <div key={name} className="absolute inset-0" hidden={selected !== name || (down && name !== "settings")}>{body}</div>;
           })}
         </main>
       </div>
 
-      <footer hidden={down} className="flex items-center gap-4 border-t border-line-soft bg-chrome px-3 text-xs text-text-2">
+      <footer className="flex items-center gap-4 border-t border-line-soft bg-chrome px-3 text-xs text-text-2">
         <div className="flex items-center gap-2 text-text" aria-live="polite">
           <span className={`dot ${status.tone} ${status.pulse ? "pulse" : ""}`} />
           <span>{status.text}</span>
