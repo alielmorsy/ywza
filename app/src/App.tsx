@@ -70,6 +70,18 @@ export default function App() {
   const win = getCurrentWindow();
   const down = !local?.connected && booted;
 
+  // Hold the index.html splash until the service answers (or the grace period ends), then fade it out.
+  const ready = booted || !!local?.connected;
+  useEffect(() => {
+    if (!ready) return;
+    const t = setTimeout(() => {
+      const s = document.getElementById("splash");
+      s?.classList.add("gone");
+      s?.addEventListener("transitionend", () => s.remove(), { once: true });
+    }, Math.max(0, 900 - performance.now()));
+    return () => clearTimeout(t);
+  }, [ready]);
+
   return (
     <div className="grid h-full bg-ground grid-rows-[32px_1fr_24px]">
       <Sprite />

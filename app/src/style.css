@@ -91,6 +91,9 @@
   .dot.pulse { animation: pulse 1.6s ease-in-out infinite; }
 }
 
+/* Soft center glow shared with the startup splash in index.html. */
+.glow { background: radial-gradient(60% 50% at 50% 46%, #23231f, var(--c-ground) 70%, #191915); }
+
 @keyframes pulse { 50% { opacity: 0.35; } }
 @keyframes pop { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
 
