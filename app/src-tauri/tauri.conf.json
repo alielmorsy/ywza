@@ -1,7 +1,6 @@
 {
   "$schema": "../../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "ywza",
-  "version": "0.1.0",
   "identifier": "dev.ywza.app",
   "build": {
     "frontendDist": "../dist",
