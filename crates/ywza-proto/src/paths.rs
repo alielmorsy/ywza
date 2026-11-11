@@ -4,18 +4,23 @@ use iroh::SecretKey;
 
 use crate::Error;
 
-/// `$YWZA_CONFIG_DIR` if set. Else on Linux `/var/lib/ywza` when the service agent runs for
-/// this user (its `agent.ticket` is readable), so clients find it without the variable.
+/// `$YWZA_CONFIG_DIR` if set. Else the service's shared dir (`/var/lib/ywza` on Linux,
+/// `%ProgramData%\ywza` on Windows) when its agent runs for this user (`agent.ticket` is
+/// readable), so clients find it without the variable.
 /// Otherwise `%APPDATA%\ywza` on Windows, `$XDG_CONFIG_HOME/ywza` (or `~/.config/ywza`) on Linux.
 pub fn config_dir() -> PathBuf {
     if let Some(dir) = std::env::var_os("YWZA_CONFIG_DIR") {
         return PathBuf::from(dir);
     }
     #[cfg(target_os = "linux")]
-    {
-        let service = Path::new("/var/lib/ywza");
+    let service = Some(PathBuf::from("/var/lib/ywza"));
+    #[cfg(windows)]
+    let service = std::env::var_os("ProgramData").map(|d| Path::new(&d).join("ywza"));
+    #[cfg(not(any(windows, target_os = "linux")))]
+    let service: Option<PathBuf> = None;
+    if let Some(service) = service {
         if std::fs::File::open(service.join("agent.ticket")).is_ok() {
-            return service.into();
+            return service;
         }
     }
     dirs::config_dir()

@@ -28,5 +28,17 @@ ywza-proto = { path = "../ywza-proto", features = ["log"] }
 ywza-stream = { path = "../ywza-stream" }
 ywza-term = { path = "../ywza-term" }
 
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.62"
+features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Environment",
+    "Win32_System_JobObjects",
+    "Win32_System_RemoteDesktop",
+    "Win32_System_Services",
+    "Win32_System_Threading",
+]
+
 [dev-dependencies]
 tempfile = "3"

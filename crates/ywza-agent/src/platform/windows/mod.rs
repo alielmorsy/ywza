@@ -1,4 +1,5 @@
 mod os;
+mod service;
 
 use tokio::process::Command;
 
@@ -11,11 +12,11 @@ pub fn shell(cmd: &str) -> Command {
     c
 }
 
-/// `ywza-agent service` exists on Linux only.
+/// `ywza-agent service`: the console session follower, run by the SCM.
 pub fn service(
     _args: &[String],
-    _verbosity: Option<&str>,
-    _log_file: Option<&std::path::Path>,
+    verbosity: Option<&str>,
+    log_file: Option<&std::path::Path>,
 ) -> Option<anyhow::Result<()>> {
-    None
+    Some(service::main(verbosity, log_file))
 }

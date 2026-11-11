@@ -6,7 +6,8 @@
 //!   Valid 10 minutes, single use.
 //! - `ticket`: prints `<config_dir>/agent.ticket` (address only; for local clients holding `local-client.key`).
 //! - `service [--user <name>]` (Linux, root): keeps a `run` agent on whatever X11 session seat0
-//!   shows; see `platform/linux/service`.
+//!   shows; see `platform/linux/service`. On Windows the SCM runs it (as LocalSystem) to keep
+//!   one on the active console session; see `platform/windows/service`.
 //!
 //! Logging: `-v` debug, `-vv` trace, `-q` warn beat `[log]` in config.toml; `RUST_LOG` beats both.
 //! `run` also writes daily files to `<config_dir>/logs` unless `[log] dir` says otherwise.
