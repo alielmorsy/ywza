@@ -1,0 +1,17 @@
+{
+  "build": {
+    "beforeBundleCommand": "cargo build --release -p ywza-agent -p ywza-cli"
+  },
+  "bundle": {
+    "targets": ["nsis"],
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine",
+        "installerIcon": "icons/icon.ico",
+        "headerImage": "windows/header.bmp",
+        "sidebarImage": "windows/sidebar.bmp",
+        "installerHooks": "./windows/hooks.nsh"
+      }
+    }
+  }
+}
