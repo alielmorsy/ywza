@@ -142,15 +142,8 @@ Paired devices don't need to be on the same network. They connect through public
 wifi can drive a PC at home. Own relay support is planned, so you will be able to run your own instead of the public
 ones.
 
-Register it straight from the repo, no install step. Replace `<repo>` with the folder you cloned ywza into:
-
-```bash
-claude mcp add ywza -- uv run --quiet --project <repo>/python ywza-mcp --cli <repo>/target/release/ywza.exe
-```
-
-On Linux the last path is `<repo>/target/release/ywza`. `--cli` is how the server reaches your paired devices, so
-it can be left out if `ywza` is already on your PATH or you only control this PC. Any other MCP client can run the same
-command.
+Put `ywza` on your PATH, then install the plugin from the `plugin` folder. It carries the skill and the MCP server for
+Claude Code, Codex and Antigravity. See `plugin/README.md`. Any other MCP client can run `python plugin/server/run.py`.
 
 ## Linux
 

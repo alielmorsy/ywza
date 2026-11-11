@@ -29,7 +29,7 @@ def _local(path, devices):
     return path
 
 
-def copy(src, dst, devices, cli=None):
+def copy(src, dst, devices):
     """Returns (ok, text)."""
     ls, ld = _local(src, devices), _local(dst, devices)
     if ls is not None and ld is not None:
@@ -42,7 +42,7 @@ def copy(src, dst, devices, cli=None):
             shutil.copy2(s, d)
         return True, f"copied to {d}"
     p = subprocess.run(
-        [cli or "ywza", "cp", "-r", src, dst],
+        ["ywza", "cp", "-r", src, dst],
         capture_output=True,
         text=True,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),

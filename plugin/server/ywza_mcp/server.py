@@ -51,7 +51,7 @@ def mcp_result(devs, method, params):
             }
         if params["name"] == "copy":
             try:
-                ok, text = copy(args.get("src", ""), args.get("dst", ""), devs.names(), devs.cli)
+                ok, text = copy(args.get("src", ""), args.get("dst", ""), devs.names())
             except OSError as e:
                 ok, text = False, str(e)
             return {"content": [{"type": "text", "text": text}], "isError": not ok}

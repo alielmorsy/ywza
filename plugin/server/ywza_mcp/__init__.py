@@ -1,6 +1,5 @@
 import itertools
 import json
-import os
 import struct
 import sys
 import threading
@@ -20,11 +19,10 @@ class Ywza:
     """One connection to one agent: the local one, or the paired `device`.
     Thread-safe; requests run one at a time."""
 
-    def __init__(self, client_name="ywza-py", dir=None, device=None, cli=None):
+    def __init__(self, client_name="ywza-py", dir=None, device=None):
         self.client_name = client_name
         self.dir = Path(dir) if dir else config_dir()
         self.device = device
-        self.cli = cli or os.environ.get("YWZA_CLI") or "ywza"
         self.rf = self.wf = self.closer = None
         self.dead = None
         self.ids = itertools.count(1)
@@ -33,7 +31,7 @@ class Ywza:
     def connect(self):
         self.close()
         if self.device:
-            self.rf, self.wf, self.closer, self.dead = connect_bridge(self.device, self.cli)
+            self.rf, self.wf, self.closer, self.dead = connect_bridge(self.device)
             return
         self.rf, self.wf, self.closer, self.dead = connect_local(self.dir, self.client_name)
 
@@ -113,10 +111,9 @@ class Devices:
     """Every agent this machine can reach: "local" (this PC) and each paired device.
     Connections open on first use and stay open."""
 
-    def __init__(self, client_name="ywza-py", dir=None, cli=None):
+    def __init__(self, client_name="ywza-py", dir=None):
         self.client_name = client_name
         self.dir = Path(dir) if dir else config_dir()
-        self.cli = cli
         self.conns = {}
 
     def names(self):
@@ -136,7 +133,7 @@ class Devices:
             raise YwzaError(f"unknown device `{name}`; known: {', '.join(names) or 'none'}")
         if name not in self.conns:
             dev = None if name == "local" else name
-            self.conns[name] = Ywza(self.client_name, self.dir, device=dev, cli=self.cli)
+            self.conns[name] = Ywza(self.client_name, self.dir, device=dev)
         return self.conns[name]
 
     def tools(self):

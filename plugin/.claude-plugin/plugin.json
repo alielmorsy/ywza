@@ -1,0 +1,8 @@
+{
+  "name": "ywza",
+  "version": "0.1.0",
+  "description": "See and drive desktops and terminals on this PC and every paired ywza device.",
+  "author": { "name": "Ali Elmorsy" },
+  "license": "AGPL-3.0-or-later",
+  "keywords": ["ywza", "desktop", "terminal", "mcp", "remote"]
+}

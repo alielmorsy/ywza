@@ -13,10 +13,10 @@ One MCP server reaches every agent this machine can talk to:
   with port + token from <config_dir>/local-tcp.json.
 - each paired device (`ywza pair <code> --name NAME`, listed by `ywza devices`): over the
   encrypted iroh link (LAN, internet, 4G) through `ywza --device NAME bridge`. The `ywza`
-  binary comes from --cli PATH, $YWZA_CLI, or PATH.
+  binary must be on PATH.
 Every tool takes an optional `device`; `list_devices` lists them. Standard library only.
 
-    ywza-mcp [--cli PATH]                     # MCP server on stdio
+    ywza-mcp                                  # MCP server on stdio
     ywza-mcp devices                          # list devices
     ywza-mcp [--device NAME] tools            # list tool names
     ywza-mcp [--device NAME] call list_windows
@@ -42,11 +42,11 @@ def main(argv=None):
         del argv[k : k + 2]
         return value
 
-    cli, device = opt("--cli"), opt("--device")
+    device = opt("--device")
     if not argv:
-        serve_mcp(Devices("mcp", cli=cli))
+        serve_mcp(Devices("mcp"))
         return 0
-    devs = Devices("ywza-py", cli=cli)
+    devs = Devices("ywza-py")
     sys.stdout.reconfigure(errors="replace")
     if argv[0] == "devices":
         print("\n".join(devs.names()))

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "ywza": {
+      "command": "python",
+      "args": ["./server/run.py"],
+      "cwd": "."
+    }
+  }
+}

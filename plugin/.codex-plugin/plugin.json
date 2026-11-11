@@ -1,0 +1,16 @@
+{
+  "name": "ywza",
+  "version": "0.1.0",
+  "description": "See and drive desktops and terminals on this PC and every paired ywza device.",
+  "author": { "name": "Ali Elmorsy" },
+  "license": "AGPL-3.0-or-later",
+  "keywords": ["ywza", "desktop", "terminal", "mcp", "remote"],
+  "skills": "./skills/",
+  "mcpServers": "./.codex.mcp.json",
+  "interface": {
+    "displayName": "ywza",
+    "shortDescription": "Drive desktops and terminals on this PC and paired devices",
+    "category": "Developer Tools",
+    "capabilities": ["Interactive", "Read", "Write"]
+  }
+}
