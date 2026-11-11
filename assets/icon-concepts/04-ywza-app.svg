@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="tile" x2=".8" y2="1"><stop stop-color="#454254"/><stop offset="1" stop-color="#1d1d26"/></linearGradient>
+    <linearGradient id="mark" x2=".6" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#b9b5d3"/></linearGradient>
+    <linearGradient id="edge" x2="1" y2="1"><stop stop-color="#b6afcf" stop-opacity=".65"/><stop offset="1" stop-color="#b6afcf" stop-opacity=".05"/></linearGradient>
+    <filter id="shadow" x="-40%" y="-40%" width="180%" height="190%"><feDropShadow dy="8" stdDeviation="7" flood-color="#08080e" flood-opacity=".45"/></filter>
+  </defs>
+  <rect x="12" y="16" width="232" height="232" rx="55" fill="#0c0c12" opacity=".2"/>
+  <rect x="12" y="8" width="232" height="232" rx="55" fill="url(#tile)"/>
+  <rect x="13" y="9" width="230" height="230" rx="54" fill="none" stroke="url(#edge)" stroke-width="2"/>
+  <path d="M56 62h34l38 53 38-53h34l-57 83v43h-30v-43Z" fill="url(#mark)" filter="url(#shadow)"/>
+  <path d="m113 188 30-43v43Z" fill="#87849a"/>
+  <rect x="55" y="61" width="36" height="7" rx="3.5" fill="#fff" opacity=".6"/>
+  <rect x="165" y="61" width="36" height="7" rx="3.5" fill="#fff" opacity=".6"/>
+</svg>
