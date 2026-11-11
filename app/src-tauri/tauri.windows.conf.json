@@ -4,6 +4,10 @@
   },
   "bundle": {
     "targets": ["nsis"],
+    "resources": {
+      "../../plugin/server/run.py": "mcp/run.py",
+      "../../plugin/server/ywza_mcp/*.py": "mcp/ywza_mcp/"
+    },
     "windows": {
       "nsis": {
         "installMode": "perMachine",

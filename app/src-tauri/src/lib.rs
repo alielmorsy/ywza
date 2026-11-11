@@ -4,6 +4,7 @@
 mod commands;
 mod conn;
 mod live;
+mod mcp;
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -61,6 +62,8 @@ pub fn run() {
             commands::remove_device,
             commands::send,
             commands::live_channel,
+            mcp::mcp_status,
+            mcp::mcp_set,
         ])
         .setup(|app| {
             tray(app.handle())?;

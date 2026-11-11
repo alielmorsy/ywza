@@ -171,6 +171,10 @@ export const send = (device: string, msg: ClientMsg) => {
   if (live) liveSent.set(device, Date.now());
   return invoke("send", { device, msg }).catch((e) => reportError(device, String(e), live));
 };
+export interface McpClient { id: string; label: string; state: "installed" | "missing" | "unavailable" }
+export const mcpStatus = () => invoke<McpClient[]>("mcp_status");
+/** Adds (or removes) the ywza MCP server in that AI tool's config. */
+export const mcpSet = (client: string, install: boolean) => invoke("mcp_set", { client, install });
 export const connectDevice = (name: string) => invoke("connect_device", { name });
 /** Pairs with another machine by the 6-digit code it shows; on success it shows up as device `name`. */
 export const pairDevice = async (name: string, code: string) => {

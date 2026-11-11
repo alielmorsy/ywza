@@ -3,11 +3,12 @@ import { EFFORTS, LOCAL, send, useStore, type Config, type Effort } from "../api
 import { Icon } from "../Icon";
 import { ApprovalRules } from "./ApprovalRules";
 import { Num, Row, Section, Tog } from "./Form";
+import { McpClients } from "./McpClients";
 import { cleanConfig, saveConfig, trimRules } from "./localConfig";
 
 const OTHER = "\0other";
 
-const SECTIONS = ["AI", "Approvals", "Desktop", "Screen sharing", "Network"];
+const SECTIONS = ["AI", "Approvals", "Desktop", "Screen sharing", "Network", "MCP"];
 const sectionId = (name: string) => `settings-${name.toLowerCase().replaceAll(" ", "-")}`;
 
 /** Why the draft can't be saved, or null. */
@@ -155,6 +156,8 @@ export default function Settings() {
                 onChange={(e) => up((c) => (c.relay_url = e.target.value.trim() || null))} />
             </Row>
           </Section>
+
+          <McpClients />
         </div>
       </div>
 

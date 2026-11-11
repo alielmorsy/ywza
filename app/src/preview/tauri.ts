@@ -186,6 +186,7 @@ clicks.forEach((text, i) => setTimeout(() => {
 
 const devices = ["berkeley", "studio-laptop"];
 const online = new Set(["berkeley"]);
+const mcp = new Set<string>();
 const connect = (name: string) => {
   if (online.has(name)) {
     emit("connection", { device: name, connected: true, detail: "" });
@@ -212,6 +213,11 @@ export async function invoke<T>(cmd: string, args: any = {}): Promise<T> {
     case "remove_device":
       devices.splice(devices.indexOf(args.name), 1);
       online.delete(args.name);
+      return undefined as T;
+    case "mcp_status": return ["claude", "codex", "agy"].map((id) => ({ id, label: { claude: "Claude Code", codex: "Codex", agy: "Antigravity" }[id], state: mcp.has(id) ? "installed" : id === "agy" ? "unavailable" : "missing" })) as T;
+    case "mcp_set":
+      await new Promise((r) => setTimeout(r, 500));
+      if (args.install) mcp.add(args.client); else mcp.delete(args.client);
       return undefined as T;
     case "send": agent(args.device ?? "local", args.msg); return undefined as T;
     default: return undefined as T;
