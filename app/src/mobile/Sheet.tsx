@@ -4,7 +4,7 @@ import { Composer } from "./Composer";
 import { Feed } from "./Feed";
 import { Scope, useDriveHint } from "./Scope";
 import { isActive, pendingOf, useRuns, type Run } from "./runs";
-import { openRun, useLabel, useM } from "./store";
+import { openRun, setFocus, useLabel, useM } from "./store";
 
 const PEEK = 148;
 const DOCKED = 76;
@@ -31,7 +31,8 @@ export function Sheet() {
   const docked = !!detail && !live;
   const visible = !pairing && (!!live || docked || (tab === "wall" && !runId));
   const liveRun = live ? runs.find((r) => isActive(r) && (r.current === live.dev || r.driver === live.dev)) : undefined;
-  const shown: Run | undefined = (live ? liveRun : detail) ?? runs.find((r) => r.id === focus) ?? runs[0];
+  const focused = runs.find((r) => r.id === focus);
+  const shown: Run | undefined = (live ? liveRun : detail) ?? focused ?? runs[0];
   const pend = runs.flatMap((r) => pendingOf(r).map((a) => ({ a, r })))[0];
 
   useEffect(() => { const f = () => setVh(innerHeight); addEventListener("resize", f); return () => removeEventListener("resize", f); }, []);
@@ -98,7 +99,8 @@ export function Sheet() {
           ) : <span>{sel.length ? "Ready" : "No runs yet"}</span>}
         </div>
       ) : <Feed run={shown} />}
-      <Composer run={liveRun} scope={live ? [live.dev] : sel} onSent={() => { if (h < dets[1] && !live) snap(dets[1]); }} />
+      <Composer run={live ? liveRun : focused} scope={live ? [live.dev] : sel} onNew={live ? undefined : () => setFocus()}
+        onSent={() => { if (h < dets[1] && !live) snap(dets[1]); }} />
     </div>
   );
 }

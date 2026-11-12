@@ -17,7 +17,10 @@ export function submit(text: string, o: { run?: Run; scope: string[] }): string 
     if (names.missing.length) toast(`${names.missing.join(", ")} not paired with ${driver}, left out`);
     devices = names.list.length ? names.list : undefined;
   }
-  const id = prompt(LOCAL, text, o.run?.id ?? null, { via: driver, devices, approval: "rules" }); // always set: the agent gates app chats only
+  // A follow-up must name the same devices the run started with, or the driver refuses it.
+  const own = o.run && s.remote[o.run.id];
+  if (own) devices = own.devices;
+  const id = prompt(own?.device ?? LOCAL, text, o.run?.id ?? null, { via: driver, devices, approval: "rules" }); // always set: the agent gates app chats only
   if (!o.run) { setFocus(id); toast(devices ? `Run started on ${driver} + ${devices.length} more` : `Run started on ${driver}`); }
 }
 
