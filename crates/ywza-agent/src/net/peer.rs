@@ -42,6 +42,7 @@ mod tests {
         control: false,
         tools: false,
         settings: false,
+        drive: false,
     };
 
     #[test]

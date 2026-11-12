@@ -73,6 +73,7 @@ async fn serve(agent: Arc<Agent>, stream: TcpStream, token: &str) -> anyhow::Res
         session_list: agent.sessions.list(),
         os: Some(crate::llm::os_description().into()),
         permissions: None,
+        llm: agent.config.get().llm.configured(),
     })?;
     for request in agent.approvals.requests(None) {
         direct.send(request)?;
@@ -105,7 +106,9 @@ async fn serve(agent: Arc<Agent>, stream: TcpStream, token: &str) -> anyhow::Res
                 allow,
                 remember,
             }) => agent.approve(request, allow, remember),
-            Ok(ClientMsg::Screenshot { target }) => Some(agent.screenshot(target).await),
+            Ok(ClientMsg::Screenshot { target, max_width }) => {
+                Some(agent.screenshot(target, max_width).await)
+            }
             Ok(ClientMsg::CreatePairing) => {
                 let (agent, direct) = (agent.clone(), direct.clone());
                 tokio::spawn(async move {

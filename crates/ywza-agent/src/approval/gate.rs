@@ -56,6 +56,7 @@ impl Agent {
         mode: ApprovalMode,
         tool: &str,
         args: &Value,
+        device: Option<&str>,
         cancel: &CancellationToken,
     ) -> Result<(), &'static str> {
         let rules = self.config.get().approval;
@@ -65,7 +66,9 @@ impl Agent {
                 tracing::info!(session = %sid.0, tool, "tool call blocked by an approval rule");
                 Err(BLOCKED)
             }
-            Verdict::Ask { tool, summary } => self.ask(sid, tool, summary, args, cancel).await,
+            Verdict::Ask { tool, summary } => {
+                self.ask(sid, tool, summary, args, device, cancel).await
+            }
         }
     }
 
@@ -75,10 +78,14 @@ impl Agent {
         tool: String,
         summary: String,
         args: &Value,
+        device: Option<&str>,
         cancel: &CancellationToken,
     ) -> Result<(), &'static str> {
         let mut detail = serde_json::to_string_pretty(args).unwrap_or_default();
-        if let Some(Some(device)) = self.sessions.device(sid) {
+        let device = device
+            .map(String::from)
+            .or_else(|| self.sessions.target(sid)?.0);
+        if let Some(device) = device {
             detail.push_str(&format!("\n\ndevice: {device}"));
         }
         tracing::info!(session = %sid.0, tool = %tool, summary = %summary, "waiting for approval in the app");

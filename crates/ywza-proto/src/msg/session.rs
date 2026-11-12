@@ -37,6 +37,9 @@ pub struct SessionSummary {
     /// The paired device this session operates with our AI; absent: this machine.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device: Option<String>,
+    /// Other paired devices the session's AI may use besides this machine.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub devices: Vec<String>,
 }
 
 /// One entry in a session's history.
@@ -53,6 +56,9 @@ pub enum SessionEvent {
         id: String,
         name: String,
         args: Value,
+        /// The device the call ran on; absent: the machine running the session's tools.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        device: Option<String>,
     },
     ToolResult {
         id: String,
@@ -87,8 +93,18 @@ mod tests {
                 id: "c1".into(),
                 name: "click".into(),
                 args: json!({"element":1}),
+                device: None,
             },
             json!({"type":"tool_call","id":"c1","name":"click","args":{"element":1}}),
+        );
+        check(
+            ToolCall {
+                id: "c2".into(),
+                name: "click".into(),
+                args: json!({}),
+                device: Some("vm".into()),
+            },
+            json!({"type":"tool_call","id":"c2","name":"click","args":{},"device":"vm"}),
         );
         check(
             ToolResult {

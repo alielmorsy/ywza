@@ -18,16 +18,21 @@ pub enum ClientMsg {
         token: Option<String>,
     },
     /// Starts a new session when `session` is absent; an id the agent does not know creates a
-    /// session with that id. `device` (local clients only) runs our AI on a paired device: every
-    /// tool call goes to it. `model` and `effort` override the configured ones for this run.
+    /// session with that id. `device` runs our AI on a paired device: every tool call goes to it.
+    /// `devices` keeps the AI here and lets it use those other paired devices per call, through a
+    /// `device` argument on every tool. Peers need `drive` for either. `model` and `effort`
+    /// override the configured ones for this run (local clients only).
     /// `approval` (local clients only) is sent by the desktop app: it gates the session's tool
-    /// calls and is kept for the session. Without it, tools run with no approval step.
+    /// calls and is kept for the session. Without it, tools run with no approval step, except
+    /// that a peer's session on devices always follows the approval rules.
     Prompt {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         session: Option<SessionId>,
         text: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         device: Option<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        devices: Vec<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         model: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -46,8 +51,11 @@ pub enum ClientMsg {
     Cancel {
         session: SessionId,
     },
+    /// With `max_width`, the PNG is downscaled to at most that width.
     Screenshot {
         target: Target,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_width: Option<u32>,
     },
     GetConfig,
     SetConfig {
@@ -80,6 +88,8 @@ pub enum ClientMsg {
     ListMonitors,
     /// Model ids of the configured LLM endpoint (answered with `Models`; local clients only).
     ListModels,
+    /// This agent's paired devices (answered with `Devices`; peers need `drive`).
+    ListDevices,
     /// A window's title, monitor and rect, and with `elements` its UI elements (answered with
     /// `WindowInfo`). `window` is `w<id>` as in `list_windows`. The elements are the window's
     /// latest `get_elements` list (same ids); a fresh one is taken if there is none yet.
@@ -131,6 +141,7 @@ impl ClientMsg {
             Self::CallTool { .. } => "call_tool",
             Self::ListMonitors => "list_monitors",
             Self::ListModels => "list_models",
+            Self::ListDevices => "list_devices",
             Self::WindowInfo { .. } => "window_info",
             Self::Pull { .. } => "pull",
             Self::Push { .. } => "push",
@@ -160,6 +171,7 @@ mod tests {
                 session: None,
                 text: "hi".into(),
                 device: None,
+                devices: Vec::new(),
                 model: None,
                 effort: None,
                 approval: None,
@@ -171,11 +183,12 @@ mod tests {
                 session: Some(sid()),
                 text: "hi".into(),
                 device: Some("vm".into()),
+                devices: vec!["pc".into()],
                 model: Some("m".into()),
                 effort: Some("high".into()),
                 approval: Some(ApprovalMode::Always),
             },
-            json!({"type":"prompt","session":SID,"text":"hi","device":"vm","model":"m",
+            json!({"type":"prompt","session":SID,"text":"hi","device":"vm","devices":["pc"],"model":"m",
                    "effort":"high","approval":"always"}),
         );
         check(
@@ -199,6 +212,7 @@ mod tests {
         );
         check(ListMonitors, json!({"type":"list_monitors"}));
         check(ListModels, json!({"type":"list_models"}));
+        check(ListDevices, json!({"type":"list_devices"}));
         check(
             WindowInfo {
                 window: "w3".into(),
@@ -213,12 +227,14 @@ mod tests {
         check(
             Screenshot {
                 target: Target::Monitor { id: 2 },
+                max_width: Some(640),
             },
-            json!({"type":"screenshot","target":{"type":"monitor","id":2}}),
+            json!({"type":"screenshot","target":{"type":"monitor","id":2},"max_width":640}),
         );
         check(
             Screenshot {
                 target: Target::Window { id: 3 },
+                max_width: None,
             },
             json!({"type":"screenshot","target":{"type":"window","id":3}}),
         );

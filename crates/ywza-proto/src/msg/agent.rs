@@ -46,6 +46,13 @@ pub struct ElementInfo {
     pub rect: ScreenRect,
 }
 
+/// A device paired with this agent.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeviceInfo {
+    pub name: String,
+    pub node_id: String,
+}
+
 /// Agent to client.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -60,6 +67,9 @@ pub enum AgentMsg {
         /// What this client may do; absent means everything (local app, local TCP clients).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         permissions: Option<Permissions>,
+        /// This agent has an LLM endpoint configured, so it can drive a session.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        llm: bool,
     },
     Event {
         session: SessionId,
@@ -110,6 +120,10 @@ pub enum AgentMsg {
     /// Model ids, sorted.
     Models {
         list: Vec<String>,
+    },
+    /// Answer to `ListDevices`: this agent's paired devices.
+    Devices {
+        list: Vec<DeviceInfo>,
     },
     /// Answer to `WindowInfo`; `window` echoes the request. `monitor` is the window's monitor
     /// index and `rect` and the element rects are relative to that monitor's origin.
@@ -184,10 +198,12 @@ mod tests {
             status: SessionStatus::Running,
             updated_ms: 5,
             device: None,
+            devices: Vec::new(),
         };
         let summary_json = json!({"id":SID,"title":"t","status":"running","updated_ms":5});
         let remote = SessionSummary {
             device: Some("vm".into()),
+            devices: vec!["pc".into()],
             ..summary.clone()
         };
         check(
@@ -197,6 +213,7 @@ mod tests {
                 session_list: vec![summary.clone()],
                 os: None,
                 permissions: None,
+                llm: false,
             },
             json!({"type":"welcome","agent_version":"0.1","node_id":"n","session_list":[summary_json]}),
         );
@@ -207,12 +224,14 @@ mod tests {
                 session_list: vec![remote],
                 os: Some("Linux".into()),
                 permissions: Some(Permissions::default()),
+                llm: true,
             },
             json!({"type":"welcome","agent_version":"0.1","node_id":"n","os":"Linux",
                    "session_list":[{"id":SID,"title":"t","status":"running","updated_ms":5,
-                                    "device":"vm"}],
+                                    "device":"vm","devices":["pc"]}],
                    "permissions":{"view":true,"chat":true,"control":true,"tools":true,
-                                  "settings":false}}),
+                                  "settings":false,"drive":false},
+                   "llm":true}),
         );
         check(
             Event {
@@ -301,6 +320,15 @@ mod tests {
             },
             json!({"type":"monitors","list":[{"index":0,"name":"DISPLAY1","x":-1920,"y":0,
                    "width":1920,"height":1080,"scale":1.5,"primary":true}]}),
+        );
+        check(
+            Devices {
+                list: vec![DeviceInfo {
+                    name: "vm".into(),
+                    node_id: "abc".into(),
+                }],
+            },
+            json!({"type":"devices","list":[{"name":"vm","node_id":"abc"}]}),
         );
         check(
             Models {

@@ -21,13 +21,16 @@ pub struct Permissions {
     pub control: bool,
     pub tools: bool,
     pub settings: bool,
+    /// May start sessions here that use this machine's paired devices.
+    pub drive: bool,
 }
 
-/// New pairings: everything but `settings`.
+/// New pairings: everything but `settings` and `drive`.
 impl Default for Permissions {
     fn default() -> Self {
         Self {
             settings: false,
+            drive: false,
             ..Self::all()
         }
     }
@@ -41,6 +44,7 @@ impl Permissions {
             control: true,
             tools: true,
             settings: true,
+            drive: true,
         }
     }
 
@@ -54,6 +58,14 @@ impl Permissions {
                 (self.view, "view")
             }
             Input { .. } | Pull { .. } | Push { .. } | PushEnd { .. } => (self.control, "control"),
+            Prompt { device, devices, .. } if device.is_some() || !devices.is_empty() => {
+                if self.chat {
+                    (self.drive, "drive")
+                } else {
+                    (false, "chat")
+                }
+            }
+            ListDevices => (self.drive, "drive"),
             Prompt { .. }
             | Approve { .. }
             | Cancel { .. }
@@ -91,6 +103,7 @@ mod tests {
             (
                 Screenshot {
                     target: Target::Monitor { id: 0 },
+                    max_width: None,
                 },
                 Some("view"),
             ),
@@ -107,12 +120,14 @@ mod tests {
                     session: None,
                     text: "t".into(),
                     device: None,
+                    devices: Vec::new(),
                     model: None,
                     effort: None,
                     approval: None,
                 },
                 Some("chat"),
             ),
+            (ListDevices, Some("drive")),
             (
                 Approve {
                     request: 1,
@@ -164,15 +179,30 @@ mod tests {
             control: false,
             tools: false,
             settings: false,
+            drive: false,
         };
         for (msg, need) in table {
             assert_eq!(none.missing(&msg), need, "{msg:?}");
             assert!(Permissions::all().allows(&msg), "{msg:?}");
             assert_eq!(
                 Permissions::default().allows(&msg),
-                need != Some("settings"),
+                !matches!(need, Some("settings" | "drive")),
                 "{msg:?}"
             );
         }
+        let on_devices = Prompt {
+            session: None,
+            text: "t".into(),
+            device: None,
+            devices: vec!["vm".into()],
+            model: None,
+            effort: None,
+            approval: None,
+        };
+        assert_eq!(none.missing(&on_devices), Some("chat"));
+        let chat_only = Permissions { chat: true, ..none };
+        assert_eq!(chat_only.missing(&on_devices), Some("drive"));
+        assert!(Permissions::all().allows(&on_devices));
+        assert!(!Permissions::default().allows(&on_devices));
     }
 }

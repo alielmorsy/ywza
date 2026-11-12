@@ -167,6 +167,7 @@ pub async fn send_prompt(c: &mut Control, text: &str, approval: Option<ApprovalM
             session: None,
             text: text.into(),
             device: None,
+            devices: Vec::new(),
             model: None,
             effort: None,
             approval,

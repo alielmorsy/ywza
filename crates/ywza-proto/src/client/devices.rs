@@ -56,7 +56,7 @@ pub fn relay_url() -> Result<Option<String>> {
 }
 
 /// The device's ticket and the relay it was paired with, if any.
-pub(super) fn load_device(name: &str) -> Result<(Ticket, Option<String>)> {
+pub fn load_device(name: &str) -> Result<(Ticket, Option<String>)> {
     let file = device_file(name);
     tracing::debug!(device = name, file = %file.display(), "resolving the paired device");
     let text = std::fs::read_to_string(&file)

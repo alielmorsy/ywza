@@ -59,6 +59,7 @@ async fn serve_client(agent: Arc<Agent>, incoming: Incoming) -> anyhow::Result<(
         },
         os: Some(crate::llm::os_description().into()),
         permissions: (!local).then_some(perms),
+        llm: agent.config.get().llm.configured(),
     })?;
     if local {
         for request in agent.approvals.requests(None) {

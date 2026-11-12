@@ -10,7 +10,17 @@ use crate::{tools::ToolOutput, Agent};
 pub trait Executor: Sync {
     fn tools(&self) -> Vec<ToolInfo>;
     fn system_prompt(&self) -> impl Future<Output = String> + Send;
-    fn call(&self, name: &str, args: &Value) -> impl Future<Output = ToolOutput> + Send;
+    /// Takes the routing `device` argument out of `args`; None: no routing (the default).
+    fn route(&self, _args: &mut Value) -> Option<String> {
+        None
+    }
+    /// `device` comes from `route`.
+    fn call(
+        &self,
+        device: Option<&str>,
+        name: &str,
+        args: &Value,
+    ) -> impl Future<Output = ToolOutput> + Send;
 }
 
 pub struct Local<'a>(pub &'a Agent);
@@ -24,7 +34,7 @@ impl Executor for Local<'_> {
         system_prompt(&crate::tools::monitors_text().await)
     }
 
-    async fn call(&self, name: &str, args: &Value) -> ToolOutput {
+    async fn call(&self, _device: Option<&str>, name: &str, args: &Value) -> ToolOutput {
         self.0.run_tool(name, args).await
     }
 }

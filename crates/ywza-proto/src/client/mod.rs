@@ -7,6 +7,7 @@ mod pair;
 
 pub use connect::{ask, bind_devices, close, dial, open_device, open_local, resolve, shut};
 pub use devices::{
-    device_file, devices_dir, list_devices, relay_url, remove_device, valid_device_name,
+    device_file, devices_dir, list_devices, load_device, relay_url, remove_device,
+    valid_device_name,
 };
 pub use pair::pair;

@@ -53,6 +53,7 @@ mod tests {
             id: "1".into(),
             name: "click".into(),
             args: serde_json::json!({"element": 3}),
+            device: None,
         };
         assert_eq!(
             format_event(&call, false, true),

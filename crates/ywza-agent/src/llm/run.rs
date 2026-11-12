@@ -86,16 +86,18 @@ pub async fn run(
                         tracing::warn!(session = %sid.0, tool = name, error = %e, "tool arguments are not valid JSON");
                         ToolOutput::err(format!("arguments are not valid JSON: {e}"))
                     }
-                    Ok(args) => {
-                        agent.emit_tool_call(sid, &id, name, &args);
+                    Ok(mut args) => {
+                        let device = exec.route(&mut args);
+                        let device = device.as_deref();
+                        agent.emit_tool_call(sid, &id, name, &args, device);
                         let gated = match agent.sessions.approval(sid) {
-                            Some(mode) => agent.gate(sid, mode, name, &args, cancel).await,
+                            Some(mode) => agent.gate(sid, mode, name, &args, device, cancel).await,
                             None => Ok(()),
                         };
                         match gated {
                             Err(why) => ToolOutput::err(why),
                             Ok(()) => tokio::select! {
-                                o = exec.call(name, &args) => o,
+                                o = exec.call(device, name, &args) => o,
                                 _ = cancel.cancelled() => ToolOutput::err("cancelled"),
                             },
                         }

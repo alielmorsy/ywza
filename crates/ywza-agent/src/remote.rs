@@ -143,6 +143,16 @@ pub struct Remote {
 }
 
 impl Remote {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// The device's OS and monitor lines, as of the last `Remotes::open`.
+    pub fn describe(&self) -> (Option<String>, String) {
+        let s = self.state.lock().unwrap();
+        (s.os.clone(), s.monitors.clone())
+    }
+
     fn take(&self) -> Option<Link> {
         self.state.lock().unwrap().link.take().filter(Link::alive)
     }
@@ -233,7 +243,7 @@ impl Executor for Remote {
         remote_system_prompt(&self.name, s.os.as_deref(), &s.monitors)
     }
 
-    async fn call(&self, name: &str, args: &Value) -> ToolOutput {
+    async fn call(&self, _device: Option<&str>, name: &str, args: &Value) -> ToolOutput {
         let mut retried = false;
         loop {
             let mut link = match self.link().await {

@@ -113,6 +113,7 @@ fn load(logs: &Path) -> HashMap<SessionId, Session> {
                 status: SessionStatus::Running,
                 updated_ms: 0,
                 device: None,
+                devices: Vec::new(),
             })
         }) else {
             continue;
@@ -158,12 +159,18 @@ impl Sessions {
 
     pub fn create(&self, prompt: &str) -> SessionId {
         let id = SessionId::new();
-        self.create_with(id, prompt, None);
+        self.create_with(id, prompt, None, &[]);
         id
     }
 
     /// Creates the session `id` unless it exists (clients may pick their own ids).
-    pub fn create_with(&self, id: SessionId, prompt: &str, device: Option<&str>) {
+    pub fn create_with(
+        &self,
+        id: SessionId,
+        prompt: &str,
+        device: Option<&str>,
+        devices: &[String],
+    ) {
         let mut map = self.map.lock().unwrap();
         if map.contains_key(&id) {
             return;
@@ -174,6 +181,7 @@ impl Sessions {
             status: SessionStatus::Running,
             updated_ms: now_ms(),
             device: device.map(String::from),
+            devices: devices.to_vec(),
         };
         let line = json!({"ts_ms": summary.updated_ms, "session": summary});
         map.insert(
@@ -190,9 +198,11 @@ impl Sessions {
         self.log(id, line);
     }
 
-    /// The paired device the session operates; None: no such session.
-    pub fn device(&self, id: SessionId) -> Option<Option<String>> {
-        Some(self.map.lock().unwrap().get(&id)?.summary.device.clone())
+    /// The paired device the session operates and the extra devices it may use; None: no such session.
+    pub fn target(&self, id: SessionId) -> Option<(Option<String>, Vec<String>)> {
+        let map = self.map.lock().unwrap();
+        let s = &map.get(&id)?.summary;
+        Some((s.device.clone(), s.devices.clone()))
     }
 
     /// Marks the session running and hands out its history. Err if unknown or already running.
@@ -290,6 +300,7 @@ mod tests {
             id: "c".into(),
             name: "wait".into(),
             args: json!({}),
+            device: None,
         }
     }
 
@@ -303,6 +314,7 @@ mod tests {
             status: SessionStatus::Running,
             updated_ms: 10,
             device: Some("vm".into()),
+            devices: Vec::new(),
         };
         write(
             dir.path(),
@@ -384,7 +396,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let s = Sessions::new(dir.path().to_path_buf());
         let id = SessionId::new();
-        s.create_with(id, "run it", Some("vm"));
+        s.create_with(id, "run it", Some("vm"), &["pc".into()]);
         s.push(
             id,
             &SessionEvent::User {
@@ -395,6 +407,8 @@ mod tests {
         let first: Value = serde_json::from_str(log.lines().next().unwrap()).unwrap();
         assert_eq!(first["session"]["title"], "run it");
         assert_eq!(first["session"]["device"], "vm");
+        assert_eq!(first["session"]["devices"][0], "pc");
+        assert_eq!(s.target(id), Some((Some("vm".into()), vec!["pc".into()])));
         assert_eq!(s.approval(id), None);
         s.set_approval(id, ApprovalMode::Rules);
         assert_eq!(s.approval(id), Some(ApprovalMode::Rules));

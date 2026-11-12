@@ -63,9 +63,32 @@ pub fn remote_system_prompt(device: &str, os: Option<&str>, monitors: &str) -> S
     build(&intro, monitors)
 }
 
+/// Appended to the prompt of a session that may also use paired devices: `(name, OS, monitors)`.
+pub fn devices_section(devices: &[(String, Option<String>, String)]) -> String {
+    let mut out = String::from(
+        "\n\nOther devices: besides this computer you can operate the paired devices below. \
+Every tool takes an optional `device` argument: omit it to act on this computer, or set it to a \
+device name to run that call there instead. Windows, terminals, files, commands and monitors \
+belong to the device the call ran on, and element ids are per device, so keep passing the same \
+`device` for follow-up calls on what you opened there.",
+    );
+    for (name, os, monitors) in devices {
+        let os = os.as_deref().map_or(String::new(), |o| format!(" ({o})"));
+        out.push_str(&format!("\n\nDevice `{name}`{os}, monitors:\n{monitors}"));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn devices_section_lists_each_device_and_the_device_argument() {
+        let s = devices_section(&[("vm".into(), Some("Ubuntu".into()), "[0] HDMI-1".into())]);
+        assert!(s.contains("`device` argument") && s.contains("Device `vm` (Ubuntu)"));
+        assert!(s.contains("[0] HDMI-1"));
+    }
 
     #[test]
     fn prompt_has_monitors_and_no_approval_talk() {

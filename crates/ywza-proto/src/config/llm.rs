@@ -13,6 +13,12 @@ pub struct Llm {
     pub effort: Option<String>,
 }
 
+impl Llm {
+    pub fn configured(&self) -> bool {
+        !self.base_url.trim().is_empty() && !self.model.trim().is_empty()
+    }
+}
+
 impl Default for Llm {
     fn default() -> Self {
         Self {

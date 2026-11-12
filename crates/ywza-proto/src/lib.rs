@@ -22,7 +22,7 @@ pub use frame::{read_frame, write_frame, MAX_FRAME};
 pub use log::init as init_log;
 pub use log::{Format, LogConfig};
 pub use msg::{
-    AgentMsg, ClientMsg, ElementInfo, FileHeader, FrameHeader, InputEvent, MonitorInfo,
+    AgentMsg, ClientMsg, DeviceInfo, ElementInfo, FileHeader, FrameHeader, InputEvent, MonitorInfo,
     MouseButton, ScreenRect, SessionEvent, SessionId, SessionStatus, SessionSummary, Target,
     ToolInfo,
 };

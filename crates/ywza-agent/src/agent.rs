@@ -100,13 +100,21 @@ impl Agent {
     }
 
     /// Logs a tool call; `notify` also shows its text as an assistant message.
-    pub fn emit_tool_call(&self, sid: SessionId, id: &str, name: &str, args: &Value) {
+    pub fn emit_tool_call(
+        &self,
+        sid: SessionId,
+        id: &str,
+        name: &str,
+        args: &Value,
+        device: Option<&str>,
+    ) {
         self.emit(
             sid,
             SessionEvent::ToolCall {
                 id: id.into(),
                 name: name.into(),
                 args: args.clone(),
+                device: device.map(String::from),
             },
         );
         if name == "notify" {
@@ -134,11 +142,21 @@ impl Agent {
         self.tools.call(name, args, cfg.ocr.engine).await
     }
 
-    /// A client's `screenshot` request: full resolution, no marks, sent only to that client.
-    pub async fn screenshot(&self, target: ywza_proto::Target) -> AgentMsg {
-        let png = crate::tools::capture(&target)
-            .await
-            .and_then(|img| Ok((ywza_desktop::encode_png(&img)?, img.width, img.height)));
+    /// A client's `screenshot` request: no marks, sent only to that client. Full resolution
+    /// unless `max_width` asks for a smaller one.
+    pub async fn screenshot(&self, target: ywza_proto::Target, max_width: Option<u32>) -> AgentMsg {
+        let png = crate::tools::capture(&target).await.and_then(|img| {
+            let img = match max_width.filter(|&w| w > 0 && w < img.width) {
+                // `downscale` caps the long side; scale that cap so the width lands on `w`.
+                Some(w) => {
+                    let long = img.width.max(img.height) as u64;
+                    let cap = (long * w as u64 / img.width as u64) as u32;
+                    crate::tools::downscale(img, cap)
+                }
+                None => img,
+            };
+            Ok((ywza_desktop::encode_png(&img)?, img.width, img.height))
+        });
         match png {
             Ok((png, width, height)) => AgentMsg::Image {
                 png_base64: data_encoding::BASE64.encode(&png),

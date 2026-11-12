@@ -85,7 +85,7 @@ mod tests {
         .unwrap();
         let p = c.peer("abc").unwrap();
         assert_eq!(p.name, "phone");
-        assert!(!p.perms.control && p.perms.view && !p.perms.settings);
+        assert!(!p.perms.control && p.perms.view && !p.perms.settings && !p.perms.drive);
         assert_eq!((c.stream.fps, c.stream.bitrate_kbps), (15, 0));
         assert!(!c.stream.cursor);
         assert_eq!(c.llm.model, "m");

@@ -9,6 +9,7 @@ const PERMS: { k: PermKey; n: string; d?: string }[] = [
   { k: "chat", n: "Send prompts" },
   { k: "control", n: "Use mouse and keyboard" },
   { k: "tools", n: "Run tools directly" },
+  { k: "drive", n: "Drive other devices", d: "Can start chats here that use this PC's paired devices" },
   { k: "settings", n: "Change settings", d: "Can change this PC's settings, pair devices and edit access" },
 ];
 

@@ -125,9 +125,9 @@ impl Client {
                 let (agent, local) = (self.agent.clone(), self.local);
                 self.reply_later(async move { agent.inspect(m, local).await });
             }
-            ClientMsg::Screenshot { target } => {
+            ClientMsg::Screenshot { target, max_width } => {
                 let agent = self.agent.clone();
-                self.reply_later(async move { agent.screenshot(target).await });
+                self.reply_later(async move { agent.screenshot(target, max_width).await });
             }
             msg => {
                 for reply in self.agent.handle(msg, self.local) {

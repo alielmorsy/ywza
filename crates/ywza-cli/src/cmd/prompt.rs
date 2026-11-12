@@ -16,6 +16,7 @@ pub async fn run(
         session,
         text: text.clone(),
         device: None,
+        devices: Vec::new(),
         model: None,
         effort: None,
         approval: None,
