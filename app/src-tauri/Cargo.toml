@@ -8,19 +8,26 @@ default-run = "ywza-app"
 
 [lib]
 name = "ywza_app_lib"
-crate-type = ["rlib"]
+# Add "staticlib" back for iOS builds; Android only needs the cdylib.
+crate-type = ["cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2.7.4", features = [] }
 
 [dependencies]
-tauri = { version = "2.12.5", features = ["tray-icon"] }
+tauri = { version = "2.12.5", features = [] }
 tauri-plugin-opener = "2"
 ywza-proto = { path = "../../crates/ywza-proto" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 iroh = "1.4.1"
 tokio = { version = "1", features = ["rt", "sync", "time", "macros"] }
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri = { version = "2.12.5", features = ["tray-icon"] }
+
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-barcode-scanner = "2"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread"] }

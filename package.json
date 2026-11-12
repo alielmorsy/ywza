@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "yarn workspace ywza-app tauri dev",
     "build": "yarn workspace ywza-app tauri build",
-    "tauri": "yarn workspace ywza-app tauri"
+    "tauri": "yarn workspace ywza-app tauri",
+    "android:build": "yarn workspace ywza-app android:build"
   }
 }

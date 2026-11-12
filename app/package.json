@@ -8,6 +8,7 @@
     "vite": "vite",
     "build": "tsc --noEmit && vite build",
     "tauri": "tauri",
+    "android:build": "node -e \"const r=require('child_process').spawnSync('tauri',['android','build',...process.argv.slice(1)],{stdio:'inherit',shell:true,env:{...process.env,CARGO_PROFILE_RELEASE_LTO:'fat',CARGO_PROFILE_RELEASE_CODEGEN_UNITS:'1'}});process.exit(r.status??1)\" --",
     "preview:ui": "vite --mode preview --port 5199 --open"
   },
   "devDependencies": {
@@ -21,6 +22,7 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-barcode-scanner": "^2.4.0",
     "@tauri-apps/plugin-opener": "^2.5.0",
     "qrcode-generator": "^2.0.4",
     "react": "^19.3.1",

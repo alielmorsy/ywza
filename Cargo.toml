@@ -23,6 +23,16 @@ default-members = [
     "crates/ywza-relay",
 ]
 
+# Thin LTO keeps desktop release builds parallel; `yarn android:build` switches to fat LTO
+# with one codegen unit for the smallest APK.
+[profile.release]
+lto = "thin"
+strip = true
+
+# Dependencies carry no debug info in dev builds; it made the debug APK ~350 MB.
+[profile.dev.package."*"]
+debug = false
+
 [workspace.package]
 # The one version: every crate, the desktop app and its installer.
 version = "0.1.0"

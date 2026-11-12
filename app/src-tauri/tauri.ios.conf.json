@@ -1,0 +1,10 @@
+{
+  "app": {
+    "windows": [
+      {
+        "title": "ywza",
+        "backgroundColor": "#1d1d19"
+      }
+    ]
+  }
+}

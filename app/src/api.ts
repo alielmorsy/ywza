@@ -7,16 +7,19 @@ import { useSyncExternalStore } from "react";
 // ---- wire types --------------------------------------------------------------------------
 export type Sid = string;
 export type SessionStatus = "running" | "done" | "failed";
-/** `device`: paired device the session drives with our AI; absent = this PC. */
-export interface Summary { id: Sid; title: string; status: SessionStatus; updated_ms: number; device?: string | null }
+/** `device`: paired device the session drives with our AI; absent = this PC. `devices`: extra devices the AI may use, in the agent's own names. */
+export interface Summary { id: Sid; title: string; status: SessionStatus; updated_ms: number; device?: string | null; devices?: string[] }
+/** A session as the store tracks it. `driver`: the device whose AI runs it (set for sessions of paired devices; the phone UI lives on these). */
+export interface Session extends Summary { driver?: string }
 export type SEvent =
   | { type: "user"; text: string }
   | { type: "assistant"; text: string }
-  | { type: "tool_call"; id: string; name: string; args: any }
+  /** `device`: the device the call runs on, in the driver's names; absent = the driver itself. */
+  | { type: "tool_call"; id: string; name: string; args: any; device?: string | null }
   | { type: "tool_result"; id: string; ok: boolean; text: string; has_image: boolean }
   | { type: "done"; summary: string }
   | { type: "failed"; error: string };
-export interface Permissions { view: boolean; chat: boolean; control: boolean; tools: boolean; settings: boolean }
+export interface Permissions { view: boolean; chat: boolean; control: boolean; tools: boolean; settings: boolean; drive: boolean }
 export type PermKey = keyof Permissions;
 /** Config `[[peers]]`: permissions are flattened next to id and name. */
 export interface Peer extends Permissions { id: string; name: string }
@@ -46,7 +49,7 @@ export interface Element { id: number; role: string; name: string; rect: Rect }
 export interface WindowInfo { window: string; title: string; monitor: number; rect: Rect; elements?: Element[] | null }
 
 export type AgentMsg =
-  | { type: "welcome"; agent_version: string; node_id: string; os?: string; session_list: Summary[]; permissions?: Permissions | null }
+  | { type: "welcome"; agent_version: string; node_id: string; os?: string; session_list: Summary[]; permissions?: Permissions | null; llm?: boolean }
   | { type: "event"; session: Sid; event: SEvent }
   | { type: "config"; config: Config }
   | { type: "sessions"; list: Summary[] }
@@ -60,10 +63,14 @@ export type AgentMsg =
   | { type: "tool_result"; call: number; ok: boolean; text: string; png_base64?: string | null }
   | { type: "approval_request"; request: number; session: Sid; tool: string; summary: string; detail: string }
   | { type: "approval_resolved"; request: number; allowed: boolean }
+  | { type: "devices"; list: { name: string; node_id: string }[] }
+  | { type: "image"; png_base64: string; width: number; height: number }
   | { type: "error"; message: string };
+/** What a screenshot points at. */
+export type Target = { type: "monitor"; id: number } | { type: "window"; id: number };
 export type ClientMsg =
   /** To LOCAL only. `session` unknown to the agent = new session with that id. `device` = drive that paired device with our AI. */
-  | { type: "prompt"; session: Sid; text: string; device?: string; model?: string; effort?: Effort; approval?: ApprovalMode }
+  | { type: "prompt"; session: Sid; text: string; device?: string; devices?: string[]; model?: string; effort?: Effort; approval?: ApprovalMode }
   | { type: "cancel"; session: Sid }
   /** To LOCAL only. `remember` adds an allow rule for this call. */
   | { type: "approve"; request: number; allow: boolean; remember: boolean }
@@ -73,6 +80,9 @@ export type ClientMsg =
   | { type: "get_session"; session: Sid }
   | { type: "list_models" }
   | { type: "list_tools" }
+  /** The devices this agent is paired with, in its names (answered with `devices`). */
+  | { type: "list_devices" }
+  | { type: "screenshot"; target: Target; max_width?: number }
   | { type: "list_monitors" }
   | { type: "window_info"; window: string; elements: boolean }
   | { type: "live_start"; monitor: number }
@@ -105,17 +115,28 @@ export interface Device {
   lastError?: string;
   /** Latest live view error, kept apart so it does not show up in chats. */
   liveError?: string;
+  /** Welcome: the device has an AI of its own and can drive runs. */
+  llm?: boolean;
+  /** The devices this agent is paired with, by its names (`list_devices`). */
+  known?: { name: string; node_id: string }[];
   /** The device's agent is older and rejected a newer message (e.g. `list_monitors`). */
   outdated?: boolean;
   /** Live view: CSS cursor with the remote cursor's shape; unset until the agent sends one. */
   cursor?: string;
 }
 /** A tool call waiting for the user's decision (or already decided). */
-export interface Approval { request: number; session: Sid; tool: string; summary: string; detail: string; resolved?: boolean; allowed?: boolean }
+export interface Approval { request: number; session: Sid; tool: string; summary: string; detail: string; resolved?: boolean; allowed?: boolean; /** Set for approvals of paired devices' agents. */ device?: string }
+/** Latest screenshot of a device (`image`), as a data URL. */
+export interface Shot { src: string; w: number; h: number; at: number }
 export interface State {
   devices: Record<string, Device>;
   /** All sessions, from the LOCAL agent. */
-  sessions: Record<Sid, Summary>;
+  sessions: Record<Sid, Session>;
+  /** Sessions of paired devices' own agents (the phone UI's runs); the desktop UI never reads them. */
+  remote: Record<Sid, Session>;
+  /** Their pending approvals, keyed `device:request`. */
+  remoteApprovals: Record<string, Approval>;
+  shots: Record<string, Shot>;
   events: Record<Sid, SEvent[]>;
   models: string[];
   /** This PC's agent tools (`list_tools`). */
@@ -126,7 +147,7 @@ export interface State {
   error?: { device: string; message: string; at: number };
 }
 
-let state: State = { devices: {}, sessions: {}, events: {}, models: [], tools: [], approvals: {} };
+let state: State = { devices: {}, sessions: {}, remote: {}, remoteApprovals: {}, shots: {}, events: {}, models: [], tools: [], approvals: {} };
 const subs = new Set<() => void>();
 const set = (fn: (s: State) => State) => { state = fn(state); subs.forEach((f) => f()); };
 const dev = (name: string): Device =>
@@ -145,6 +166,8 @@ export function reportError(device: string, message: string, live = false) {
 }
 /** Sessions this app created this run; the agent may not know them yet, so never fetch them. */
 const fresh = new Set<Sid>();
+/** Remote sessions whose history was asked for. */
+const asked = new Set<Sid>();
 export const getState = () => state;
 /** Sessions that drive `device` (LOCAL = this PC), newest first. Use inside useStore with a stable result (useMemo). */
 export const sessionsOf = (s: State, device: string) =>
@@ -167,7 +190,7 @@ const liveRecently = (device: string) => Date.now() - (liveSent.get(device) ?? 0
 
 export const send = (device: string, msg: ClientMsg) => {
   if (msg.type === "live_start") patch(device, () => ({ cursor: undefined, liveError: undefined })); // the new stream sends its own
-  const live = msg.type === "live_start" || msg.type === "live_stop" || msg.type === "input";
+  const live = msg.type === "live_start" || msg.type === "live_stop" || msg.type === "input" || msg.type === "screenshot";
   if (live) liveSent.set(device, Date.now());
   return invoke("send", { device, msg }).catch((e) => reportError(device, String(e), live));
 };
@@ -186,47 +209,69 @@ export const pairDevice = async (name: string, code: string) => {
 export const onRemoved = new Set<(name: string) => void>();
 export const removeDevice = async (name: string) => {
   await invoke("remove_device", { name });
-  set((s) => { const { [name]: _, ...rest } = s.devices; return { ...s, devices: rest }; });
+  set((s) => {
+    const { [name]: _, ...rest } = s.devices;
+    return { ...s, devices: rest, remote: Object.fromEntries(Object.entries(s.remote).filter(([, x]) => x.driver !== name)) };
+  });
   onRemoved.forEach((f) => f(name));
 };
 
-/** Sends a prompt about `device` to our AI. Returns the session id (new one when `session` is null). */
-export function prompt(device: string, text: string, session: Sid | null, opts: { model?: string; effort?: Effort; approval?: ApprovalMode } = {}): Sid {
+/**
+ * Sends a prompt to an agent's AI. `device`: the paired device that AI drives on our behalf (LOCAL = none).
+ * `via`: the agent that runs the session (default LOCAL); a paired device's own agent when the phone has no AI.
+ * `devices`: extra devices it may use, in `via`'s names. Returns the session id (new one when `session` is null).
+ */
+export function prompt(device: string, text: string, session: Sid | null, opts: { model?: string; effort?: Effort; approval?: ApprovalMode; via?: string; devices?: string[] } = {}): Sid {
+  const { via = LOCAL, ...rest } = opts;
   const id = session ?? crypto.randomUUID();
   // Show the new chat as running right away; the agent's first event fills it in.
-  if (!session) fresh.add(id);
-  if (!session) set((s) => ({ ...s, sessions: { ...s.sessions, [id]: { id, title: text, status: "running", updated_ms: Date.now(), device: device === LOCAL ? null : device } } }));
-  send(LOCAL, { type: "prompt", session: id, text, device: device === LOCAL ? undefined : device, ...opts });
+  if (!session) {
+    fresh.add(id);
+    const x: Session = { id, title: text, status: "running", updated_ms: Date.now(), device: device === LOCAL ? null : device, devices: rest.devices };
+    set((s) => via === LOCAL ? { ...s, sessions: { ...s.sessions, [id]: x } } : { ...s, remote: { ...s.remote, [id]: { ...x, driver: via } } });
+  }
+  send(via, { type: "prompt", session: id, text, ...rest, device: device === LOCAL ? undefined : device });
   return id;
 }
-export const approve = (request: number, allow: boolean, remember = false) => send(LOCAL, { type: "approve", request, allow, remember });
-export const cancel = (session: Sid) => send(LOCAL, { type: "cancel", session });
-export const loadSession = (session: Sid) => { if (!state.events[session] && !fresh.has(session)) send(LOCAL, { type: "get_session", session }); };
+export const approve = (request: number, allow: boolean, remember = false, device = LOCAL) => send(device, { type: "approve", request, allow, remember });
+export const cancel = (session: Sid, device = LOCAL) => send(device, { type: "cancel", session });
+export const loadSession = (session: Sid, device = LOCAL) => {
+  if (fresh.has(session) || (device === LOCAL ? state.events[session] : asked.has(session))) return;
+  if (device !== LOCAL) asked.add(session);
+  send(device, { type: "get_session", session });
+};
+
+const setRemote = (device: string, list: Summary[]) =>
+  set((s) => ({
+    ...s,
+    remote: { ...Object.fromEntries(Object.entries(s.remote).filter(([, x]) => x.driver !== device)), ...Object.fromEntries(list.map((x) => [x.id, { ...x, driver: device }])) },
+  }));
 
 function onMsg(device: string, m: AgentMsg) {
   switch (m.type) {
     case "welcome":
       if (device === LOCAL) set((s) => ({ ...s, sessions: Object.fromEntries(m.session_list.map((x) => [x.id, x])) }));
-      return patch(device, () => ({ connected: true, version: m.agent_version, nodeId: m.node_id, os: m.os, permissions: m.permissions ?? null }));
+      else setRemote(device, m.session_list);
+      return patch(device, () => ({ connected: true, version: m.agent_version, nodeId: m.node_id, os: m.os, permissions: m.permissions ?? null, llm: m.llm }));
     case "event":
-      if (device !== LOCAL) return;
       return set((s) => {
-        const cur = s.sessions[m.session];
+        const local = device === LOCAL;
+        const cur = (local ? s.sessions : s.remote)[m.session];
         // Any event but done/failed means it runs (again): a follow-up revives a finished session.
         const status: SessionStatus = m.event.type === "done" ? "done" : m.event.type === "failed" ? "failed" : "running";
         const title = cur?.title || (m.event.type === "user" ? m.event.text : "");
-        const approvals = status === "running" ? s.approvals : Object.fromEntries(Object.entries(s.approvals).map(([k, a]) => [k, a.session === m.session && !a.resolved ? { ...a, resolved: true, allowed: false } : a]));
-        return {
-          ...s,
-          approvals,
-          sessions: { ...s.sessions, [m.session]: { device: null, ...cur, id: m.session, title, status, updated_ms: Date.now() } },
-          events: { ...s.events, [m.session]: [...(s.events[m.session] ?? []), m.event] },
-        };
+        const settle = (all: Record<string, Approval>) => status === "running" ? all : Object.fromEntries(Object.entries(all).map(([k, a]) => [k, a.session === m.session && (a.device ?? LOCAL) === device && !a.resolved ? { ...a, resolved: true, allowed: false } : a]));
+        const session: Session = { device: null, ...cur, id: m.session, title, status, updated_ms: Date.now(), ...(!local && { driver: device }) };
+        const events = { ...s.events, [m.session]: [...(s.events[m.session] ?? []), m.event] };
+        return local
+          ? { ...s, events, approvals: settle(s.approvals as Record<string, Approval>), sessions: { ...s.sessions, [m.session]: session } }
+          : { ...s, events, remoteApprovals: settle(s.remoteApprovals), remote: { ...s.remote, [m.session]: session } };
       });
     case "sessions":
       if (device === LOCAL) set((s) => ({ ...s, sessions: Object.fromEntries(m.list.map((x) => [x.id, x])) }));
+      else setRemote(device, m.list);
       return;
-    case "session": return set((s) => ({ ...s, events: { ...s.events, [m.session]: m.events } }));
+    case "session": asked.add(m.session); return set((s) => ({ ...s, events: { ...s.events, [m.session]: m.events } }));
     case "config": return patch(device, () => ({ config: m.config }));
     case "pairing_code": return set((s) => ({ ...s, pairing: { code: m.code, expires_at: Date.now() + m.expires_in_secs * 1000 } }));
     case "monitors": return patch(device, () => ({ monitors: m.list }));
@@ -239,16 +284,25 @@ function onMsg(device: string, m: AgentMsg) {
     case "cursor": return patch(device, () => ({
       cursor: m.png_base64 ? `url(data:image/png;base64,${m.png_base64}) ${m.hot_x} ${m.hot_y}, auto` : "none",
     }));
-    case "approval_request":
-      if (device !== LOCAL) return;
-      return set((s) => ({ ...s, approvals: { ...s.approvals, [m.request]: { request: m.request, session: m.session, tool: m.tool, summary: m.summary, detail: m.detail } } }));
-    case "approval_resolved": {
-      const a = state.approvals[m.request];
-      if (device !== LOCAL || !a) return;
-      return set((s) => ({ ...s, approvals: { ...s.approvals, [m.request]: { ...a, resolved: true, allowed: m.allowed } } }));
+    case "approval_request": {
+      const a: Approval = { request: m.request, session: m.session, tool: m.tool, summary: m.summary, detail: m.detail };
+      if (device === LOCAL) return set((s) => ({ ...s, approvals: { ...s.approvals, [m.request]: a } }));
+      return set((s) => ({ ...s, remoteApprovals: { ...s.remoteApprovals, [`${device}:${m.request}`]: { ...a, device } } }));
     }
+    case "approval_resolved": {
+      const key = `${device}:${m.request}`;
+      const a = device === LOCAL ? state.approvals[m.request] : state.remoteApprovals[key];
+      if (!a) return;
+      const done = { ...a, resolved: true, allowed: m.allowed };
+      return set((s) => device === LOCAL ? { ...s, approvals: { ...s.approvals, [m.request]: done } } : { ...s, remoteApprovals: { ...s.remoteApprovals, [key]: done } });
+    }
+    case "devices": return patch(device, () => ({ known: m.list }));
+    case "image": return set((s) => ({ ...s, shots: { ...s.shots, [device]: { src: `data:image/png;base64,${m.png_base64}`, w: m.width, h: m.height, at: Date.now() } } }));
     case "error": {
       const unknown = /unknown variant `(\w+)`/.exec(m.message)?.[1];
+      // No device list coming back: drive alone instead of waiting forever.
+      if (unknown === "list_devices" || m.message === "permission denied: drive") patch(device, () => ({ known: [] }));
+      if (m.message === "permission denied: drive") return reportError(device, "does not let this phone use its other devices. Turn on Drive other devices for it in Access.");
       if (!unknown) return reportError(device, m.message, liveRecently(device));
       const first = !state.devices[device]?.outdated;
       // An older agent streams monitor 0 only and knows nothing newer; degrade instead of failing.

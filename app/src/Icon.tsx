@@ -1,6 +1,6 @@
 // SVG icon sprite from mockup-ui/index.html. Render <Sprite/> once, then <Icon name="x"/>.
 
-export type IconName = 'laptop' | 'monitor' | 'phone' | 'server' | 'sliders' | 'back' | 'copy' | 'refresh' | 'qr' | 'chat' | 'send' | 'play' | 'pause' | 'stop' | 'expand' | 'shrink' | 'pointer' | 'check' | 'chev' | 'shield' | 'warn' | 'tool' | 'trash' | 'eye' | 'min' | 'max' | 'home' | 'plus' | 'pencil' | 'dock' | 'split' | 'window' | 'bug' | 'star' | 'link' | 'unlink' | 'spark' | 'keyboard' | 'x';
+export type IconName = 'laptop' | 'monitor' | 'phone' | 'server' | 'sliders' | 'back' | 'copy' | 'refresh' | 'qr' | 'chat' | 'send' | 'play' | 'pause' | 'stop' | 'expand' | 'shrink' | 'pointer' | 'check' | 'chev' | 'shield' | 'warn' | 'tool' | 'trash' | 'eye' | 'min' | 'max' | 'home' | 'plus' | 'pencil' | 'dock' | 'split' | 'window' | 'bug' | 'star' | 'link' | 'unlink' | 'spark' | 'keyboard' | 'x' | 'grid' | 'list' | 'inbox' | 'backspace' | 'more';
 
 const SYMBOLS = `<symbol id="i-laptop" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></symbol>
 <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></symbol>
@@ -40,7 +40,12 @@ const SYMBOLS = `<symbol id="i-laptop" viewBox="0 0 24 24"><rect x="4" y="5" wid
 <symbol id="i-unlink" viewBox="0 0 24 24"><path d="M14.5 6.5l1-1a4 4 0 0 1 5.7 5.7l-1 1M9.5 17.5l-1 1a4 4 0 0 1-5.7-5.7l1-1M4 4l16 16"/></symbol>
 <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/></symbol>
 <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></symbol>
-<symbol id="i-x" viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9"/></symbol>`;
+<symbol id="i-x" viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9"/></symbol>
+<symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="13" y="4" width="8" height="7" rx="1.5"/><rect x="3" y="13" width="8" height="7" rx="1.5"/><rect x="13" y="13" width="8" height="7" rx="1.5"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M4 7h10M4 12h16M4 17h7"/></symbol>
+<symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13l3-8h12l3 8v6H3zM3 13h5l1 3h6l1-3h5"/></symbol>
+<symbol id="i-backspace" viewBox="0 0 24 24"><path d="M9 5h11v14H9l-6-7z"/><path d="M12 9l5 6M17 9l-5 6"/></symbol>
+<symbol id="i-more" viewBox="0 0 24 24"><path d="M6 12h.01M12 12h.01M18 12h.01"/></symbol>`;
 
 export const Sprite = () => (
   <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden dangerouslySetInnerHTML={{ __html: `<defs>${SYMBOLS}</defs>` }} />

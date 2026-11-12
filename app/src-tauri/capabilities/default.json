@@ -5,6 +5,11 @@
   "windows": [
     "main"
   ],
+  "platforms": [
+    "windows",
+    "linux",
+    "macOS"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",

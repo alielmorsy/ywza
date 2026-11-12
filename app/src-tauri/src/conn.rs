@@ -169,6 +169,9 @@ fn client_name(device: &str) -> String {
     if device == LOCAL {
         return "ywza-app".into();
     }
+    if cfg!(mobile) {
+        return "phone".into();
+    }
     std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
         .unwrap_or_else(|_| "ywza-app".into())
