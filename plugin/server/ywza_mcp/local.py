@@ -15,8 +15,13 @@ def config_dir():
     """Resolve config directory across platforms."""
     if os.environ.get("YWZA_CONFIG_DIR"):
         return Path(os.environ["YWZA_CONFIG_DIR"])
-    service = Path("/var/lib/ywza")
-    if sys.platform.startswith("linux") and os.access(service / "agent.ticket", os.R_OK):
+    if sys.platform == "win32" and os.environ.get("ProgramData"):
+        service = Path(os.environ["ProgramData"]) / "ywza"
+    elif sys.platform.startswith("linux"):
+        service = Path("/var/lib/ywza")
+    else:
+        service = None
+    if service and os.access(service / "agent.ticket", os.R_OK):
         return service
     if sys.platform == "win32":
         base = Path(os.environ["APPDATA"])

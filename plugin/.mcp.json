@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "ywza": {
-      "command": "python",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/server/run.py"]
+      "command": "uv",
+      "args": ["run", "--no-project", "--directory", "${CLAUDE_PLUGIN_ROOT}/server", "python", "-m", "ywza_mcp"]
     }
   }
 }
