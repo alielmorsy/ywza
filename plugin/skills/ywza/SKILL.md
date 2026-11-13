@@ -1,36 +1,50 @@
 ---
 name: ywza
-description: Use when the task needs to see or drive a computer's desktop or terminal (windows, UI elements, clicks, typing, screenshots, shells) on this PC or a paired ywza device, or to copy files between them.
+description: Use when a task needs to see or operate a real computer through the ywza MCP tools - desktop apps, an already-open browser, web forms, native dialogs, terminals or AI CLIs running in them, on this PC or a paired device, or copying files between devices.
 ---
 
 # ywza
 
-MCP tools that drive desktops and terminals on "local" (this PC) and every paired device.
+The ywza MCP tools read and drive desktops through the accessibility tree, not pixels. Text is cheap, pictures are not: one session spent over a million tokens on screenshots. Read the element list, act on ids and read the diff each action returns.
 
-## Flow
+## Core loop
 
-1. `list_devices` to see targets. Pass `device` to any tool to pick one; omitted means local.
-2. `list_windows`, then `get_elements` on a window. Act on element ids.
-3. Ids (windows, elements) belong to the device that returned them. Never reuse them on another device.
-4. Re-read `get_elements` after any action that changes the UI.
+1. `list_windows` (add `device` for a paired machine; omitted means this PC).
+2. `get_elements` on the window. Browsers: `page_only: true`.
+3. Act on element ids: `click`, `type_text`, `press_keys`, `scroll`, or several at once with `batch`.
+4. Read the returned diff. Call `get_elements` again only when the diff is a summary or you need ids it does not show.
+5. Confirm outcomes with `wait` + `text` ("Submitted", "Saved"), not with a screenshot.
 
-## Files
+An already-open browser is just a window: drive it with ywza. Do not hunt for a debug port, CDP or other browser automation.
 
-`copy` moves a file or folder, scp style. A path is `device:path` for a paired device, or a plain path for this PC. A destination that is an existing folder receives the source inside it. On a remote device relative paths and `~` are under the user's home.
+## Rules
 
-## Approval
+- Ids belong to the latest `get_elements` of that window on that device. A `stale` result did nothing and carries the fresh list: use it.
+- `type_text` focuses the field itself and replaces its content: do not click a field before typing into it. Empty `text` clears it.
+- Check the element line after every choice (`selected`, `= on`, the value) before moving on.
+- Screenshot only for what the tree cannot show: images, canvas, layout. Never to read text or state.
+- An action the user denies stays denied. Do not retry it another way.
+- Never reload or navigate back (`alt+left`, F5) on a page holding unsaved input.
 
-Some actions wait for the user to approve in the ywza app, and may be denied. Do not retry a denied action another way.
+## Quick reference
 
-## Setup
+| Need | Use |
+|---|---|
+| Wait for a result, spinner gone | `wait` window + `text` (+ `gone: true`) |
+| Wait for a long task | `wait` window + `element` on what will change (Stop button) |
+| Fill a form step | one `get_elements`, then one `batch` |
+| Open a split button's menu | `click` with `expand: true` on a `+menu` element |
+| Native file dialog | its own window id from the `dialog` line |
+| Text missing from the list | `get_elements` with `accurate_ocr: true` |
+| Show the user a window | `show_screenshot` (you do not see it) |
+| One-shot shell work | `run_command` |
+| Move files between devices | `copy` with `device:path` |
 
-Needs the `ywza` CLI on PATH and a running agent. Pair a device with `ywza pair <code> --name NAME`.
+## References
 
-Without MCP, the same tools run from a shell: `python <plugin>/server/run.py [--device NAME] tools|call <tool> '<json>'`.
+Read the one that matches the task:
 
-## Forms
-
-- Verify each radio, checkbox and dropdown choice from its element line (`selected`, `= on`, the shown value) before pressing Next.
-- Never press alt+left or reload a half-filled form: the data is lost.
-- If a dropdown or search stays stuck (spinner, `busy`) after two tries, check whether the session expired before retrying.
-- One `get_elements` per step, then `batch` the fills. Use `wait` with `text` to confirm a submit.
+- `references/elements.md`: element lines, flags, diffs, ids, OCR, batch and wait details.
+- `references/web-forms.md`: browsers, dropdowns, radios, type-ahead, dates, file uploads, sign-in popups, multi-step forms.
+- `references/terminals.md`: terminals and the AI coding CLIs that run in them.
+- `references/devices.md`: paired devices, file copy, approvals.
