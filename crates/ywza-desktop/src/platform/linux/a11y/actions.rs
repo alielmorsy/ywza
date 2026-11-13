@@ -53,8 +53,10 @@ pub fn long_press(snap: &Snapshot, id: u32, ms: u64) -> Result<()> {
     x::real_click(snap.window.id, at, Button::Left, 1, ms)
 }
 
-/// Sets the element's text through EditableText when possible; otherwise focuses the
-/// element (or just the window when `id` is None) and types the text.
+/// Sets the element's text through EditableText when possible (and it reads back);
+/// otherwise focuses the element (or just the window when `id` is None), selects all
+/// when replacing (Delete for empty text) and types the text.
+// shortcut: no paste mode on X11 (serving the CLIPBOARD selection needs an event loop), keys are synced per character instead; add it if long text proves slow.
 pub fn type_text(snap: &Snapshot, id: Option<u32>, text: &str, append: bool) -> Result<()> {
     let done = block(async {
         let Some(id) = id else { return Ok(false) };
@@ -66,7 +68,16 @@ pub fn type_text(snap: &Snapshot, id: Option<u32>, text: &str, append: bool) -> 
         if !append && e.patterns.value && !e.patterns.value_readonly {
             if let Ok(t) = proxies.editable_text().await {
                 if matches!(t.set_text_contents(text).await, Ok(true)) {
-                    return Ok(true);
+                    let now = match proxies.text().await {
+                        Ok(t) => {
+                            let n = t.character_count().await.unwrap_or(0);
+                            t.get_text(0, n).await.ok()
+                        }
+                        Err(_) => None,
+                    };
+                    if now.is_none_or(|v| v.trim_end() == text.trim_end()) {
+                        return Ok(true);
+                    }
                 }
             }
         }
@@ -77,6 +88,10 @@ pub fn type_text(snap: &Snapshot, id: Option<u32>, text: &str, append: bool) -> 
     })?;
     if done {
         return Ok(());
+    }
+    if id.is_some() && !append {
+        let keys = if text.is_empty() { "ctrl+a delete" } else { "ctrl+a" };
+        x::press_keys(Some(snap.window.id), keys)?;
     }
     x::type_text(Some(snap.window.id), text)
 }

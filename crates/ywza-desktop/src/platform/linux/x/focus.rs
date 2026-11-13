@@ -46,6 +46,22 @@ impl X {
         Ok(())
     }
 
+    /// Whether `w` is a dialog of `owner`, directly or through other dialogs.
+    pub(super) fn transient_of(&self, w: Window, owner: Window) -> bool {
+        let mut cur = w;
+        for _ in 0..8 {
+            match self
+                .prop32(cur, AtomEnum::WM_TRANSIENT_FOR.into(), AtomEnum::WINDOW)
+                .first()
+            {
+                Some(&o) if o == owner => return true,
+                Some(&o) if o != 0 && o != cur => cur = o,
+                _ => return false,
+            }
+        }
+        false
+    }
+
     pub(super) fn remove_state(&self, w: Window, state: Atom) -> Result<()> {
         self.client_message(w, self.a._NET_WM_STATE, [0, state, 0, 2, 0])
     }

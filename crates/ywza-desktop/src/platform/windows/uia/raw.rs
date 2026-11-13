@@ -29,8 +29,20 @@ const PROPS: &[UIA_PROPERTY_ID] = &[
     UIA_ToggleToggleStatePropertyId,
     UIA_IsExpandCollapsePatternAvailablePropertyId,
     UIA_IsSelectionItemPatternAvailablePropertyId,
+    UIA_SelectionItemIsSelectedPropertyId,
     UIA_IsScrollPatternAvailablePropertyId,
+    UIA_IsRangeValuePatternAvailablePropertyId,
+    UIA_RangeValueValuePropertyId,
+    UIA_AriaPropertiesPropertyId,
+    UIA_NativeWindowHandlePropertyId,
 ];
+
+/// Whether `prop=true` is in a UIA AriaProperties string ("checked=true;busy=false").
+fn aria(props: &str, prop: &str) -> bool {
+    props
+        .split(';')
+        .any(|kv| kv.trim().eq_ignore_ascii_case(&format!("{prop}=true")))
+}
 
 pub(super) fn cache_request(uia: &IUIAutomation) -> Result<IUIAutomationCacheRequest> {
     let c = unsafe { uia.CreateCacheRequest()? };
@@ -54,6 +66,16 @@ pub(super) fn raw_from(el: &IUIAutomationElement) -> Result<Raw> {
             select: flag(UIA_IsSelectionItemPatternAvailablePropertyId),
             scroll: flag(UIA_IsScrollPatternAvailablePropertyId),
         };
+        let props = Var::get(el, UIA_AriaPropertiesPropertyId)
+            .string()
+            .unwrap_or_default();
+        let range = if flag(UIA_IsRangeValuePatternAvailablePropertyId) {
+            Var::get(el, UIA_RangeValueValuePropertyId)
+                .float()
+                .map(|v| format!("{v}"))
+        } else {
+            None
+        };
         Ok(Raw {
             role: role(el.CachedControlType()?),
             name: el.CachedName().map(|s| s.to_string()).unwrap_or_default(),
@@ -73,10 +95,18 @@ pub(super) fn raw_from(el: &IUIAutomationElement) -> Result<Raw> {
                 .map(|b| b.as_bool())
                 .unwrap_or(false),
             value: if patterns.value {
-                Var::get(el, UIA_ValueValuePropertyId).string()
+                Var::get(el, UIA_ValueValuePropertyId)
+                    .string()
+                    .filter(|v| !v.is_empty())
+                    .or(range)
             } else {
-                None
+                range
             },
+            selected: (patterns.select && flag(UIA_SelectionItemIsSelectedPropertyId))
+                || (!patterns.toggle && aria(&props, "checked"))
+                || aria(&props, "selected"),
+            busy: aria(&props, "busy"),
+            group: String::new(),
             toggle: if patterns.toggle {
                 Var::get(el, UIA_ToggleToggleStatePropertyId).int()
             } else {

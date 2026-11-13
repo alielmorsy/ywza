@@ -1,7 +1,7 @@
 use ::windows::Win32::System::Com::CoTaskMemFree;
 use ::windows::Win32::System::Variant::{
-    VariantClear, VariantToBoolean, VariantToInt32, VariantToInt32ArrayAlloc, VariantToStringAlloc,
-    VARIANT,
+    VariantClear, VariantToBoolean, VariantToDouble, VariantToInt32, VariantToInt32ArrayAlloc,
+    VariantToStringAlloc, VARIANT,
 };
 use ::windows::Win32::UI::Accessibility::{IUIAutomationElement, UIA_PROPERTY_ID};
 
@@ -19,6 +19,10 @@ impl Var {
 
     pub(super) fn int(&self) -> Option<i32> {
         unsafe { VariantToInt32(&self.0) }.ok()
+    }
+
+    pub(super) fn float(&self) -> Option<f64> {
+        unsafe { VariantToDouble(&self.0) }.ok()
     }
 
     pub(super) fn string(&self) -> Option<String> {

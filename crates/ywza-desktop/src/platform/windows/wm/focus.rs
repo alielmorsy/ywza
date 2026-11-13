@@ -4,8 +4,9 @@ use crate::{Error, Result, WindowId};
 use ::windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use ::windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
 use ::windows::Win32::UI::WindowsAndMessaging::{
-    BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId, IsIconic, IsWindowVisible,
-    PostMessageW, SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW, WM_CLOSE,
+    BringWindowToTop, GetForegroundWindow, GetWindow, GetWindowThreadProcessId, IsIconic,
+    IsWindowVisible, PostMessageW, SetForegroundWindow, ShowWindow, GW_OWNER, SW_RESTORE, SW_SHOW,
+    WM_CLOSE,
 };
 use std::time::{Duration, Instant};
 
@@ -49,6 +50,20 @@ pub(crate) fn bring_to_front(h: HWND) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Whether `h` is owned, directly or through other owned windows, by `owner`: one of
+/// its dialogs (file picker, message box).
+pub(crate) fn owned_by(h: HWND, owner: HWND) -> bool {
+    let mut cur = h;
+    for _ in 0..8 {
+        match unsafe { GetWindow(cur, GW_OWNER) } {
+            Ok(o) if o == owner => return true,
+            Ok(o) if !o.0.is_null() => cur = o,
+            _ => return false,
+        }
+    }
+    false
 }
 
 pub fn close_window(id: WindowId) -> Result<()> {

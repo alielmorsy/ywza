@@ -29,6 +29,12 @@ pub(crate) struct Raw {
     pub value: Option<String>,
     /// Toggle state: Some(0) off, Some(1) on, Some(2) mixed.
     pub toggle: Option<i32>,
+    /// Selected (SelectionItem, checked radio, aria-checked/selected).
+    pub selected: bool,
+    /// Loading (aria-busy, AT-SPI Busy).
+    pub busy: bool,
+    /// Name of the nearest named group around it (radio questions).
+    pub group: String,
     /// Stable identity (UIA RuntimeId); empty for OCR boxes.
     pub key: Vec<i32>,
     /// Set for nodes of a popup window (menu, dropdown) that belongs to the snapshot
@@ -47,6 +53,12 @@ pub struct Element {
     pub automation_id: String,
     pub value: Option<String>,
     pub enabled: bool,
+    pub selected: bool,
+    pub busy: bool,
+    /// Radios only: the question they answer.
+    pub group: String,
+    /// `name` is borrowed from the named node it wraps or sits next to (see `build`).
+    pub labeled: bool,
     pub rect: Rect,
     pub patterns: Patterns,
     pub key: Vec<i32>,

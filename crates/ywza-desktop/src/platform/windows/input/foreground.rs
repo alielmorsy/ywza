@@ -4,7 +4,7 @@ use crate::{Error, Result, WindowId};
 use ::windows::Win32::Foundation::POINT;
 use ::windows::Win32::System::SystemInformation::GetTickCount;
 use ::windows::Win32::UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO};
-use ::windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, SetCursorPos};
+use ::windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, GetForegroundWindow, SetCursorPos};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -22,7 +22,9 @@ pub fn set_idle_before_input(ms: u64) {
 /// cursor back. The previous foreground window is deliberately never restored: a
 /// click often opens a menu or dialog, and handing focus back closes it, and the
 /// caller cannot tell a UI-changing action from a harmless one. The target stays in
-/// front so the follow-up snapshot, capture and input hit it.
+/// front so the follow-up snapshot, capture and input hit it. When a dialog the window
+/// owns is in front (file picker), it keeps the focus and gets the input: raising the
+/// owner would steal its Enter.
 pub(super) fn with_foreground<T>(
     window: Option<WindowId>,
     act: impl FnOnce() -> Result<T>,
@@ -31,7 +33,9 @@ pub(super) fn with_foreground<T>(
     let mut cursor = POINT::default();
     unsafe { GetCursorPos(&mut cursor)? };
     if let Some(id) = window {
-        wm::bring_to_front(hwnd(id))?;
+        if !wm::owned_by(unsafe { GetForegroundWindow() }, hwnd(id)) {
+            wm::bring_to_front(hwnd(id))?;
+        }
     }
     let result = act();
     // Let the app consume the input before the cursor moves away again.

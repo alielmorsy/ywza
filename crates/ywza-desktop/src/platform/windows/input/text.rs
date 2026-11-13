@@ -1,3 +1,4 @@
+use super::clipboard::Held;
 use super::foreground::{wait_idle, with_foreground};
 use super::keyboard::{char_key, chord};
 use super::lock::InputLock;
@@ -24,7 +25,8 @@ use std::time::{Duration, Instant};
 ///   (or not empty) this declines, it is not an error, and the takeover below runs;
 /// - otherwise a short takeover: wait for the user to be idle, bring the window
 ///   forward, focus the element (UIA, then a real click), select all (or go to the
-///   end when appending), type, and give the foreground back.
+///   end when appending), type, and give the foreground back. Empty text deletes the
+///   selection; long or non-keyboard text is pasted (see `pastes`).
 ///
 /// Before every batch of keys the element is re-validated (same RuntimeId, name and
 /// kind), so keys never go to a control that changed under us (another chat opened).
@@ -84,8 +86,21 @@ fn background_type(snap: &Snapshot, id: u32, el: &uia::Uia, text: &str) -> Resul
     for u in text.encode_utf16() {
         unsafe { PostMessageW(Some(target), WM_CHAR, WPARAM(u as usize), LPARAM(1))? };
     }
-    verify(id, el, text)?;
+    verify(id, el, text, true)?;
     Ok(true)
+}
+
+/// Text above this many characters is pasted: key-by-key typing drops letters in
+/// browsers on long text.
+const PASTE_FROM: usize = 80;
+
+/// Whether to paste instead of typing: long text, or characters with no key on the
+/// layout (each would be a slow paced Unicode packet).
+fn pastes(text: &str) -> bool {
+    text.chars().count() > PASTE_FROM
+        || text
+            .chars()
+            .any(|c| !c.is_control() && char_key(c).is_none())
 }
 
 /// Path B: brief foreground takeover with real keys; the previous foreground window
@@ -124,8 +139,16 @@ fn takeover_type(snap: &Snapshot, id: u32, at: (i32, i32), append: bool, text: &
             VIRTUAL_KEY(b'A' as u16)
         };
         send(&chord(&[VK_CONTROL, go]))?; // Ctrl+End or Ctrl+A (replace)
+        if !append && text.is_empty() {
+            send(&chord(&[VK_DELETE]))?;
+        }
+        if pastes(text) {
+            let held = Held::put(text)?;
+            send(&chord(&[VK_CONTROL, VIRTUAL_KEY(b'V' as u16)]))?;
+            return Ok((el, Some(held)));
+        }
         send_text(text)?;
-        Ok(el)
+        Ok((el, None))
     })();
     // Let the app take the keys from its queue before focus moves away again.
     sleep(Duration::from_millis(100));
@@ -135,25 +158,42 @@ fn takeover_type(snap: &Snapshot, id: u32, at: (i32, i32), append: bool, text: &
     if !prev.0.is_null() && prev != target {
         let _ = wm::bring_to_front(prev);
     }
-    verify(id, &typed?, text)
+    // `_held` restores the clipboard once the paste is verified (or not).
+    let (el, _held) = typed?;
+    verify(id, &el, text, append)
 }
 
-/// Polls the element's text for up to a second (keys are processed asynchronously).
-/// Unreadable text (password fields) is not checked.
-fn verify(id: u32, el: &uia::Uia, text: &str) -> Result<()> {
-    let want = uia::norm(text);
-    let deadline = Instant::now() + Duration::from_secs(1);
+/// Polls the element's text (keys are processed asynchronously), longer for longer
+/// text. Replacing with "" needs the field empty, anything else needs it to contain
+/// the text. Unreadable text (password fields) is not checked.
+fn verify(id: u32, el: &uia::Uia, text: &str, append: bool) -> Result<()> {
+    let ms = (1000 + 5 * text.chars().count() as u64).min(10_000);
+    let deadline = Instant::now() + Duration::from_millis(ms);
     loop {
         match uia::text(el) {
             None => return Ok(()),
-            Some(t) if uia::norm(&t).contains(&want) => return Ok(()),
+            Some(t) if arrived(&t, text, append) => return Ok(()),
             Some(_) if Instant::now() >= deadline => {
-                return Err(Error::Os(format!(
-                    "typed into element {id}, but its text does not contain it; check it before retrying"
-                )))
+                let what = if text.is_empty() && !append {
+                    format!("cleared element {id}, but it is not empty")
+                } else {
+                    format!("typed into element {id}, but its text does not contain it")
+                };
+                return Err(Error::Os(format!("{what}; check it before retrying")));
             }
             Some(_) => sleep(Duration::from_millis(100)),
         }
+    }
+}
+
+/// Whether the field's text shows the typing: replacing with "" left it empty,
+/// anything else made it contain the text.
+fn arrived(field: &str, text: &str, append: bool) -> bool {
+    let (field, want) = (uia::norm(field), uia::norm(text));
+    if want.is_empty() && !append {
+        field.trim().is_empty()
+    } else {
+        field.contains(&want)
     }
 }
 
@@ -188,4 +228,26 @@ fn send_text(text: &str) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_replace_needs_an_empty_field() {
+        assert!(arrived("", "", false));
+        assert!(arrived("\r\n", "", false));
+        assert!(!arrived("old cover letter", "", false)); // Ctrl+A with nothing typed
+        assert!(arrived("old cover letter", "", true));
+        assert!(arrived("Dear team,\r\nhi", "Dear team,\nhi", false));
+        assert!(!arrived("Dear tam", "Dear team", false));
+    }
+
+    #[test]
+    fn long_or_unkeyed_text_is_pasted() {
+        assert!(!pastes("hello"));
+        assert!(pastes(&"a".repeat(PASTE_FROM + 1)));
+        assert!(pastes("ok 🙂")); // no key on any layout
+    }
 }

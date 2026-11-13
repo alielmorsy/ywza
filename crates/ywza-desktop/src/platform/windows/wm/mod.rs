@@ -11,6 +11,6 @@ pub use list::list_windows;
 pub use monitors::{list_monitors, set_dpi_awareness};
 pub use resize::move_window;
 
-pub(crate) use focus::bring_to_front;
+pub(crate) use focus::{bring_to_front, owned_by};
 pub(crate) use list::{popup_windows, process_name, visible_rect, window_info};
 pub(crate) use monitors::monitor_handle;

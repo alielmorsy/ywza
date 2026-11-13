@@ -7,7 +7,7 @@ use std::{
 
 use schemars::JsonSchema;
 use serde::Deserialize;
-use ywza_desktop::{self as desk, WindowId};
+use ywza_desktop::{self as desk, Snapshot, WindowId};
 
 use super::{
     act::settle_diff, ocr::check_ocr, util::blocking, Ctx, ElementArg, Tool, ToolOutput, WindowArg,
@@ -22,7 +22,7 @@ const OCR_MISSES: u32 = 2;
 /// Consecutive failed re-reads (other than the window being gone) before giving up.
 const READ_FAILS: u32 = 5;
 
-/// Pause for `ms` milliseconds (max 60000). With `window` and `element`: instead return as soon as that element changes (name, value, toggle state, enabled) or disappears, or its window closes, waiting up to `ms` (max 600000), and report the changes. Use it to wait out long tasks in one call, e.g. until a "Stop" button turns back into "Start".
+/// Pause for `ms` milliseconds (max 60000). With `window` and `element`: instead return as soon as that element changes (name, value, toggle state, selected, busy, enabled) or disappears, or its window closes, waiting up to `ms` (max 600000), and report the changes. Use it to wait out long tasks in one call, e.g. until a "Stop" button turns back into "Start". With `window` and `text`: return as soon as an element whose name or value contains `text` (any case) appears, with its line, or with `gone` once none is left (a spinner, "Loading"); no element id needed.
 #[derive(Deserialize, JsonSchema)]
 pub struct Wait {
     ms: u64,
@@ -30,15 +30,25 @@ pub struct Wait {
     window: Option<WindowArg>,
     /// Element id from this window's latest get_elements.
     element: Option<ElementArg>,
+    /// Wait for an element with this text in its name or value, e.g. "Application submitted".
+    text: Option<String>,
+    /// With `text`: wait until no element has it any more.
+    #[serde(default)]
+    gone: bool,
 }
 
 impl Tool for Wait {
     const NAME: &'static str = "wait";
 
     async fn run(self, cx: &Ctx) -> ToolOutput {
-        match (self.window, self.element) {
-            (Some(w), Some(e)) => watch(cx, w.0, e.0, self.ms.min(WATCH_MAX)).await,
-            (None, Some(_)) => ToolOutput::err("`element` needs `window`"),
+        match (self.window, self.element, self.text) {
+            (Some(w), Some(e), _) => watch(cx, w.0, e.0, self.ms.min(WATCH_MAX)).await,
+            (Some(w), None, Some(t)) => {
+                wait_text(cx, w.0, &t, self.gone, self.ms.min(WATCH_MAX)).await
+            }
+            (None, Some(_), _) | (None, _, Some(_)) => {
+                ToolOutput::err("`element` and `text` need `window`")
+            }
             _ => {
                 let ms = self.ms.min(SLEEP_MAX);
                 tokio::time::sleep(Duration::from_millis(ms)).await;
@@ -101,6 +111,64 @@ async fn watch(cx: &Ctx, w: WindowId, id: u32, ms: u64) -> ToolOutput {
         "element {id} changed after {secs:.1} s; changes:\n{}",
         d.trim_end()
     ))
+}
+
+/// Re-reads `w` until an element whose name or value contains `text` shows up (or, with
+/// `gone`, until none is left). The last read is stored, so the returned ids are usable.
+async fn wait_text(cx: &Ctx, w: WindowId, text: &str, gone: bool, ms: u64) -> ToolOutput {
+    let want = text.to_lowercase();
+    let hit = move |s: &Snapshot| {
+        s.elements
+            .iter()
+            .find(|e| {
+                e.name.to_lowercase().contains(&want)
+                    || e.value
+                        .as_ref()
+                        .is_some_and(|v| v.to_lowercase().contains(&want))
+            })
+            .map(|e| e.line())
+    };
+    let start = Instant::now();
+    let deadline = start + Duration::from_millis(ms);
+    let mut prev = cx.snap(w);
+    let mut fails = 0;
+    loop {
+        let p = prev.take();
+        let (res, p) = blocking(move || (desk::snapshot(w, p.as_ref()), p)).await;
+        prev = p;
+        match res {
+            Ok(s) => {
+                fails = 0;
+                let found = hit(&s);
+                let secs = start.elapsed().as_secs_f32();
+                let done = match (found, gone) {
+                    (Some(line), false) => Some(format!("found after {secs:.1} s: {line}")),
+                    (None, true) => Some(format!("{text:?} gone after {secs:.1} s")),
+                    _ if Instant::now() >= deadline => {
+                        let state = if gone { "still there" } else { "not found" };
+                        Some(format!("{text:?} {state} after {ms} ms"))
+                    }
+                    _ => None,
+                };
+                if let Some(msg) = done {
+                    cx.store(w, s);
+                    return ToolOutput::ok(msg);
+                }
+                prev = Some(s);
+            }
+            Err(desk::Error::NotFound(_)) => {
+                cx.forget(w);
+                return ToolOutput::ok(format!("w{w} closed"));
+            }
+            Err(e) => {
+                fails += 1;
+                if fails >= READ_FAILS || Instant::now() >= deadline {
+                    return ToolOutput::err(format!("could not re-read w{w}: {e}"));
+                }
+            }
+        }
+        tokio::time::sleep(POLL).await;
+    }
 }
 
 #[cfg(all(test, windows))]

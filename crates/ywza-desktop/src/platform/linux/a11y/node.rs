@@ -104,6 +104,10 @@ pub(super) async fn raw_of(acc: &AccessibleProxy<'_>) -> Result<(Raw, bool)> {
         patterns,
         value,
         toggle,
+        selected: state.contains(State::Selected)
+            || (role == Role::RadioButton && state.contains(State::Checked)),
+        busy: state.contains(State::Busy),
+        group: String::new(),
         key,
         bounds: None,
     };

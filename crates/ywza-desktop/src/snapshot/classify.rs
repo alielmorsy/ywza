@@ -73,6 +73,14 @@ pub(crate) fn classify(raw: &Raw, window: &Rect) -> Option<Element> {
         automation_id: raw.automation_id.clone(),
         value,
         enabled: raw.enabled,
+        selected: raw.selected,
+        busy: raw.busy,
+        group: if kind == "radio" {
+            truncate(raw.group.trim(), MAX_VALUE / 2)
+        } else {
+            String::new()
+        },
+        labeled: false,
         rect: raw.rect,
         patterns: raw.patterns,
         key: raw.key.clone(),
@@ -100,7 +108,7 @@ pub(crate) fn recheck(old: &Element, raw: &Raw, old_win: &Rect, win: &Rect) -> R
     if now.kind != old.kind {
         return Err(format!("now a {}", now.kind));
     }
-    if now.name != old.name {
+    if now.name != old.name && !(old.labeled && now.name.is_empty()) {
         return Err(format!("name now {:?}", now.name));
     }
     // Compare relative to the window so a moved window does not invalidate everything.

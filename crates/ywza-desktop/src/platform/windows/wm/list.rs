@@ -32,18 +32,21 @@ fn pid_of(h: HWND) -> u32 {
 
 /// Top-level popup windows of `root`'s process that overlap it, e.g. an open menu
 /// (class `#32768`, WinForms/XAML dropdown hosts). They are not UIA children of the root.
-pub(crate) fn popup_windows(root: &WindowInfo) -> Vec<WindowId> {
+/// The bool marks an owned dialog (file picker, message box): an app window of its own
+/// that `list_windows` lists too.
+pub(crate) fn popup_windows(root: &WindowInfo) -> Vec<(WindowId, bool)> {
     let Ok(all) = top_level() else {
         return Vec::new();
     };
     all.into_iter()
         .filter(|&h| window_id(h) != root.id)
         .filter(|&h| pid_of(h) == root.pid)
-        .filter(|&h| {
+        .filter_map(|h| {
             let owned = unsafe { GetWindow(h, GW_OWNER) }.is_ok_and(|o| window_id(o) == root.id);
-            is_popup(&facts(h), owned) && !visible_rect(h).intersect(&root.rect).is_empty()
+            let f = facts(h);
+            (is_popup(&f, owned) && !visible_rect(h).intersect(&root.rect).is_empty())
+                .then(|| (window_id(h), is_app_window(&f)))
         })
-        .map(window_id)
         .collect()
 }
 

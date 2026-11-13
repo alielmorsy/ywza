@@ -97,7 +97,7 @@ impl Tool for LongPress {
     }
 }
 
-/// Type text into an element. Focuses the element itself; do not click it first. Replaces the content unless `append`; without `element`, types into the window's focused control. Returns 'ok: text written' when verified.
+/// Type text into an element. Focuses the element itself; do not click it first. Replaces the content unless `append`; empty `text` clears the field. Long or non-Latin text is pasted (your clipboard is restored after). Without `element`, types into the window's focused control. Returns 'ok: text written' when verified.
 #[derive(Deserialize, JsonSchema)]
 pub struct TypeText {
     /// Window id from list_windows/launch, e.g. "w3412106".
@@ -108,7 +108,7 @@ pub struct TypeText {
     /// false replaces the field's content, true types at its end.
     #[serde(default)]
     append: bool,
-    /// Press Enter after the text is verified (sends the message in chat apps). The changes are returned.
+    /// Press Enter after the text is verified (sends the message in chat apps; in a file dialog's name box, opens the file). The changes are returned.
     #[serde(default)]
     submit: bool,
 }
@@ -144,7 +144,7 @@ impl Tool for TypeText {
     }
 }
 
-/// Press key combos, space-separated: "ctrl+s", "alt+f4", "enter", "ctrl+k ctrl+s". With `window`, it is brought to the front first and the changes are returned.
+/// Press key combos, space-separated: "ctrl+s", "alt+f4", "enter", "ctrl+k ctrl+s". With `window`, it is brought to the front first and the changes are returned; if a dialog of that window (file picker) is in front, the dialog keeps focus and gets the keys.
 #[derive(Deserialize, JsonSchema)]
 pub struct PressKeys {
     /// Window id from list_windows/launch, e.g. "w3412106".

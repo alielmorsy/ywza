@@ -27,3 +27,10 @@ Some actions wait for the user to approve in the ywza app, and may be denied. Do
 Needs the `ywza` CLI on PATH and a running agent. Pair a device with `ywza pair <code> --name NAME`.
 
 Without MCP, the same tools run from a shell: `python <plugin>/server/run.py [--device NAME] tools|call <tool> '<json>'`.
+
+## Forms
+
+- Verify each radio, checkbox and dropdown choice from its element line (`selected`, `= on`, the shown value) before pressing Next.
+- Never press alt+left or reload a half-filled form: the data is lost.
+- If a dropdown or search stays stuck (spinner, `busy`) after two tries, check whether the session expired before retrying.
+- One `get_elements` per step, then `batch` the fills. Use `wait` with `text` to confirm a submit.

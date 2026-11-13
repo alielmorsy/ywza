@@ -193,6 +193,109 @@ fn ids_carry_over_and_diff() {
 }
 
 #[test]
+fn big_diff_collapses() {
+    let many = |base: i32, n: i32| {
+        (0..n).map(move |i| Raw {
+            rect: Rect::new(10, 10, 100, 20),
+            ..raw("button", "B", base + i)
+        })
+    };
+    let old = snap(many(100, 30).collect(), None);
+    let new = snap(many(200, 25).collect(), Some(&old));
+    let d = diff(&old, &new);
+    let lines: Vec<&str> = d.lines().collect();
+    assert_eq!(lines[0], "30 removed, 25 added (sample; get_elements lists all)");
+    assert_eq!(lines[1], "-[1] -[2] -[3] -[4] -[5] -[6] -[7] -[8] …");
+    assert_eq!(lines[2], "+[31] button \"B\"");
+    assert_eq!(lines.len(), 2 + 12 + 1);
+    assert_eq!(lines[14], "+… 13 more added");
+    // Small changes stay listed in full.
+    let few = snap(many(100, 28).collect(), Some(&old));
+    assert_eq!(diff(&old, &few), "-[29]\n-[30]\n");
+}
+
+#[test]
+fn unnamed_clickables_borrow_labels() {
+    let click = |key: i32, rect: Rect| {
+        let mut r = raw("pane", "", key);
+        r.patterns.invoke = true;
+        r.rect = rect;
+        r
+    };
+    let mut item = raw("listitem", "Job Board", 1);
+    item.rect = Rect::new(10, 40, 300, 24);
+    let hit = click(2, Rect::new(12, 42, 20, 20)); // follows the named row it overlaps
+    let row = click(3, Rect::new(10, 100, 300, 24)); // wraps the option text
+    let circle = click(4, Rect::new(12, 102, 20, 20)); // left of the option text
+    let mut text = raw("text", "Immediately", 5);
+    text.rect = Rect::new(40, 104, 100, 16);
+    let lone = click(6, Rect::new(10, 300, 20, 20));
+    let s = snap(vec![item, hit, row, circle, text, lone], None);
+    let lines: Vec<String> = s.elements.iter().map(|e| e.line()).collect();
+    assert_eq!(
+        lines,
+        [
+            "[1] listitem \"Job Board\"",
+            "[2] clickable \"Job Board\"",
+            "[3] clickable \"Immediately\"",
+            "[4] clickable \"Immediately\"",
+            "[5] clickable",
+        ]
+    );
+    // The live node is still unnamed: not a reason to call it stale.
+    let mut live = click(2, Rect::new(12, 42, 20, 20));
+    assert_eq!(recheck(&s.elements[1], &live, &WIN, &WIN), Ok(()));
+    live.name = "Other".into();
+    assert!(recheck(&s.elements[1], &live, &WIN, &WIN).is_err());
+}
+
+#[test]
+fn state_flags_and_groups() {
+    let mut yes = raw("radio", "Yes", 1);
+    yes.patterns.select = true;
+    yes.selected = true;
+    yes.group = "Are you 18 or older?".into();
+    let mut spin = raw("spinner", "Day", 2);
+    spin.value = Some("1".into());
+    let mut list = raw("listitem", "Loading", 3);
+    list.busy = true;
+    let s = snap(vec![yes, spin, list], None);
+    let lines: Vec<String> = s.elements.iter().map(|e| e.line()).collect();
+    assert_eq!(
+        lines,
+        [
+            "[1] radio \"Yes\" in \"Are you 18 or older?\" selected",
+            "[2] spinner \"Day\" = \"1\"",
+            "[3] listitem \"Loading\" busy",
+        ]
+    );
+    let mut raws = sample();
+    raws[3].selected = true;
+    let old = snap(sample(), None);
+    assert_eq!(
+        diff(&old, &snap(raws, Some(&old))),
+        "~[4] checkbox \"Auto-update\" = off selected\n"
+    );
+}
+
+#[test]
+fn page_only_skips_browser_chrome() {
+    let mut tab = raw("tabitem", "Inbox", 1);
+    tab.rect = Rect::new(0, 0, 200, 30);
+    let mut doc = raw("document", "Inbox", 2);
+    doc.rect = Rect::new(0, 100, 1200, 700);
+    let mut next = raw("button", "Next", 3);
+    next.rect = Rect::new(500, 600, 80, 30);
+    let mut menu = raw("menuitem", "Copy", 4);
+    menu.rect = Rect::new(0, 0, 100, 20);
+    menu.bounds = Some(Rect::new(0, 0, 100, 100));
+    let s = snap(vec![tab, doc, next, menu], None);
+    let page = s.render_page();
+    assert!(!page.contains("tabitem") && page.contains("Next") && page.contains("Copy"));
+    assert!(s.render().contains("tabitem"));
+}
+
+#[test]
 fn needs_ocr_counts_named_interactive() {
     let mut s = snap(
         vec![

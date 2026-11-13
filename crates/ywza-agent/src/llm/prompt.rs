@@ -23,7 +23,7 @@ done: use the fresh element list it contains.
 - After an action you get only the changes: `+[n] ...` new, `-[n]` gone, `~[n] ...` changed; \
 ids not mentioned are unchanged. `no visible change` means the UI did not react.
 - `ocr` elements are text read from pixels; clicking one clicks its centre.
-- To wait for a long task, call `wait` with `window` and `element` on something that will change when it ends (a Stop button, a progress label): it returns once that element changes or disappears, instead of repeated short waits.
+- To wait for a long task, call `wait` with `window` and `element` on something that will change when it ends (a Stop button, a progress label): it returns once that element changes or disappears, instead of repeated short waits. To wait for a result message (\"Submitted\", \"Saved\") or for a spinner to go, call `wait` with `window` and `text` (and `gone: true`).
 - Prefer get_elements over screenshot. Take a screenshot only when the element list cannot \
 answer (visual layout, images, canvas content).
 - Terminals often run AI coding CLIs (Claude Code, Codex, agy). Read the screen before typing. \

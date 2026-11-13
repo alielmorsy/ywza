@@ -1,6 +1,6 @@
 use super::handle::Handle;
 use super::raw::{automation, cache_request, raw_from};
-use crate::platform::windows::util::hwnd;
+use crate::platform::windows::util::{hwnd, window_id};
 use crate::platform::windows::wm;
 use crate::snapshot::Raw;
 use crate::{Rect, Result, Snapshot, WindowId};
@@ -17,11 +17,17 @@ pub fn snapshot(window: WindowId, prev: Option<&Snapshot>) -> Result<Snapshot> {
     let info = wm::window_info(window)?;
     let uia = automation()?;
     let cache = cache_request(&uia)?;
-    let mut raws = collect(&uia, &cache, window, None)?;
     // Menus and dropdowns are separate top-level windows of the same process.
-    for popup in wm::popup_windows(&info) {
+    let popups = wm::popup_windows(&info);
+    let dialogs: Vec<WindowId> = popups.iter().filter(|p| p.1).map(|p| p.0).collect();
+    let mut raws = collect(&uia, &cache, window, None, &dialogs)?;
+    for (popup, dialog) in popups {
         let bounds = wm::visible_rect(hwnd(popup));
-        for (raw, handle) in collect(&uia, &cache, popup, Some(bounds)).unwrap_or_default() {
+        if dialog {
+            raws.push((dialog_pointer(popup, bounds), None));
+            continue;
+        }
+        for (raw, handle) in collect(&uia, &cache, popup, Some(bounds), &[]).unwrap_or_default() {
             if raws
                 .iter()
                 .all(|(r, _)| r.key.is_empty() || r.key != raw.key)
@@ -33,8 +39,25 @@ pub fn snapshot(window: WindowId, prev: Option<&Snapshot>) -> Result<Snapshot> {
     Ok(Snapshot::build(info, raws, prev))
 }
 
+/// One line standing for an owned dialog: it is driven as its own window, so its
+/// elements always come from a fresh snapshot of it rather than a late merge here.
+fn dialog_pointer(id: WindowId, rect: Rect) -> Raw {
+    let title = wm::window_info(id).map(|i| i.title).unwrap_or_default();
+    Raw {
+        role: "dialog",
+        name: format!("{title} (window w{id}, get_elements it)"),
+        // Its title bar: a click on this line only activates the dialog.
+        rect: Rect { h: rect.h.min(30), ..rect },
+        bounds: Some(rect),
+        enabled: true,
+        key: vec![-1, id as i32, (id >> 32) as i32],
+        ..Raw::default()
+    }
+}
+
 /// All control-view descendants of a window in document order, each once, tagged
-/// with `bounds` for popups.
+/// with `bounds` for popups. The `skip` windows (owned dialogs UIA nests under their
+/// owner) are left out with their subtree.
 ///
 /// A TreeWalker with a RuntimeId visited set, not `FindAll(Descendants)`: WinUI 3
 /// hosts expose a WebView2 HWND twice (as a Win32 child and under the XAML WebView2
@@ -46,6 +69,7 @@ fn collect(
     cache: &IUIAutomationCacheRequest,
     window: WindowId,
     bounds: Option<Rect>,
+    skip: &[WindowId],
 ) -> Result<Vec<(Raw, Option<Handle>)>> {
     unsafe {
         let walker = uia.ControlViewWalker()?;
@@ -62,9 +86,13 @@ fn collect(
         };
         let mut seen = std::collections::HashSet::new();
         let mut raws = Vec::new();
-        let mut stack = children(&root);
+        // Each node with the name of its nearest named group (radio questions).
+        let mut stack: Vec<_> = children(&root)
+            .into_iter()
+            .map(|c| (c, String::new()))
+            .collect();
         let mut visits = 0;
-        while let Some(el) = stack.pop() {
+        while let Some((el, group)) = stack.pop() {
             visits += 1;
             if visits > MAX_NODES {
                 break;
@@ -73,8 +101,22 @@ fn collect(
             if !raw.key.is_empty() && !seen.insert(raw.key.clone()) {
                 continue;
             }
-            stack.extend(children(&el));
+            if raw.role == "dialog"
+                && !skip.is_empty()
+                && el
+                    .CachedNativeWindowHandle()
+                    .is_ok_and(|h| skip.contains(&window_id(h)))
+            {
+                continue;
+            }
+            let inner = if raw.role == "group" && !raw.name.trim().is_empty() {
+                raw.name.clone()
+            } else {
+                group.clone()
+            };
+            stack.extend(children(&el).into_iter().map(|c| (c, inner.clone())));
             raw.bounds = bounds;
+            raw.group = group;
             raws.push((raw, Some(Handle(el))));
         }
         Ok(raws)

@@ -33,7 +33,8 @@ fn wait_idle(x: &X) -> Result<()> {
 }
 
 /// Brings `window` forward (after the user has been idle), runs `act`, then puts the
-/// pointer back. Like on Windows the previous active window is deliberately not restored.
+/// pointer back. Like on Windows the previous active window is deliberately not restored,
+/// and an active dialog of the window (WM_TRANSIENT_FOR chain) keeps the focus and the input.
 pub(super) fn with_foreground<T>(
     window: Option<WindowId>,
     act: impl FnOnce(&X) -> Result<T>,
@@ -45,7 +46,9 @@ pub(super) fn with_foreground<T>(
     wait_idle(&x)?;
     let pointer = x.pointer()?;
     if let Some(id) = window {
-        x.bring_to_front(id as Window)?;
+        if !x.active().is_some_and(|a| x.transient_of(a, id as Window)) {
+            x.bring_to_front(id as Window)?;
+        }
     }
     let result = act(&x);
     x.conn.flush()?;

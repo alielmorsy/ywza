@@ -1,6 +1,7 @@
 //! Element actions: UIA patterns first, real input (foreground + SendInput) otherwise.
 //! Real input leaves the target window in the foreground (see `foreground::with_foreground`).
 
+mod clipboard;
 mod foreground;
 mod keyboard;
 mod lock;
