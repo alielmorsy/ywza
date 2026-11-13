@@ -1,7 +1,7 @@
 //! Who a connection is and what it may do: the permission gate.
 
 use iroh::EndpointId;
-use ywza_proto::{AgentMsg, ClientMsg, Permissions};
+use ywza_proto::{AgentMsg, ClientMsg, Permissions, SessionEvent};
 
 use crate::Agent;
 
@@ -31,10 +31,48 @@ pub fn visible(msg: &AgentMsg, perms: &Permissions) -> bool {
     }
 }
 
+/// Drops pictures shown to the user (`show_screenshot`) for a client that may not view the screen.
+pub fn redact(mut msg: AgentMsg, perms: &Permissions) -> AgentMsg {
+    if !perms.view {
+        let strip = |e: &mut SessionEvent| {
+            if let SessionEvent::ToolResult { image, .. } = e {
+                *image = None;
+            }
+        };
+        match &mut msg {
+            AgentMsg::Event { event, .. } => strip(event),
+            AgentMsg::Session { events, .. } => events.iter_mut().for_each(strip),
+            _ => {}
+        }
+    }
+    msg
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ywza_proto::{SessionEvent, SessionId};
+    use ywza_proto::SessionId;
+
+    #[test]
+    fn shown_images_need_view() {
+        let shown = || AgentMsg::Event {
+            session: SessionId::new(),
+            event: SessionEvent::ToolResult {
+                id: "c".into(),
+                ok: true,
+                text: String::new(),
+                has_image: false,
+                image: Some("png".into()),
+            },
+        };
+        let image = |m: AgentMsg| match m {
+            AgentMsg::Event { event: SessionEvent::ToolResult { image, .. }, .. } => image,
+            _ => unreachable!(),
+        };
+        assert!(image(redact(shown(), &Permissions::all())).is_some());
+        let chat_only = Permissions { view: false, ..Permissions::all() };
+        assert!(image(redact(shown(), &chat_only)).is_none());
+    }
 
     const NONE: Permissions = Permissions {
         view: false,

@@ -3,7 +3,7 @@ import { approve } from "../api";
 import { Composer } from "./Composer";
 import { Feed } from "./Feed";
 import { Scope, useDriveHint } from "./Scope";
-import { isActive, pendingOf, useRuns, type Run } from "./runs";
+import { devicesOf, isActive, pendingOf, useRuns, type Run } from "./runs";
 import { openRun, setFocus, useLabel, useM } from "./store";
 
 const PEEK = 148;
@@ -30,9 +30,12 @@ export function Sheet() {
   const detail = tab === "runs" ? runs.find((r) => r.id === runId) : undefined;
   const docked = !!detail && !live;
   const visible = !pairing && (!!live || docked || (tab === "wall" && !runId));
-  const liveRun = live ? runs.find((r) => isActive(r) && (r.current === live.dev || r.driver === live.dev)) : undefined;
-  const focused = runs.find((r) => r.id === focus);
-  const shown: Run | undefined = (live ? liveRun : detail) ?? focused ?? runs[0];
+  // The sheet continues what it shows, unless a new run was asked for (focus null): on the wall the
+  // focused run, else the latest; on a live view the run acting there, else the latest that used the device.
+  const on = (dev: string) => runs.find((r) => isActive(r) && (r.current === dev || r.driver === dev)) ?? runs.find((r) => devicesOf(r).includes(dev));
+  const liveRun = live && focus !== null ? on(live.dev) : undefined;
+  const focused = focus === null ? undefined : runs.find((r) => r.id === focus) ?? runs[0];
+  const shown: Run | undefined = live ? liveRun : detail ?? focused;
   const pend = runs.flatMap((r) => pendingOf(r).map((a) => ({ a, r })))[0];
 
   useEffect(() => { const f = () => setVh(innerHeight); addEventListener("resize", f); return () => removeEventListener("resize", f); }, []);
@@ -96,10 +99,10 @@ export function Sheet() {
             <button className="min-w-0 truncate text-left" onClick={() => openRun(shown.id)}>
               <b className="font-semibold text-text">{shown.title}</b>{shown.last && ` · ${L(shown.current)}: ${shown.last}`}
             </button>
-          ) : <span>{sel.length ? "Ready" : "No runs yet"}</span>}
+          ) : <span>{runs.length ? "New run" : "No runs yet"}</span>}
         </div>
       ) : <Feed run={shown} />}
-      <Composer run={live ? liveRun : focused} scope={live ? [live.dev] : sel} onNew={live ? undefined : () => setFocus()}
+      <Composer run={live ? liveRun : focused} scope={live ? [live.dev] : sel} onNew={() => setFocus(null)}
         onSent={() => { if (h < dets[1] && !live) snap(dets[1]); }} />
     </div>
   );

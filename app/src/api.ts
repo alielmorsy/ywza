@@ -16,7 +16,8 @@ export type SEvent =
   | { type: "assistant"; text: string }
   /** `device`: the device the call runs on, in the driver's names; absent = the driver itself. */
   | { type: "tool_call"; id: string; name: string; args: any; device?: string | null }
-  | { type: "tool_result"; id: string; ok: boolean; text: string; has_image: boolean }
+  /** `image`: PNG (base64) shown to the user only (`show_screenshot`); the model never sees it. */
+  | { type: "tool_result"; id: string; ok: boolean; text: string; has_image: boolean; image?: string | null }
   | { type: "done"; summary: string }
   | { type: "failed"; error: string };
 export interface Permissions { view: boolean; chat: boolean; control: boolean; tools: boolean; settings: boolean; drive: boolean }
@@ -251,12 +252,20 @@ function onMsg(device: string, m: AgentMsg) {
   switch (m.type) {
     case "welcome":
       if (device === LOCAL) set((s) => ({ ...s, sessions: Object.fromEntries(m.session_list.map((x) => [x.id, x])) }));
-      else setRemote(device, m.session_list);
+      else {
+        setRemote(device, m.session_list);
+        // Reconnected: what changed while away is unknown. Waiting approvals come again on connect
+        // (and with each session), so drop ours, and reload the histories already shown.
+        set((s) => ({ ...s, remoteApprovals: Object.fromEntries(Object.entries(s.remoteApprovals).filter(([, a]) => a.resolved || a.device !== device)) }));
+        for (const x of m.session_list) if (state.events[x.id]) send(device, { type: "get_session", session: x.id });
+      }
       return patch(device, () => ({ connected: true, version: m.agent_version, nodeId: m.node_id, os: m.os, permissions: m.permissions ?? null, llm: m.llm }));
     case "event":
       return set((s) => {
         const local = device === LOCAL;
         const cur = (local ? s.sessions : s.remote)[m.session];
+        // Two paired names can reach the same agent; take a session's events from its driver only.
+        if (!local && cur?.driver && cur.driver !== device) return s;
         // Any event but done/failed means it runs (again): a follow-up revives a finished session.
         const status: SessionStatus = m.event.type === "done" ? "done" : m.event.type === "failed" ? "failed" : "running";
         const title = cur?.title || (m.event.type === "user" ? m.event.text : "");
@@ -287,6 +296,8 @@ function onMsg(device: string, m: AgentMsg) {
     case "approval_request": {
       const a: Approval = { request: m.request, session: m.session, tool: m.tool, summary: m.summary, detail: m.detail };
       if (device === LOCAL) return set((s) => ({ ...s, approvals: { ...s.approvals, [m.request]: a } }));
+      const driver = state.remote[m.session]?.driver;
+      if (driver && driver !== device) return; // same agent under another name, see "event"
       return set((s) => ({ ...s, remoteApprovals: { ...s.remoteApprovals, [`${device}:${m.request}`]: { ...a, device } } }));
     }
     case "approval_resolved": {

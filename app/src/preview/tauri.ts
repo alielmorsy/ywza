@@ -121,6 +121,16 @@ function runPrompt(out: (m: unknown) => void, msg: any) {
   if (!s) sessions.push((s = { id: sid, title: msg.text, status: "running", updated_ms: Date.now(), device: msg.device ?? null }));
   s.status = "running";
   add({ type: "user", text: msg.text });
+  if (/show/i.test(msg.text)) { // show_screenshot: the picture goes to the user only
+    const c = Object.assign(document.createElement("canvas"), { width: 960, height: 600 });
+    const g = c.getContext("2d")!;
+    g.fillStyle = "#1e2a3a"; g.fillRect(0, 0, 960, 600);
+    g.fillStyle = "#e8e6df"; g.font = "48px sans-serif"; g.fillText("Settings - Notepad (preview)", 60, 300);
+    later(sid, 600, () => add({ type: "tool_call", id: "s1", name: "show_screenshot", args: { window: "w3" } }));
+    later(sid, 1200, () => add({ type: "tool_result", id: "s1", ok: true, text: "showed a screenshot of w3 to the user; you do not see it", has_image: false, image: c.toDataURL("image/png").split(",")[1] }));
+    later(sid, 1600, () => add({ type: "done", summary: "Here is the window." }));
+    return;
+  }
   later(sid, 500, () => add({ type: "assistant", text: `(preview) Looking at ${msg.device ?? "this PC"}.` }));
   later(sid, 1000, () => add({ type: "tool_call", id: "p1", name: "get_elements", args: { window: "w3" } }));
   later(sid, 1900, () => add({ type: "tool_result", id: "p1", ok: true, text: "8 elements in w3 Settings (notepad.exe)", has_image: false }));
@@ -170,7 +180,9 @@ function agent(device: string, msg: any) {
         rect: rect(220, 140, 1180, 760), ...(msg.elements ? { elements } : {}),
       });
     case "create_pairing": return out({ type: "pairing_code", code: "482913", expires_in_secs: 600 });
-    case "prompt": if (device === "local") runPrompt(out, msg); return;
+    // berkeley has an assistant of its own, so the phone UI (`?mobile`) can drive runs through it.
+    case "prompt": if (device === "local" || device === "berkeley") runPrompt(out, msg); return;
+    case "list_devices": return out({ type: "devices", list: devices.map((name) => ({ name, node_id: `node-${name}` })) });
     case "approve": return pending.get(msg.request)?.decide(msg.allow);
     case "cancel": return cancel(out, msg.session);
     case "live_start": return out({ type: "error", message: "Live view needs the real app (preview mode)." });
@@ -190,7 +202,7 @@ const mcp = new Set<string>();
 const connect = (name: string) => {
   if (online.has(name)) {
     emit("connection", { device: name, connected: true, detail: "" });
-    emit("agent-msg", { device: name, msg: { type: "welcome", agent_version: "0.4.2", node_id: "b204ee71c3a95d10f6aa", os: OS, session_list: [], permissions: { view: true, chat: true, control: true, tools: true, settings: false } } });
+    emit("agent-msg", { device: name, msg: { type: "welcome", agent_version: "0.4.2", node_id: `node-${name}`, os: OS, session_list: [], llm: name === "berkeley", permissions: { view: true, chat: true, control: true, tools: true, settings: false, drive: true } } });
   } else emit("connection", { device: name, connected: false, detail: "no route to device (offline)" });
 };
 
@@ -226,3 +238,6 @@ export async function invoke<T>(cmd: string, args: any = {}): Promise<T> {
 
 /** Stands in for @tauri-apps/plugin-opener. */
 export async function openUrl(url: string) { window.open(url, "_blank", "noopener"); }
+/** The barcode scanner plugin imports these from core; the browser has no plugin to ask. */
+export const checkPermissions = async () => "denied";
+export const requestPermissions = async () => "denied";

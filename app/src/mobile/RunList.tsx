@@ -3,7 +3,7 @@ import { devicesOf, elapsed, isActive, STATE_TEXT, useRuns, ago, type Run, type 
 import { openRun, setTab, useLabel } from "./store";
 import { Empty, Header, useNow } from "./ui";
 
-export const STATE_CLASS: Record<RunState, string> = { working: "text-accent", needs: "text-warn", done: "text-text", failed: "text-bad", offline: "text-text-2" };
+export const STATE_CLASS: Record<RunState, string> = { working: "text-accent", needs: "text-warn", done: "text-text", stopped: "text-text-2", failed: "text-bad", offline: "text-text-2" };
 
 function RunCard({ r }: { r: Run }) {
   const L = useLabel();

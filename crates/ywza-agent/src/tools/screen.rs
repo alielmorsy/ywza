@@ -126,6 +126,37 @@ impl Tool for Screenshot {
     }
 }
 
+/// Long side of pictures shown to the user: sharp on a phone, small enough to keep in the history.
+const USER_IMAGE_MAX: u32 = 1920;
+
+/// Shows the user a screenshot of a window in their chat. You do not get the picture: use it when the user asks to see a window, or to show them a result.
+#[derive(Deserialize, JsonSchema)]
+pub struct ShowScreenshot {
+    /// Window id from list_windows/launch, e.g. "w3412106".
+    window: WindowArg,
+}
+
+impl Tool for ShowScreenshot {
+    const NAME: &'static str = SHOW_SCREENSHOT;
+
+    async fn run(self, _cx: &Ctx) -> ToolOutput {
+        flat(async {
+            let id = self.window.0;
+            let img = capture(&Target::Window { id }).await.map_err(desk_err)?;
+            let png = desk::encode_png(&downscale(img, USER_IMAGE_MAX)).map_err(desk_err)?;
+            Ok(ToolOutput {
+                text: format!("showed a screenshot of w{id} to the user; you do not see it"),
+                ok: true,
+                image_png: Some(png),
+                supersedes_key: None,
+            })
+        })
+        .await
+    }
+}
+
+pub const SHOW_SCREENSHOT: &str = "show_screenshot";
+
 /// The element lists to draw on a capture of `target`.
 async fn marks_snapshots(cx: &Ctx, target: &Target) -> Result<Vec<Snapshot>, ToolOutput> {
     match *target {

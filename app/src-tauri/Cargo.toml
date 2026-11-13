@@ -21,6 +21,7 @@ ywza-proto = { path = "../../crates/ywza-proto" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 iroh = "1.4.1"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 tokio = { version = "1", features = ["rt", "sync", "time", "macros"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]

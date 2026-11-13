@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { loadSession, useStore } from "../api";
 import { Markdown } from "../views/chat/Markdown";
 import { stopRun } from "./actions";
+import { ShownImage } from "../views/chat/ShownImage";
 import { ApproveCard } from "./ApproveCard";
 import { STATE_CLASS } from "./RunList";
 import { ago, isActive, pendingOf, STATE_TEXT, type Item, type Run } from "./runs";
@@ -16,8 +17,9 @@ function phased(items: Item[]) {
   return items.map((x) => {
     const p = x.k === "step" ? "act" : seen ? "check" : "plan";
     if (x.k === "step") seen = true;
-    const label = p !== last && x.k !== "err" ? PHASE[p] : "";
-    if (x.k !== "err") last = p;
+    const own = x.k !== "err" && x.k !== "img";
+    const label = p !== last && own ? PHASE[p] : "";
+    if (own) last = p;
     return { x, label };
   });
 }
@@ -36,7 +38,7 @@ export function RunDetail({ run }: { run: Run }) {
         <Back onClick={closeRun} label="Back to runs" />
         <div className="min-w-0 flex-1">
           <b className="block truncate text-[15px]">{run.title}</b>
-          <small className="text-[11.5px] text-text-2"><span className={STATE_CLASS[run.state]}>{STATE_TEXT[run.state]}</span> Â· {ago(run.updated)}</small>
+          <small className="text-[11.5px] text-text-2"><span className={STATE_CLASS[run.state]}>{STATE_TEXT[run.state]}</span> · {ago(run.updated)}</small>
         </div>
         <span className="flex-none rounded-full border border-line px-2.5 py-1 text-[11px] text-primary">Driver: {L(run.driver)}</span>
       </header>
@@ -54,6 +56,7 @@ export function RunDetail({ run }: { run: Run }) {
               <div key={x.k === "step" ? x.key : j}>
                 {label && <Label>{label}</Label>}
                 {x.k === "step" ? <StepLine step={x} />
+                  : x.k === "img" ? <ShownImage png={x.png} className="mb-2" />
                   : x.k === "say" ? <div className="mb-2 max-w-[92%] rounded-[10px] border border-line-soft bg-surface px-3 py-2 select-text"><Markdown>{x.text}</Markdown></div>
                   : <p className="mb-2 rounded-[10px] border border-bad px-3 py-2 break-words text-bad select-text">{x.text}</p>}
               </div>
@@ -67,6 +70,7 @@ export function RunDetail({ run }: { run: Run }) {
         {run.state === "working" && !pend.length && <p className="animate-pulse px-1 py-2 text-text-3" role="status">Working</p>}
         {run.state === "offline" && <p className="py-2 text-text-2">Driver offline. Reconnect {L(run.driver)} to continue this run.</p>}
         {run.state === "failed" && <p className="py-2 text-text-2">Run failed. Send a follow-up below to try again.</p>}
+        {run.state === "stopped" && <p className="py-2 text-text-2">You stopped this run. Send a follow-up below to continue it.</p>}
         {isActive(run) && (
           <div className="mt-4 mb-6 flex gap-2">
             <button className="m-btn danger" onClick={() => stopRun(run)}>Stop run</button>

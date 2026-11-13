@@ -6,7 +6,10 @@ use tokio_util::sync::CancellationToken;
 use ywza_proto::{SessionEvent, SessionId};
 
 use super::{client::complete, push_tool_result, Executor, Msg};
-use crate::{tools::ToolOutput, Agent};
+use crate::{
+    tools::{ToolOutput, SHOW_SCREENSHOT},
+    Agent,
+};
 
 /// Per-run overrides of the configured model and reasoning effort.
 #[derive(Debug, Default, Clone)]
@@ -104,8 +107,8 @@ pub async fn run(
                     }
                 }
             };
-            agent.emit_tool_result(sid, &id, &out);
-            if let (Some(png), true) = (&out.image_png, llm.vision) {
+            agent.emit_tool_result(sid, &id, name, &out);
+            if let (Some(png), true, false) = (&out.image_png, llm.vision, name == SHOW_SCREENSHOT) {
                 images.push(json!({"type":"image_url","image_url":{
                     "url": format!("data:image/png;base64,{}", BASE64.encode(png))}}));
             }

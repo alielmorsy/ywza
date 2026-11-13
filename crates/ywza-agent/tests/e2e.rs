@@ -298,7 +298,7 @@ async fn local_tcp_port_lists_and_calls_tools() {
     let AgentMsg::Tools { list } = reply(&mut s).await else {
         panic!("expected tools")
     };
-    assert_eq!(list.len(), 22);
+    assert_eq!(list.len(), 23);
     assert!(list
         .iter()
         .any(|t| t.name == "wait" && t.parameters["type"] == "object"));
@@ -368,4 +368,27 @@ async fn direct_tool_calls_run_without_asking() {
             ..
         }
     ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn shown_screenshot_reaches_the_user_but_not_the_model() {
+    // shortcut: captures whatever real window is on top, which can hang or vanish mid-test (seen
+    // once, 90 s); give the test its own window if it flakes.
+    let Some(w) = ywza_desktop::list_windows()
+        .ok()
+        .and_then(|l| l.into_iter().find(|w| !w.minimized && !w.hidden))
+    else {
+        return eprintln!("no desktop window to capture; skipped");
+    };
+    let (_dir, _client, mut c) = start(true).await;
+    let (events, _) = run_prompt(&mut c, &format!("show w{}", w.id)).await;
+    assert!(
+        events.iter().any(|e| matches!(e,
+            SessionEvent::ToolResult { ok: true, has_image: false, image: Some(png), .. } if !png.is_empty())),
+        "{events:?}"
+    );
+    assert!(
+        matches!(events.last(), Some(SessionEvent::Done { summary }) if summary == "all done"),
+        "the model must not get the picture: {events:?}"
+    );
 }

@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { approve, type Approval } from "../api";
+import { approve, useStore, type Approval } from "../api";
 import { Icon } from "../Icon";
 import { DevChip } from "./ui";
 
 /** A tool call waiting on you. `device`: where it runs; `run`: shown when the card is not already inside that run. */
 export function ApproveCard({ a, device, run }: { a: Approval; device?: string; run?: string }) {
   const [remember, setRemember] = useState(false);
-  const go = (allow: boolean, always = false) => approve(a.request, allow, always, a.device);
+  const [sent, setSent] = useState(false); // until the agent answers with approval_resolved
+  // The agent ignores "remember" from a client without the settings permission.
+  const canRemember = useStore((s) => !a.device || s.devices[a.device]?.permissions?.settings !== false);
+  const go = (allow: boolean, always = false) => { setSent(true); setTimeout(() => setSent(false), 8000); approve(a.request, allow, always, a.device); };
 
   if (a.resolved) {
     return (
@@ -32,16 +35,16 @@ export function ApproveCard({ a, device, run }: { a: Approval; device?: string; 
         </details>
       )}
       <div className="flex flex-wrap gap-2">
-        <button className="m-btn primary sm" onClick={() => go(true)}>Allow</button>
-        <button className="m-btn sm" onClick={() => go(false)}>Deny</button>
-        <button className="m-btn ghost sm" aria-expanded={remember} onClick={() => setRemember(!remember)}>Always allow</button>
+        <button className="m-btn primary sm" disabled={sent} onClick={() => go(true)}>Allow</button>
+        <button className="m-btn sm" disabled={sent} onClick={() => go(false)}>Deny</button>
+        {canRemember && <button className="m-btn ghost sm" disabled={sent} aria-expanded={remember} onClick={() => setRemember(!remember)}>Always allow</button>}
       </div>
       {remember && (
         <div className="flex flex-col gap-2 border-t border-line pt-2.5">
           <p className="text-xs text-text-2">Allow every future call to <b className="text-text">{a.tool}</b> with any arguments. This changes {a.device ?? "this device"}'s approval rules; remove the rule in its Settings.</p>
           <div className="flex gap-2">
             <button className="m-btn sm" onClick={() => setRemember(false)}>Cancel</button>
-            <button className="m-btn primary sm" onClick={() => go(true, true)}>Allow and remember</button>
+            <button className="m-btn primary sm" disabled={sent} onClick={() => go(true, true)}>Allow and remember</button>
           </div>
         </div>
       )}

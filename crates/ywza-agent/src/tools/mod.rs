@@ -30,7 +30,7 @@ pub use args::{parse_window, ElementArg, TermArg, WindowArg};
 pub use batch::{format_steps, parse_batch, Step, StepResult, BATCH_TOOLS};
 pub use ctx::{Ctx, ToolSpec, Tools};
 pub use output::{downscale, ToolOutput, MODEL_IMAGE_MAX};
-pub use screen::{capture, monitor_info, monitor_line, monitors_text};
+pub use screen::{capture, monitor_info, monitor_line, monitors_text, SHOW_SCREENSHOT};
 pub use util::blocking;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -92,6 +92,7 @@ pub fn registry() -> Vec<Entry> {
         entry::<input::PressKeys>(),
         entry::<input::Scroll>(),
         entry::<screen::Screenshot>(),
+        entry::<screen::ShowScreenshot>(),
         entry::<terminal::TermList>(),
         entry::<terminal::TermStart>(),
         entry::<terminal::TermRead>(),
@@ -129,6 +130,7 @@ mod tests {
                 "press_keys",
                 "scroll",
                 "screenshot",
+                "show_screenshot",
                 "term_list",
                 "term_start",
                 "term_read",

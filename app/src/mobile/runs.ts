@@ -2,9 +2,9 @@
 import { getState, useStore, type Approval, type Sid, type State } from "../api";
 import { phoneName } from "./devices";
 
-export type RunState = "working" | "needs" | "done" | "failed" | "offline";
+export type RunState = "working" | "needs" | "done" | "stopped" | "failed" | "offline";
 export interface Step { k: "step"; key: string; device: string; text: string; bad: boolean; live: boolean }
-export type Item = Step | { k: "say"; text: string } | { k: "err"; text: string };
+export type Item = Step | { k: "say"; text: string } | { k: "err"; text: string } | { k: "img"; png: string };
 /** One user message and what the driver did about it: says before the first step are the plan, steps the acts, later says the check. */
 export interface Turn { user: string; items: Item[] }
 export interface Run {
@@ -29,7 +29,7 @@ function build(s: State): Run[] {
     const answered = new Set<string>();
     let cur: Turn | undefined;
     const turn = () => cur ?? (cur = turns[turns.push({ user: "", items: [] }) - 1]);
-    let lastSay = "";
+    let lastSay = "", stopped = false;
     for (const e of s.events[x.id] ?? []) {
       if (e.type === "user") cur = turns[turns.push({ user: e.text, items: [] }) - 1];
       else if (e.type === "assistant") { if (e.text.trim()) { lastSay = e.text.trim(); turn().items.push({ k: "say", text: e.text }); } }
@@ -41,15 +41,19 @@ function build(s: State): Run[] {
         answered.add(e.id);
         const st = steps.get(e.id);
         if (st) st.bad = !e.ok;
+        if (e.image) turn().items.push({ k: "img", png: e.image });
       } else if (e.type === "done") { if (e.summary.trim() && e.summary.trim() !== lastSay) turn().items.push({ k: "say", text: e.summary }); }
-      else if (e.type === "failed") turn().items.push({ k: "err", text: e.error });
+      else if (e.type === "failed") {
+        stopped = e.error === "cancelled"; // what the agent reports for a cancel
+        turn().items.push(stopped ? { k: "say", text: "Stopped." } : { k: "err", text: e.error });
+      }
     }
     const all = [...steps.values()];
     const end = all[all.length - 1];
     if (end && x.status === "running" && !answered.has(end.key)) end.live = true;
     if (x.status === "running" && !since.has(x.id)) since.set(x.id, Date.now());
     const mine = apps.filter((a) => a.device === driver && a.session === x.id);
-    const state: RunState = x.status === "failed" ? "failed" : x.status === "done" ? "done" : !s.devices[driver]?.connected ? "offline" : mine.some((a) => !a.resolved) ? "needs" : "working";
+    const state: RunState = x.status === "failed" ? (stopped ? "stopped" : "failed") : x.status === "done" ? "done" : !s.devices[driver]?.connected ? "offline" : mine.some((a) => !a.resolved) ? "needs" : "working";
     return {
       id: x.id, title: x.title || "Untitled run", driver, state, turns, steps: all, approvals: mine, updated: x.updated_ms,
       since: x.status === "running" ? since.get(x.id) : undefined,
@@ -71,7 +75,7 @@ export function useRuns(): Run[] {
 
 export const isActive = (r: Run) => r.state === "working" || r.state === "needs";
 export const pendingOf = (r: Run) => r.approvals.filter((a) => !a.resolved);
-export const STATE_TEXT: Record<RunState, string> = { working: "Running", needs: "Needs you", done: "Done", failed: "Failed", offline: "Driver offline" };
+export const STATE_TEXT: Record<RunState, string> = { working: "Running", needs: "Needs you", done: "Done", stopped: "Stopped", failed: "Failed", offline: "Driver offline" };
 
 /** Every device a run touched or may use, driver first. */
 export const devicesOf = (r: Run) => [...new Set([...r.scope, ...r.steps.map((x) => x.device)])];

@@ -14,7 +14,8 @@ interface M {
   /** Wall selection: extra devices the driver may use. */
   sel: string[];
   driver?: string;
-  focus?: Sid;
+  /** The run the wall sheet shows and continues; null: a new run, unset: the latest run. */
+  focus?: Sid | null;
   toast?: { text: string; at: number };
   /** Display names; the protocol has no rename, so these live on this phone only. */
   alias: Record<string, string>;
@@ -45,7 +46,7 @@ export const lockLive = (locked: boolean) => m.live && set({ live: { ...m.live, 
 export const closeLive = () => set({ live: null });
 export const setPairing = (pairing: boolean) => set({ pairing });
 export const setMenu = (menu: string | null) => set({ menu });
-export const setFocus = (focus?: Sid) => set({ focus });
+export const setFocus = (focus?: Sid | null) => set({ focus });
 export const toggleSel = (name: string) => set({ sel: m.sel.includes(name) ? m.sel.filter((n) => n !== name) : [...m.sel, name] });
 export const clearSel = () => set({ sel: [] });
 export const setDriver = (driver: string) => { save("ywza.m.driver", driver); set({ driver }); };

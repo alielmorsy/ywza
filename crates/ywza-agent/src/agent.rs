@@ -123,14 +123,21 @@ impl Agent {
         }
     }
 
-    pub fn emit_tool_result(&self, sid: SessionId, id: &str, out: &ToolOutput) {
+    /// `name`: the tool; `show_screenshot`'s image goes to the user in the event, never to the model.
+    pub fn emit_tool_result(&self, sid: SessionId, id: &str, name: &str, out: &ToolOutput) {
+        let shown = name == crate::tools::SHOW_SCREENSHOT;
         self.emit(
             sid,
             SessionEvent::ToolResult {
                 id: id.into(),
                 ok: out.ok,
                 text: out.text.clone(),
-                has_image: out.image_png.is_some(),
+                has_image: out.image_png.is_some() && !shown,
+                image: out
+                    .image_png
+                    .as_ref()
+                    .filter(|_| shown)
+                    .map(|p| data_encoding::BASE64.encode(p)),
             },
         );
     }

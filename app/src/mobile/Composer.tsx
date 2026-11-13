@@ -16,7 +16,7 @@ export function Composer({ run, scope, onSent, onNew }: { run?: Run; scope: stri
 
   const go = (e: FormEvent) => {
     e.preventDefault();
-    if (running) return stopRun(run);
+    if (running) return toast("Still running. Stop it to send this"); // Enter must never stop a run
     const t = text.trim();
     if (!t || block) return;
     const err = submit(t, { run, scope });
@@ -31,10 +31,10 @@ export function Composer({ run, scope, onSent, onNew }: { run?: Run; scope: stri
         <button type="button" className="m-btn" onClick={onNew} aria-label="New run"><Icon name="plus" /></button>
       )}
       <input value={text} onChange={(e) => setText(e.target.value)} disabled={!!block} enterKeyHint="send" autoComplete="off" aria-label="Message"
-        placeholder={block || (running ? "Running, stop it to send" : run ? "Continue this run" : "Describe a task")}
+        placeholder={block || (running ? "Running. Type ahead, stop to send" : run ? "Continue this run" : "Describe a task")}
         className="h-11 min-w-0 flex-1 rounded-[10px] border border-line bg-surface px-3 outline-none placeholder:text-text-3 focus:border-accent focus:shadow-[0_0_0_3px_var(--c-accent-soft)] disabled:opacity-50" />
       {running
-        ? <button type="submit" className="m-btn"><Icon name="stop" />Stop</button>
+        ? <button type="button" className="m-btn danger" onClick={() => stopRun(run)}><Icon name="stop" />Stop</button>
         : <button type="submit" className="m-btn primary" disabled={!text.trim() || !!block}><Icon name="send" />Send</button>}
     </form>
   );

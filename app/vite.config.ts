@@ -1,7 +1,9 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import tailwindcss from "@tailwindcss/vite";
 
-const preview = "/src/preview/tauri.ts";
+// Absolute: the dependency optimizer resolves aliases of node_modules imports (barcode scanner) too.
+const preview = fileURLToPath(new URL("./src/preview/tauri.ts", import.meta.url));
 // Set by `tauri android dev` so the phone can reach the dev server.
 const host = process.env.TAURI_DEV_HOST;
 

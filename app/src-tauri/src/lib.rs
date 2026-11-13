@@ -13,6 +13,8 @@ mod mobile;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // reqwest is built without a TLS provider; the phone has no local agent to install one.
+    let _ = rustls::crypto::ring::default_provider().install_default();
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(conn::Hub::default())

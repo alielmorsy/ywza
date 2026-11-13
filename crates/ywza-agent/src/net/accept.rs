@@ -61,7 +61,8 @@ async fn serve_client(agent: Arc<Agent>, incoming: Incoming) -> anyhow::Result<(
         permissions: (!local).then_some(perms),
         llm: agent.config.get().llm.configured(),
     })?;
-    if local {
+    // A reconnecting phone must see what is still waiting on it, like the approval broadcasts.
+    if local || perms.chat || perms.tools {
         for request in agent.approvals.requests(None) {
             direct.send(request)?;
         }

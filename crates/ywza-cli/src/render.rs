@@ -66,6 +66,7 @@ mod tests {
             ok: true,
             text: text.into(),
             has_image: false,
+            image: None,
         };
         assert_eq!(format_event(&res("a\nb"), false, false), "< a\n  b");
         let long = "1\n2\n3\n4\n5";

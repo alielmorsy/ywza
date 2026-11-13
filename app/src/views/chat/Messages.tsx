@@ -5,6 +5,7 @@ import { setPairing } from "../../nav";
 import { LetIn } from "../PairDialog";
 import { ApprovalCard } from "./ApprovalCard";
 import { Markdown } from "./Markdown";
+import { ShownImage } from "./ShownImage";
 import { ToolRow } from "./ToolRow";
 
 type Result = Extract<SEvent, { type: "tool_result" }>;
@@ -61,6 +62,8 @@ export function Messages({ who, events, running, approvals, fresh, alone, compac
             return <Markdown key={i} className={prose}>{e.text}</Markdown>;
           case "tool_call":
             return <div key={i} className={col}><ToolRow call={e} res={results.get(e.id)} waiting={running && i === lastCall} asking={!!newest} /></div>;
+          case "tool_result":
+            return e.image ? <div key={i} className={col}><ShownImage png={e.image} /></div> : null;
           case "done":
             return e.summary.trim() && e.summary.trim() !== lastAssistant ? <Markdown key={i} className={prose}>{e.summary}</Markdown> : null;
           case "failed":

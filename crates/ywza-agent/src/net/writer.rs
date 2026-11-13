@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc};
 use ywza_proto::{write_frame, AgentMsg, Permissions};
 
-use super::peer::visible;
+use super::peer::{redact, visible};
 
 /// Sends `direct` replies and the broadcast `events` to one client, filtered by its current `perms`.
 pub(crate) async fn write_loop<W: tokio::io::AsyncWrite + Unpin>(
@@ -24,6 +24,7 @@ pub(crate) async fn write_loop<W: tokio::io::AsyncWrite + Unpin>(
                 Err(broadcast::error::RecvError::Closed) => return,
             },
         };
+        let msg = redact(msg, &perms.lock().unwrap());
         if write_frame(&mut send, &msg).await.is_err() {
             return;
         }

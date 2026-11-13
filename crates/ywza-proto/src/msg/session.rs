@@ -65,6 +65,9 @@ pub enum SessionEvent {
         ok: bool,
         text: String,
         has_image: bool,
+        /// PNG (base64) shown to the user only (`show_screenshot`); the model never gets it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        image: Option<String>,
     },
     Done {
         summary: String,
@@ -112,6 +115,7 @@ mod tests {
                 ok: true,
                 text: "ok".into(),
                 has_image: false,
+                image: None,
             },
             json!({"type":"tool_result","id":"c1","ok":true,"text":"ok","has_image":false}),
         );

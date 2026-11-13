@@ -7905,6 +7905,7 @@ name = "ywza-app"
 version = "0.1.0"
 dependencies = [
  "iroh",
+ "rustls",
  "serde",
  "serde_json",
  "tauri",
