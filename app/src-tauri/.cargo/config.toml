@@ -1,0 +1,4 @@
+# The app resolves different dependency features than the root CLI build; a separate
+# target dir stops the two from invalidating each other's cache.
+[build]
+target-dir = "../../target/app"
