@@ -68,15 +68,7 @@ This downloads the latest installer and runs it. It installs the desktop app, th
 
 ### Releases
 
-Every [release](https://github.com/alielmorsy/ywza/releases) carries:
-
-| File | What it is |
-|---|---|
-| `ywza_<version>_x64-setup.exe` | Windows installer: app, agent service and CLI |
-| `ywza-windows-bins.zip` | Windows `ywza-agent`, `ywza` and `ywza-relay` on their own |
-| `ywza_<version>_amd64.deb` | Linux desktop app |
-| `ywza-linux-x86_64.tar.gz` | Linux `ywza-agent`, `ywza` and `ywza-relay` |
-| `ywza.apk` | Android app (arm64) |
+Windows, Linux and Android builds are on the [releases page](https://github.com/alielmorsy/ywza/releases).
 
 ## Build from source
 
