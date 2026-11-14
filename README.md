@@ -7,7 +7,7 @@
 <p align="center">
   <b>Let an AI model use your PC, from anywhere.</b><br>
   <a href="#demo">Demo</a> •
-  <a href="#build">Build</a> •
+  <a href="#install">Install</a> •
   <a href="#quick-start">Quick start</a> •
   <a href="#control-it-from-another-device">Pairing</a> •
   <a href="#use-it-from-an-mcp-client">MCP</a> •
@@ -53,7 +53,32 @@ ywza works perfectly on Windows. Linux works on X11.
   </tr>
 </table>
 
-## Build
+## Install
+
+### Windows
+
+In PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/alielmorsy/ywza/main/scripts/install.ps1 | iex
+```
+
+This downloads the latest installer and runs it. It installs the desktop app, the `ywza-agent` service and the
+`ywza` CLI, and puts them on your PATH.
+
+### Releases
+
+Every [release](https://github.com/alielmorsy/ywza/releases) carries:
+
+| File | What it is |
+|---|---|
+| `ywza_<version>_x64-setup.exe` | Windows installer: app, agent service and CLI |
+| `ywza-windows-bins.zip` | Windows `ywza-agent`, `ywza` and `ywza-relay` on their own |
+| `ywza_<version>_amd64.deb` | Linux desktop app |
+| `ywza-linux-x86_64.tar.gz` | Linux `ywza-agent`, `ywza` and `ywza-relay` |
+| `ywza.apk` | Android app (arm64) |
+
+## Build from source
 
 You need a recent [Rust toolchain](https://rustup.rs). On Windows, the MSVC build tools that rustup asks for are enough.
 
@@ -75,6 +100,17 @@ Put both on your PATH, or install them with cargo:
 ```bash
 cargo install --path crates/ywza-agent
 cargo install --path crates/ywza-cli
+```
+
+### Desktop and phone app
+
+The app needs [Node.js](https://nodejs.org) and Yarn on top of Rust, plus the
+[Tauri prerequisites](https://tauri.app/start/prerequisites/) for your platform.
+
+```bash
+yarn install
+yarn build                                     # desktop app; on Windows, the installer
+yarn android:build --apk --target aarch64      # Android APK, needs the Android SDK and NDK
 ```
 
 ### OCR

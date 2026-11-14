@@ -1,4 +1,5 @@
-# Installs the latest ywza release: irm https://<host>/install.ps1 | iex
+# Installs the latest ywza release:
+# irm https://raw.githubusercontent.com/alielmorsy/ywza/main/scripts/install.ps1 | iex
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
