@@ -11,6 +11,11 @@ pub(crate) fn type_text(window: Option<WindowId>, text: &str) -> Result<()> {
     with_foreground(window, |x| send_text(x, text))
 }
 
+/// Types `text` on an open connection, with no idle wait or focus change (live view).
+pub(crate) fn live_type(x: &X, text: &str) -> Result<()> {
+    send_text(x, text)
+}
+
 /// Presses key combos like `"ctrl+shift+s"` or `"ctrl+k ctrl+s"`, into `window` if given
 /// (brought to the front first), else into whatever has focus.
 pub fn press_keys(window: Option<WindowId>, keys: &str) -> Result<()> {

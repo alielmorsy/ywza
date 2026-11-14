@@ -25,7 +25,8 @@ pub use platform::{
     set_idle_before_input, snapshot, type_text, validate,
 };
 pub use platform::{
-    live_key, live_mouse_button, live_mouse_move, live_wheel, CursorWatch, MonitorCapture,
+    live_key, live_mouse_button, live_mouse_move, live_text, live_wheel, CursorWatch, FocusWatch,
+    MonitorCapture,
 };
 pub use settle::{wait_settled, SETTLE_TIMEOUT};
 

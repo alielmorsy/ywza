@@ -23,5 +23,5 @@ pub use list::{list_windows, window_info};
 pub use monitors::{list_monitors, set_dpi_awareness};
 pub use resize::move_window;
 
-pub(crate) use keyboard::type_text;
+pub(crate) use keyboard::{live_type, type_text};
 pub(crate) use mouse::{real_click, wheel};

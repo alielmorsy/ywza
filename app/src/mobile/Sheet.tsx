@@ -29,7 +29,7 @@ export function Sheet() {
 
   const detail = tab === "runs" ? runs.find((r) => r.id === runId) : undefined;
   const docked = !!detail && !live;
-  const visible = !pairing && (!!live || docked || (tab === "wall" && !runId));
+  const visible = !pairing && !live?.kb && (!!live || docked || (tab === "wall" && !runId));
   // The sheet continues what it shows, unless a new run was asked for (focus null): on the wall the
   // focused run, else the latest; on a live view the run acting there, else the latest that used the device.
   const on = (dev: string) => runs.find((r) => isActive(r) && (r.current === dev || r.driver === dev)) ?? runs.find((r) => devicesOf(r).includes(dev));

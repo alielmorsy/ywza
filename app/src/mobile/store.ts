@@ -3,8 +3,8 @@ import { useSyncExternalStore } from "react";
 import { onRemoved, type Sid } from "../api";
 
 export type Tab = "wall" | "runs" | "inbox";
-/** `follow`: the live view moves with the device that run acts on, unless `locked`. */
-export interface LiveState { dev: string; from?: DOMRect; follow?: Sid; locked: boolean }
+/** `follow`: the live view moves with the device that run acts on, unless `locked`. `kb`: the remote keyboard is open (the chat sheet hides). */
+export interface LiveState { dev: string; from?: DOMRect; follow?: Sid; locked: boolean; kb?: boolean }
 interface M {
   tab: Tab;
   run: Sid | null;
@@ -44,6 +44,7 @@ export const openLive = (dev: string, o: { from?: DOMRect; follow?: Sid } = {}) 
 export const switchLive = (dev: string) => m.live && set({ live: { ...m.live, dev } });
 export const lockLive = (locked: boolean) => m.live && set({ live: { ...m.live, locked } });
 export const closeLive = () => set({ live: null });
+export const setKb = (kb: boolean) => m.live && set({ live: { ...m.live, kb } });
 export const setPairing = (pairing: boolean) => set({ pairing });
 export const setMenu = (menu: string | null) => set({ menu });
 export const setFocus = (focus?: Sid | null) => set({ focus });

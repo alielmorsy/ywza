@@ -10,6 +10,8 @@
 .m-root input { font-size: 16px; }
 .m-scroll { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
 .m-scroll::-webkit-scrollbar { display: none; }
+.m-scroll-x { overflow-x: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.m-scroll-x::-webkit-scrollbar { display: none; }
 
 .m-tile { position: relative; overflow: hidden; border: 2px solid var(--c-line); border-radius: 12px; background: var(--c-surface); transition: border-color .2s; }
 .m-tile[data-st="working"] { border-color: var(--c-accent); animation: m-glow 1.8s infinite; }
@@ -59,3 +61,11 @@
 
 /* The shared monitor picker is sized for a mouse; give its buttons a thumb-sized target here. */
 .m-mon [role="radio"] { min-height: 36px; min-width: 44px; }
+
+/* Live view: where a tap landed, and the remote text field that has focus. */
+@keyframes m-ping { from { transform: translate(-50%, -50%) scale(.4); opacity: .9; } to { transform: translate(-50%, -50%) scale(1.6); opacity: 0; } }
+.m-ping { position: absolute; width: 28px; height: 28px; border: 2px solid var(--c-primary); border-radius: 50%; pointer-events: none; animation: m-ping .45s var(--ease) forwards; }
+@keyframes m-caret { 50% { opacity: .35; } }
+.m-field { position: absolute; pointer-events: none; border: 2px solid var(--c-accent); border-radius: 3px; animation: m-caret 1.1s infinite; }
+/* The keyboard button while a remote text field has focus. */
+.m-btn.m-want { border-color: var(--c-warn); color: var(--c-warn); animation: m-need 1.1s infinite; }

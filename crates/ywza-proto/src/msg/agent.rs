@@ -143,6 +143,11 @@ pub enum AgentMsg {
         hot_x: u32,
         hot_y: u32,
     },
+    /// Live view: where text would go now, relative to the streamed monitor's origin (the
+    /// caret when the app shows one, else the focused field). None: nothing takes text.
+    Focus {
+        rect: Option<ScreenRect>,
+    },
     ToolResult {
         call: u64,
         ok: bool,
@@ -389,6 +394,18 @@ mod tests {
             json!({"type":"xfer_start","xfer":1,"name":"d","files":2,"bytes":3}),
         );
         check(XferReady { xfer: 1 }, json!({"type":"xfer_ready","xfer":1}));
+        check(Focus { rect: None }, json!({"type":"focus","rect":null}));
+        check(
+            Focus {
+                rect: Some(ScreenRect {
+                    x: 4,
+                    y: 5,
+                    width: 2,
+                    height: 18,
+                }),
+            },
+            json!({"type":"focus","rect":{"x":4,"y":5,"width":2,"height":18}}),
+        );
         check(
             XferDone {
                 xfer: 1,

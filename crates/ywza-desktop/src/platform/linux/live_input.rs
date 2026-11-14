@@ -151,6 +151,12 @@ pub fn live_key(name: &str, down: bool) -> Result<()> {
     })
 }
 
+/// Types `text` at whatever has focus, as key presses.
+// shortcut: newlines are typed, not pasted, so editors may auto-indent them; paste through the X selection if Linux coding needs it.
+pub fn live_text(text: &str) -> Result<()> {
+    with_x(|x, _| super::x::live_type(x, text))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

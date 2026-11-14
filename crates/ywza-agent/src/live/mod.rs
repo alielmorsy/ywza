@@ -2,6 +2,7 @@
 //! stream (`FrameHeader` frame + Annex-B bytes), plus human input on that monitor.
 
 mod cursor;
+mod focus;
 mod input;
 mod rate;
 mod send;
@@ -10,7 +11,6 @@ use std::sync::{atomic::Ordering, Arc};
 
 use iroh::endpoint::Connection;
 use tokio::{sync::mpsc, task::JoinHandle};
-use ywza_desktop::Rect;
 use ywza_proto::{AgentMsg, InputEvent};
 use ywza_stream::Ctl;
 
@@ -19,7 +19,8 @@ pub use input::to_pixels;
 /// A client's running live view; dropping it stops capture and sending.
 pub struct Live {
     pub monitor: u32,
-    rect: Rect,
+    /// Human input, injected in order on its own thread (pasting text blocks for a while).
+    input: std::sync::mpsc::Sender<InputEvent>,
     ctl: Arc<Ctl>,
     sender: JoinHandle<()>,
 }
@@ -62,9 +63,13 @@ impl Live {
             }
         });
         if !cursor {
-            let stop = ctl.clone();
+            let (stop, to_client) = (ctl.clone(), to_client.clone());
             std::thread::spawn(move || cursor::watch(&stop, &to_client));
         }
+        let (stop, focus_to) = (ctl.clone(), to_client.clone());
+        std::thread::spawn(move || focus::watch(&stop, rect, &focus_to));
+        let (input, events) = std::sync::mpsc::channel();
+        std::thread::spawn(move || input::run(rect, events, to_client));
         let sender = tokio::spawn(send::send_loop(
             conn,
             monitor,
@@ -81,14 +86,14 @@ impl Live {
         );
         Ok(Self {
             monitor,
-            rect,
+            input,
             ctl,
             sender,
         })
     }
 
-    /// Human input from a client that holds `control`.
-    pub fn input(&self, ev: &InputEvent) -> anyhow::Result<()> {
-        input::inject(self.rect, ev)
+    /// Human input from a client that holds `control`; failures go back as `AgentMsg::Error`.
+    pub fn input(&self, ev: InputEvent) {
+        let _ = self.input.send(ev);
     }
 }

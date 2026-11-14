@@ -37,6 +37,11 @@ pub enum InputEvent {
         key: String,
         down: bool,
     },
+    /// Text for whatever has keyboard focus. More than one character is pasted, so bursts
+    /// arrive whole and editors do not auto-indent or auto-close it a second time.
+    Text {
+        text: String,
+    },
 }
 
 /// Live view: starts each unidirectional stream (as one [`crate::write_frame`] frame),
@@ -81,6 +86,12 @@ mod tests {
                 down: false,
             },
             json!({"type":"key","key":"enter","down":false}),
+        );
+        check(
+            Text {
+                text: "fn main() {}".into(),
+            },
+            json!({"type":"text","text":"fn main() {}"}),
         );
     }
 }

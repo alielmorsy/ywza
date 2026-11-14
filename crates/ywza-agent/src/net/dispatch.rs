@@ -162,17 +162,12 @@ impl Client {
     }
 
     fn input(&mut self, event: InputEvent) {
-        let r = match &self.live {
-            Some(l) => l.input(&event),
-            None => Err(anyhow::anyhow!("live view is not running")),
-        };
-        // A failing move would repeat at mouse rate; its button/key events report it.
-        let is_move = matches!(event, InputEvent::MouseMove { .. });
-        if let (Err(e), false) = (r, is_move) {
-            tracing::warn!(client = %self.name, error = %e, "input failed");
-            self.send(AgentMsg::Error {
-                message: format!("input: {e}"),
-            });
+        match &self.live {
+            Some(l) => l.input(event),
+            None if !matches!(event, InputEvent::MouseMove { .. }) => self.send(AgentMsg::Error {
+                message: "input: live view is not running".into(),
+            }),
+            None => {}
         }
     }
 }

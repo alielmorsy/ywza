@@ -61,6 +61,8 @@ export type AgentMsg =
   | { type: "tools"; list: ToolInfo[] }
   | ({ type: "window_info" } & WindowInfo)
   | { type: "cursor"; png_base64?: string | null; hot_x: number; hot_y: number }
+  /** Live view: the caret or focused text field, relative to the streamed monitor; null when nothing takes text. */
+  | { type: "focus"; rect: Rect | null }
   | { type: "tool_result"; call: number; ok: boolean; text: string; png_base64?: string | null }
   | { type: "approval_request"; request: number; session: Sid; tool: string; summary: string; detail: string }
   | { type: "approval_resolved"; request: number; allowed: boolean }
@@ -95,7 +97,9 @@ export type InputEvent =
   | { type: "mouse_move"; x: number; y: number }
   | { type: "mouse_button"; button: "left" | "right" | "middle"; down: boolean }
   | { type: "wheel"; dx: number; dy: number }
-  | { type: "key"; key: string; down: boolean };
+  | { type: "key"; key: string; down: boolean }
+  /** Typed at the remote focus; more than one character is pasted. */
+  | { type: "text"; text: string };
 
 // ---- store -------------------------------------------------------------------------------
 /** This PC's own agent. Every chat (local or remote) runs on it with our AI. */
@@ -124,6 +128,8 @@ export interface Device {
   outdated?: boolean;
   /** Live view: CSS cursor with the remote cursor's shape; unset until the agent sends one. */
   cursor?: string;
+  /** Live view: where typed text would land (monitor pixels), null when nothing takes text; unset until reported. */
+  focus?: Rect | null;
 }
 /** A tool call waiting for the user's decision (or already decided). */
 export interface Approval { request: number; session: Sid; tool: string; summary: string; detail: string; resolved?: boolean; allowed?: boolean; /** Set for approvals of paired devices' agents. */ device?: string }
@@ -190,7 +196,7 @@ const liveSent = new Map<string, number>();
 const liveRecently = (device: string) => Date.now() - (liveSent.get(device) ?? 0) < 3000;
 
 export const send = (device: string, msg: ClientMsg) => {
-  if (msg.type === "live_start") patch(device, () => ({ cursor: undefined, liveError: undefined })); // the new stream sends its own
+  if (msg.type === "live_start") patch(device, () => ({ cursor: undefined, focus: undefined, liveError: undefined })); // the new stream sends its own
   const live = msg.type === "live_start" || msg.type === "live_stop" || msg.type === "input" || msg.type === "screenshot";
   if (live) liveSent.set(device, Date.now());
   return invoke("send", { device, msg }).catch((e) => reportError(device, String(e), live));
@@ -293,6 +299,7 @@ function onMsg(device: string, m: AgentMsg) {
     case "cursor": return patch(device, () => ({
       cursor: m.png_base64 ? `url(data:image/png;base64,${m.png_base64}) ${m.hot_x} ${m.hot_y}, auto` : "none",
     }));
+    case "focus": return patch(device, () => ({ focus: m.rect }));
     case "approval_request": {
       const a: Approval = { request: m.request, session: m.session, tool: m.tool, summary: m.summary, detail: m.detail };
       if (device === LOCAL) return set((s) => ({ ...s, approvals: { ...s.approvals, [m.request]: a } }));

@@ -1,5 +1,8 @@
+use std::sync::mpsc::Receiver;
+
+use tokio::sync::mpsc::UnboundedSender;
 use ywza_desktop::{Button, Rect};
-use ywza_proto::{InputEvent, MouseButton};
+use ywza_proto::{AgentMsg, InputEvent, MouseButton};
 
 /// Normalized (0..1) monitor coordinates to virtual-screen pixels, clamped to the monitor.
 pub fn to_pixels(r: Rect, x: f32, y: f32) -> (i32, i32) {
@@ -9,7 +12,20 @@ pub fn to_pixels(r: Rect, x: f32, y: f32) -> (i32, i32) {
     (map(x, r.x, r.w), map(y, r.y, r.h))
 }
 
-pub fn inject(rect: Rect, ev: &InputEvent) -> anyhow::Result<()> {
+/// Injects events until the live view drops its sender.
+pub fn run(rect: Rect, events: Receiver<InputEvent>, to_client: UnboundedSender<AgentMsg>) {
+    for ev in events {
+        // A failing move would repeat at mouse rate; its button/key events report it.
+        if let (Err(e), false) = (inject(rect, &ev), matches!(ev, InputEvent::MouseMove { .. })) {
+            tracing::warn!(error = %e, "input failed");
+            let _ = to_client.send(AgentMsg::Error {
+                message: format!("input: {e}"),
+            });
+        }
+    }
+}
+
+fn inject(rect: Rect, ev: &InputEvent) -> anyhow::Result<()> {
     match ev {
         InputEvent::MouseMove { x, y } => {
             let (x, y) = to_pixels(rect, *x, *y);
@@ -25,6 +41,7 @@ pub fn inject(rect: Rect, ev: &InputEvent) -> anyhow::Result<()> {
         }
         InputEvent::Wheel { dx, dy } => ywza_desktop::live_wheel(*dx, *dy)?,
         InputEvent::Key { key, down } => ywza_desktop::live_key(key, *down)?,
+        InputEvent::Text { text } => ywza_desktop::live_text(text)?,
     }
     Ok(())
 }

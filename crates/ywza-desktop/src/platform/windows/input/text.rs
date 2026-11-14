@@ -197,6 +197,18 @@ fn arrived(field: &str, text: &str, append: bool) -> bool {
     }
 }
 
+/// Live view text at whatever has focus, with no lock, idle wait or foreground change:
+/// the human is driving. A single keystroke is typed; anything longer is pasted: typed
+/// bursts drop characters in lagging apps (seen in Windows 11 Notepad), and code editors
+/// would auto-indent or auto-close pasted code again.
+pub fn live_text(text: &str) -> Result<()> {
+    if text.chars().count() > 1 || pastes(text) {
+        let _held = Held::put(text)?;
+        return send(&chord(&[VK_CONTROL, VIRTUAL_KEY(b'V' as u16)]));
+    }
+    send_text(text)
+}
+
 /// Types text. Characters on an unshifted key are real key presses. Everything else
 /// goes as Unicode (VK_PACKET), paced, because both alternatives break in lagging
 /// apps (seen in Windows 11 Notepad): an injected Shift is released before the app
