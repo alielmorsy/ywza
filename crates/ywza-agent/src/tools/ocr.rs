@@ -153,8 +153,8 @@ fn pieces(l: &ywza_ocr::TextLine, img: &Image) -> Vec<(String, Rect)> {
             col(to_rect(&l.words[k + 1].rect).center().0),
         );
         let (mut best, mut run) = ((0, 0), 0);
-        for x in a..c {
-            run = if ink[x] { 0 } else { run + 1 };
+        for (x, &on) in ink.iter().enumerate().take(c).skip(a) {
+            run = if on { 0 } else { run + 1 };
             if run > best.1 {
                 best = (x + 1 - run, run);
             }

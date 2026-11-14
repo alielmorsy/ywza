@@ -50,8 +50,9 @@ fn cursor_shape(c: HCURSOR) -> Result<CursorShape> {
     let rgba = match color {
         Some(c) => {
             let (_, h, mut px) = c?;
-            let no_alpha = px.chunks_exact(4).all(|p| p[3] == 0);
-            for (i, p) in px.chunks_exact_mut(4).enumerate() {
+            let (chunks, _) = px.as_chunks_mut::<4>();
+            let no_alpha = chunks.iter().all(|p| p[3] == 0);
+            for (i, p) in chunks.iter_mut().enumerate() {
                 p.swap(0, 2); // BGRA -> RGBA
                 if no_alpha {
                     // Old-style cursor: the AND mask says which pixels are transparent.

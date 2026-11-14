@@ -60,10 +60,10 @@ fn bilinear(
     let (tx, ty) = (fx - x0 as f32, fy - y0 as f32);
     let at = |sx: usize, sy: usize, k: usize| src[(sy * sw + sx) * 3 + k] as f32;
     let mut c = [0u32; 3];
-    for k in 0..3 {
+    for (k, out) in c.iter_mut().enumerate() {
         let top = at(x0, y0, k) * (1.0 - tx) + at(x1, y0, k) * tx;
         let bot = at(x0, y1, k) * (1.0 - tx) + at(x1, y1, k) * tx;
-        c[k] = (top * (1.0 - ty) + bot * ty + 0.5) as u32;
+        *out = (top * (1.0 - ty) + bot * ty + 0.5) as u32;
     }
     c
 }

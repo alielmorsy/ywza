@@ -189,7 +189,7 @@ mod tests {
         store.set(old).unwrap();
         assert_eq!(store.get().peer("x").unwrap().perms, Permissions::all());
 
-        let mut rx = store.subscribe();
+        let rx = store.subscribe();
         store.trust("y".into(), "laptop".into()).unwrap();
         assert!(rx.has_changed().unwrap());
         let y = store.peer("y").unwrap();

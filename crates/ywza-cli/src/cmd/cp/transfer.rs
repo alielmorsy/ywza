@@ -74,6 +74,7 @@ where
     F: Fn(RecvStream) -> Fut,
     Fut: std::future::Future<Output = Result<u64>> + Send + 'static,
 {
+    #[allow(clippy::large_enum_variant)]
     enum Ev {
         Msg(Result<AgentMsg>),
         Stream(Result<RecvStream, iroh::endpoint::ConnectionError>),

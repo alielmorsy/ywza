@@ -173,7 +173,7 @@ impl Agent {
                     &mut history,
                     &cancel,
                     &run.opts,
-                    &llm::Local(&*self),
+                    &llm::Local(&self),
                 )
                 .await
             }
@@ -192,7 +192,7 @@ impl Agent {
                 match failed {
                     None => {
                         let multi = llm::Multi {
-                            agent: &*self,
+                            agent: &self,
                             devices,
                         };
                         llm::run(&self, sid, &mut history, &cancel, &run.opts, &multi).await

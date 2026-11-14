@@ -50,10 +50,11 @@ pub async fn run(c: &mut Control, device: Option<&str>, monitor: u32) -> Result<
         loop {
             tokio::select! {
                 r = &mut win => return r?,
-                m = read_frame::<_, AgentMsg>(&mut c.recv) => match m? {
-                    AgentMsg::Error { message } => bail!("agent: {message}"),
-                    _ => {}
-                },
+                m = read_frame::<_, AgentMsg>(&mut c.recv) => {
+                    if let AgentMsg::Error { message } = m? {
+                        bail!("agent: {message}")
+                    }
+                }
             }
         }
     }
