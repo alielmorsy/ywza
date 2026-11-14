@@ -47,7 +47,10 @@ fn dialog_pointer(id: WindowId, rect: Rect) -> Raw {
         role: "dialog",
         name: format!("{title} (window w{id}, get_elements it)"),
         // Its title bar: a click on this line only activates the dialog.
-        rect: Rect { h: rect.h.min(30), ..rect },
+        rect: Rect {
+            h: rect.h.min(30),
+            ..rect
+        },
         bounds: Some(rect),
         enabled: true,
         key: vec![-1, id as i32, (id >> 32) as i32],

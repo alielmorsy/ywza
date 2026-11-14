@@ -92,6 +92,8 @@ mod tests {
             monitor: 0,
             minimized: false,
             hidden: false,
+            focused: false,
+            maximized: false,
         }
     }
 

@@ -21,3 +21,13 @@ pub use x::{
 };
 
 pub(crate) use a11y::Handle;
+
+/// A real click at a screen point of `window` (brought to the front first).
+pub fn click_at(
+    window: crate::WindowId,
+    at: (i32, i32),
+    button: crate::Button,
+    count: u32,
+) -> crate::Result<()> {
+    x::real_click(window, at, button, count, 0)
+}

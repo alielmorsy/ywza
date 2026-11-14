@@ -18,6 +18,9 @@ pub enum Report {
     Verified,
     /// "ok", no settle wait, no diff (inside a batch).
     Quiet,
+    /// Like `Diff`, but no visible change is an error with this text (input that could not
+    /// be verified otherwise, e.g. typing into an OCR-only window).
+    Changed(&'static str),
 }
 
 /// `desk::diff` of two identical snapshots.
@@ -50,7 +53,7 @@ pub async fn act(
     let had_ocr = snap.elements.iter().any(|e| e.kind == "ocr");
     let (res, old, fresh) = blocking(move || {
         let res = f(&snap);
-        if res.is_ok() && mode == Report::Diff {
+        if res.is_ok() && matches!(mode, Report::Diff | Report::Changed(_)) {
             // Waits until the UI stops changing; its snapshots do not carry ids over from
             // `snap`, so the one we keep is re-taken with `snap` as `prev`.
             let _ = desk::wait_settled(w, desk::SETTLE_TIMEOUT);
@@ -68,7 +71,8 @@ pub async fn act(
             Err(e) => Err(desk_err(e)),
         };
     };
-    if res.is_ok() && had_ocr {
+    // Also on errors: a stale error lists the fresh elements, OCR lines included.
+    if had_ocr {
         keep_ocr(w, ocr, &old, &mut fresh).await;
     }
     let out = match res {
@@ -76,6 +80,10 @@ pub async fn act(
         Ok(()) if mode == Report::Quiet => Ok(ToolOutput::ok("ok")),
         Ok(()) => {
             let d = desk::diff(&old, &fresh);
+            if let (Report::Changed(why), true) = (mode, d == NO_CHANGES) {
+                cx.store(w, fresh);
+                return Err(ToolOutput::err(why));
+            }
             Ok(ToolOutput::ok(if d == NO_CHANGES {
                 "done; no visible change".to_string()
             } else {

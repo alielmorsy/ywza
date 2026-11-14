@@ -10,8 +10,8 @@ use ::windows::Win32::System::Threading::{
     OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 use ::windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetWindow, GetWindowRect, GetWindowThreadProcessId, IsIconic, IsWindow,
-    IsWindowVisible, GW_OWNER,
+    EnumWindows, GetForegroundWindow, GetWindow, GetWindowRect, GetWindowThreadProcessId, IsIconic,
+    IsWindow, IsWindowVisible, IsZoomed, GW_OWNER,
 };
 
 fn top_level() -> Result<Vec<HWND>> {
@@ -93,6 +93,8 @@ fn info_with(h: HWND, monitors: &[HMONITOR]) -> WindowInfo {
         monitor: monitors.iter().position(|&x| x == m).unwrap_or(0),
         minimized: unsafe { IsIconic(h) }.as_bool(),
         hidden: !unsafe { IsWindowVisible(h) }.as_bool(),
+        focused: unsafe { GetForegroundWindow() } == h,
+        maximized: unsafe { IsZoomed(h) }.as_bool(),
     }
 }
 

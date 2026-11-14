@@ -10,6 +10,7 @@ mod args;
 mod batch;
 mod ctx;
 mod elements;
+mod find;
 mod input;
 mod ocr;
 mod output;
@@ -168,7 +169,7 @@ mod tests {
             assert!(!s.description.is_empty(), "{}", s.name);
         }
         let click = &spec("click").parameters;
-        assert_eq!(click["required"], json!(["window", "element"]));
+        assert_eq!(click["required"], json!(["window"]));
         assert_eq!(
             click["properties"]["button"]["enum"],
             json!(["left", "right", "middle"])
@@ -193,10 +194,7 @@ mod tests {
             async move { t.call(name, &args, OcrEngine::Auto).await }
         };
         let out = call("click", json!({"window":"w1"})).await;
-        assert!(
-            !out.ok && out.text.contains("missing field `element`"),
-            "{out:?}"
-        );
+        assert!(!out.ok && out.text.contains("exactly one of"), "{out:?}");
         let out = call("click", json!({"window":"w1","element":"x"})).await;
         assert!(!out.ok && out.text.contains("`element`"), "{out:?}");
         let out = call("wait", json!({"ms":"soon"})).await;

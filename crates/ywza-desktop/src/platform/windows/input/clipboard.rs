@@ -26,7 +26,8 @@ impl Held {
     pub(super) fn put(text: &str) -> Result<Held> {
         let saved = open(|| Ok(save()))?;
         let units: Vec<u16> = text.encode_utf16().chain([0]).collect();
-        let bytes = unsafe { std::slice::from_raw_parts(units.as_ptr().cast::<u8>(), units.len() * 2) };
+        let bytes =
+            unsafe { std::slice::from_raw_parts(units.as_ptr().cast::<u8>(), units.len() * 2) };
         open(|| write(&[(CF_UNICODETEXT.0 as u32, bytes.to_vec())]))?;
         Ok(Held(saved))
     }

@@ -108,7 +108,8 @@ pub async fn run(
                 }
             };
             agent.emit_tool_result(sid, &id, name, &out);
-            if let (Some(png), true, false) = (&out.image_png, llm.vision, name == SHOW_SCREENSHOT) {
+            if let (Some(png), true, false) = (&out.image_png, llm.vision, name == SHOW_SCREENSHOT)
+            {
                 images.push(json!({"type":"image_url","image_url":{
                     "url": format!("data:image/png;base64,{}", BASE64.encode(png))}}));
             }

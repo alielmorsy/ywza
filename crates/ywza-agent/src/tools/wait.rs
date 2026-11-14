@@ -9,8 +9,14 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use ywza_desktop::{self as desk, Snapshot, WindowId};
 
+use ywza_term::TermId;
+
 use super::{
-    act::settle_diff, ocr::check_ocr, util::blocking, Ctx, ElementArg, Tool, ToolOutput, WindowArg,
+    act::settle_diff,
+    find::{frame, visibly_changed},
+    ocr::{check_ocr, snapshot_with_ocr},
+    util::blocking,
+    Ctx, ElementArg, TermArg, Tool, ToolOutput, WindowArg,
 };
 
 const SLEEP_MAX: u64 = 60_000;
@@ -21,8 +27,9 @@ const OCR_POLL: Duration = Duration::from_secs(1);
 const OCR_MISSES: u32 = 2;
 /// Consecutive failed re-reads (other than the window being gone) before giving up.
 const READ_FAILS: u32 = 5;
+const QUIET_DEFAULT: u64 = 2000;
 
-/// Pause for `ms` milliseconds (max 60000). With `window` and `element`: instead return as soon as that element changes (name, value, toggle state, selected, busy, enabled) or disappears, or its window closes, waiting up to `ms` (max 600000), and report the changes. Use it to wait out long tasks in one call, e.g. until a "Stop" button turns back into "Start". With `window` and `text`: return as soon as an element whose name or value contains `text` (any case) appears, with its line, or with `gone` once none is left (a spinner, "Loading"); no element id needed.
+/// Pause for `ms` milliseconds (max 60000). The forms below instead return as soon as their condition holds, waiting up to `ms` (max 600000). `window` + `element`: that element changes (name, value, toggle state, selected, busy, enabled) or disappears, or its window closes; reports the changes. Use it to wait out long tasks in one call, e.g. until a "Stop" button turns back into "Start". `window` + `text`: an element (or text read from the pixels, OCR misreads tolerated) containing `text` appears, with its line; with `gone`, once none is left (a spinner, "Loading"). `window` alone: the window changes and then stays still for `quiet_ms`, e.g. a chat app finishing its answer or stopping to ask something; reports the changes. `title`: a window whose title contains it appears (with `gone`: none is left). `term` + `text`: the terminal's output shows `text` (with `gone`: no longer does).
 #[derive(Deserialize, JsonSchema)]
 pub struct Wait {
     ms: u64,
@@ -32,19 +39,36 @@ pub struct Wait {
     element: Option<ElementArg>,
     /// Wait for an element with this text in its name or value, e.g. "Application submitted".
     text: Option<String>,
-    /// With `text`: wait until no element has it any more.
+    /// With `text` or `title`: wait until it is gone instead.
     #[serde(default)]
     gone: bool,
+    /// `window` alone: how long the window must stay unchanged to count as done (default 2000; a streaming LLM answer may pause longer, try 5000).
+    quiet_ms: Option<u64>,
+    /// Wait for a window whose title contains this (any case).
+    title: Option<String>,
+    /// Terminal id from term_list/term_start; with `text`, waits for it in the output.
+    term: Option<TermArg>,
 }
 
 impl Tool for Wait {
     const NAME: &'static str = "wait";
 
     async fn run(self, cx: &Ctx) -> ToolOutput {
+        let ms = self.ms.min(WATCH_MAX);
+        if let Some(t) = self.title {
+            return wait_title(&t, self.gone, ms).await;
+        }
+        if let Some(term) = self.term {
+            return match self.text {
+                Some(t) => wait_term(cx, term.0, &t, self.gone, ms).await,
+                None => ToolOutput::err("`term` needs `text`"),
+            };
+        }
         match (self.window, self.element, self.text) {
-            (Some(w), Some(e), _) => watch(cx, w.0, e.0, self.ms.min(WATCH_MAX)).await,
-            (Some(w), None, Some(t)) => {
-                wait_text(cx, w.0, &t, self.gone, self.ms.min(WATCH_MAX)).await
+            (Some(w), Some(e), _) => watch(cx, w.0, e.0, ms).await,
+            (Some(w), None, Some(t)) => wait_text(cx, w.0, &t, self.gone, ms).await,
+            (Some(w), None, None) => {
+                wait_quiet(cx, w.0, ms, self.quiet_ms.unwrap_or(QUIET_DEFAULT)).await
             }
             (None, Some(_), _) | (None, _, Some(_)) => {
                 ToolOutput::err("`element` and `text` need `window`")
@@ -117,10 +141,14 @@ async fn watch(cx: &Ctx, w: WindowId, id: u32, ms: u64) -> ToolOutput {
 /// `gone`, until none is left). The last read is stored, so the returned ids are usable.
 async fn wait_text(cx: &Ctx, w: WindowId, text: &str, gone: bool, ms: u64) -> ToolOutput {
     let want = text.to_lowercase();
+    let want_ocr = desk::ocr_norm(text);
     let hit = move |s: &Snapshot| {
         s.elements
             .iter()
             .find(|e| {
+                if e.kind == "ocr" {
+                    return desk::ocr_matches(&desk::ocr_norm(&e.name), &want_ocr);
+                }
                 e.name.to_lowercase().contains(&want)
                     || e.value
                         .as_ref()
@@ -132,10 +160,12 @@ async fn wait_text(cx: &Ctx, w: WindowId, text: &str, gone: bool, ms: u64) -> To
     let deadline = start + Duration::from_millis(ms);
     let mut prev = cx.snap(w);
     let mut fails = 0;
+    let mut ocr = false;
     loop {
-        let p = prev.take();
-        let (res, p) = blocking(move || (desk::snapshot(w, p.as_ref()), p)).await;
-        prev = p;
+        // OCR-only windows have their text in OCR lines, re-read each round (slower).
+        let res = snapshot_with_ocr(w, prev.clone(), false, cx.ocr)
+            .await
+            .map(|(s, _)| s);
         match res {
             Ok(s) => {
                 fails = 0;
@@ -154,6 +184,7 @@ async fn wait_text(cx: &Ctx, w: WindowId, text: &str, gone: bool, ms: u64) -> To
                     cx.store(w, s);
                     return ToolOutput::ok(msg);
                 }
+                ocr = s.elements.iter().any(|e| e.kind == "ocr");
                 prev = Some(s);
             }
             Err(desk::Error::NotFound(_)) => {
@@ -167,7 +198,99 @@ async fn wait_text(cx: &Ctx, w: WindowId, text: &str, gone: bool, ms: u64) -> To
                 }
             }
         }
+        tokio::time::sleep(if ocr { OCR_POLL } else { POLL }).await;
+    }
+}
+
+/// Waits for the window's pixels to change and then stay the same (a blinking caret aside)
+/// for `quiet` ms; reports the element changes since the call started.
+async fn wait_quiet(cx: &Ctx, w: WindowId, ms: u64, quiet: u64) -> ToolOutput {
+    let start = Instant::now();
+    let deadline = start + Duration::from_millis(ms);
+    let quiet = Duration::from_millis(quiet);
+    let base = cx.snap(w);
+    let mut last = frame(w).await;
+    let mut changed_at: Option<Instant> = None;
+    loop {
+        let Some(prev) = &last else {
+            cx.forget(w);
+            return ToolOutput::ok(format!("w{w} closed"));
+        };
+        if changed_at.is_some_and(|t| t.elapsed() >= quiet) {
+            break;
+        }
+        if Instant::now() >= deadline {
+            let state = match changed_at {
+                Some(_) => "still changing",
+                None => "no change",
+            };
+            return ToolOutput::ok(format!("{state} in w{w} after {ms} ms"));
+        }
         tokio::time::sleep(POLL).await;
+        let now = frame(w).await;
+        if now.as_ref().is_none_or(|n| visibly_changed(prev, n)) {
+            changed_at = Some(Instant::now());
+            last = now;
+        }
+    }
+    let secs = start.elapsed().as_secs_f32();
+    let head = format!("w{w} changed, then stayed still; {secs:.1} s");
+    ToolOutput::ok(match base {
+        Some(base) => match settle_diff(cx, w, &base).await {
+            Some(d) => format!("{head}; changes:\n{}", d.trim_end()),
+            None => head,
+        },
+        None => format!("{head}; get_elements to see it"),
+    })
+}
+
+/// Waits for a window titled like `title` to appear (or, with `gone`, for none to be left).
+async fn wait_title(title: &str, gone: bool, ms: u64) -> ToolOutput {
+    let want = title.to_lowercase();
+    let start = Instant::now();
+    let deadline = start + Duration::from_millis(ms);
+    loop {
+        let wins = blocking(desk::list_windows).await.unwrap_or_default();
+        let found = wins
+            .into_iter()
+            .find(|w| w.title.to_lowercase().contains(&want));
+        let secs = start.elapsed().as_secs_f32();
+        match (found, gone) {
+            (Some(win), false) => return ToolOutput::ok(format!("found after {secs:.1} s: {win}")),
+            (None, true) => return ToolOutput::ok(format!("{title:?} gone after {secs:.1} s")),
+            _ if Instant::now() >= deadline => {
+                let state = if gone { "still open" } else { "no such window" };
+                return ToolOutput::ok(format!("{title:?}: {state} after {ms} ms"));
+            }
+            _ => tokio::time::sleep(POLL).await,
+        }
+    }
+}
+
+/// Waits for `text` (any case) to show in a terminal's recent output, or to leave it.
+async fn wait_term(cx: &Ctx, term: TermId, text: &str, gone: bool, ms: u64) -> ToolOutput {
+    let want = text.to_lowercase();
+    let start = Instant::now();
+    let deadline = start + Duration::from_millis(ms);
+    loop {
+        let terms = cx.terms();
+        let out = match blocking(move || terms.read(term, 200)).await {
+            Ok(o) => o,
+            Err(e) => return ToolOutput::err(e.0),
+        };
+        let line = out.lines().rev().find(|l| l.to_lowercase().contains(&want));
+        let secs = start.elapsed().as_secs_f32();
+        match (line, gone) {
+            (Some(l), false) => {
+                return ToolOutput::ok(format!("found after {secs:.1} s: {}", l.trim()))
+            }
+            (None, true) => return ToolOutput::ok(format!("{text:?} gone after {secs:.1} s")),
+            _ if Instant::now() >= deadline => {
+                let state = if gone { "still there" } else { "not found" };
+                return ToolOutput::ok(format!("{text:?} {state} after {ms} ms"));
+            }
+            _ => tokio::time::sleep(POLL).await,
+        }
     }
 }
 

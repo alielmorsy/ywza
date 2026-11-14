@@ -7,15 +7,22 @@ const SAMPLE_REMOVED: usize = 8;
 const SAMPLE_ADDED: usize = 12;
 
 /// Changes from `old` to `new`, matched by key: `+[20] dialog "Save as"`, `-[12]`,
-/// `~[3] = "new value"`. Elements without a key (OCR) match on kind and name.
+/// `~[3] = "new value"`. Other keyless elements match on kind and name; OCR lines on their id
+/// (carried over by position), and a re-read that differs only by OCR noise is no change.
 /// A page change (many removed or added) starts with a count line and lists a sample.
 pub fn diff(old: &Snapshot, new: &Snapshot) -> String {
+    let ocr = |a: &Element, b: &Element| a.kind == "ocr" && b.kind == "ocr";
     let same = |a: &Element, b: &Element| {
-        if a.key.is_empty() || b.key.is_empty() {
+        if ocr(a, b) {
+            a.id == b.id
+        } else if a.key.is_empty() || b.key.is_empty() {
             a.key.is_empty() && b.key.is_empty() && a.kind == b.kind && a.name == b.name
         } else {
             a.key == b.key
         }
+    };
+    let same_name = |a: &Element, b: &Element| {
+        a.name == b.name || (ocr(a, b) && super::ocr::ocr_similar(&a.name, &b.name))
     };
     let removed: Vec<String> = old
         .elements
@@ -30,7 +37,7 @@ pub fn diff(old: &Snapshot, new: &Snapshot) -> String {
             None => rest.push((true, format!("+{}", n.line()))),
             Some(o)
                 if o.kind == n.kind
-                    && o.name == n.name
+                    && same_name(o, n)
                     && o.enabled == n.enabled
                     && o.selected == n.selected
                     && o.busy == n.busy =>
@@ -46,7 +53,10 @@ pub fn diff(old: &Snapshot, new: &Snapshot) -> String {
     let a = rest.iter().filter(|(added, _)| *added).count();
     let mut out = String::new();
     if r > COLLAPSE || a > COLLAPSE {
-        let _ = writeln!(out, "{r} removed, {a} added (sample; get_elements lists all)");
+        let _ = writeln!(
+            out,
+            "{r} removed, {a} added (sample; get_elements lists all)"
+        );
     }
     if r > COLLAPSE {
         let _ = writeln!(out, "{} …", removed[..SAMPLE_REMOVED].join(" "));

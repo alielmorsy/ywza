@@ -5,6 +5,7 @@ use serde::Deserialize;
 use ywza_desktop as desk;
 
 use super::{
+    find::{frame, visibly_changed},
     output::{desk_err, flat},
     util::blocking,
     Ctx, Tool, ToolOutput, WindowArg,
@@ -22,7 +23,7 @@ impl Tool for ListMonitors {
     }
 }
 
-/// List top-level app windows: [w<id>] "title" (process) mon <index> [minimized] [hidden]. [hidden] = closed to the tray; focus_window shows it.
+/// List top-level app windows: [w<id>] "title" (process) mon <index> [minimized] [hidden] [maximized] [focused]. [hidden] = closed to the tray; focus_window shows it. [focused] = gets keys pressed without a window.
 #[derive(Deserialize, JsonSchema)]
 pub struct ListWindows {}
 
@@ -108,7 +109,7 @@ impl Tool for MoveWindow {
     }
 }
 
-/// Ask a window to close (like clicking X). If it is still open afterwards (e.g. a save prompt), its fresh element list is returned so you can answer it.
+/// Ask a window to close (like clicking X). If the app ignores the request (nothing changes, as with some frameless Qt windows), Alt+F4 is sent to the window. If it is still open afterwards (e.g. a save prompt), its fresh element list is returned so you can answer it.
 #[derive(Deserialize, JsonSchema)]
 pub struct CloseWindow {
     /// Window id from list_windows/launch, e.g. "w3412106".
@@ -122,10 +123,28 @@ impl Tool for CloseWindow {
     async fn run(self, cx: &Ctx) -> ToolOutput {
         flat(async {
             let w = self.window.0;
+            let looks = || async move {
+                let wins = blocking(desk::list_windows).await.unwrap_or_default();
+                (frame(w).await, wins.len())
+            };
+            let before = looks().await;
             blocking(move || desk::close_window(w))
                 .await
                 .map_err(desk_err)?;
             tokio::time::sleep(Duration::from_millis(700)).await;
+            let after = looks().await;
+            // Still there, looking the same, no new window (prompt): the request was ignored.
+            let ignored = match (&before.0, &after.0) {
+                (Some(a), Some(b)) => before.1 == after.1 && !visibly_changed(a, b),
+                _ => false,
+            };
+            if ignored {
+                tracing::info!(w, "close request ignored; sending alt+f4");
+                blocking(move || desk::press_keys(Some(w), "alt+f4"))
+                    .await
+                    .map_err(desk_err)?;
+                tokio::time::sleep(Duration::from_millis(700)).await;
+            }
             let prev = cx.snap(w);
             Ok(
                 match blocking(move || desk::snapshot(w, prev.as_ref())).await {

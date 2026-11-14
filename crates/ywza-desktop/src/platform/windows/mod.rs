@@ -11,7 +11,9 @@ mod util;
 mod wm;
 
 pub use capture::{capture_monitor, capture_window};
-pub use input::{click, expand, long_press, press_keys, scroll, set_idle_before_input, type_text};
+pub use input::{
+    click, click_at, expand, long_press, press_keys, scroll, set_idle_before_input, type_text,
+};
 pub use launch::launch;
 pub use stream_capture::{
     live_key, live_mouse_button, live_mouse_move, live_wheel, CursorWatch, MonitorCapture,

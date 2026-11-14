@@ -58,7 +58,16 @@ pub(super) fn with_foreground<T>(
     // Qt/GTK menu grabs the pointer, and a motion outside its items clears the
     // highlighted item and closes submenus (Down then did nothing, Enter closed it).
     let moved = x.pointer().is_ok_and(|p| p != pointer);
-    let menu_open = window.is_some_and(|id| !x.popups(id as Window).is_empty());
+    // Slow apps (Motif in a VM) post the menu a while after the click: keep looking briefly.
+    let menu_open = moved
+        && window.is_some_and(|id| {
+            (0..6).any(|i| {
+                if i > 0 {
+                    sleep(Duration::from_millis(50));
+                }
+                !x.popups(id as Window).is_empty()
+            })
+        });
     if moved && !menu_open {
         let _ = x.motion(pointer).and_then(|_| x.sync());
     }

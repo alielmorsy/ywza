@@ -52,7 +52,9 @@ pub async fn mock_llm() -> String {
                     .iter()
                     .find(|m| m["role"] == "user")
                     .map_or("", |m| m["content"].as_str().unwrap_or_default());
-                let message = if last["role"] == "tool" || last["role"] == "user" && last["content"].is_array() {
+                let message = if last["role"] == "tool"
+                    || last["role"] == "user" && last["content"].is_array()
+                {
                     // A picture that reached the model shows up as image_url parts.
                     let saw = req["messages"].to_string().contains("image_url");
                     json!({"role":"assistant","content": if saw { "saw an image" } else { "all done" }})
@@ -70,8 +72,10 @@ pub async fn mock_llm() -> String {
                                 {"tool":"wait","ms":5},
                                 {"tool":"type_text","element":1,"text":"hi","submit":true}]}),
                         ),
-                        "bad-args" => ("click", json!({"window":"w1"})),
-                        p if p.starts_with("show ") => ("show_screenshot", json!({"window": &p[5..]})),
+                        "bad-args" => ("type_text", json!({"window":"w1"})),
+                        p if p.starts_with("show ") => {
+                            ("show_screenshot", json!({"window": &p[5..]}))
+                        }
                         _ => ("run_command", json!({"command":"echo hi"})),
                     };
                     json!({"role":"assistant","content":null,"tool_calls":[{

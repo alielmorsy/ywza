@@ -48,3 +48,77 @@ pub fn merge_ocr(snapshot: &mut Snapshot, lines: Vec<(String, Rect)>) {
     }
     snapshot.elements.extend(added);
 }
+
+/// Whether `want` appears in `got` (both lowercase, no spaces) up to OCR noise: one wrong,
+/// missing or extra character per 4 (re-reading the same pixels gives "File eView" for
+/// "File View"). Short text (under 4 characters) must match exactly.
+pub fn ocr_matches(got: &str, want: &str) -> bool {
+    let (g, w): (Vec<char>, Vec<char>) = (got.chars().collect(), want.chars().collect());
+    if w.is_empty() {
+        return g.is_empty();
+    }
+    // Edit distance of `want` against the best-matching substring of `got`.
+    let mut row: Vec<usize> = vec![0; g.len() + 1];
+    for (i, wc) in w.iter().enumerate() {
+        let mut next = vec![i + 1; g.len() + 1];
+        for (j, gc) in g.iter().enumerate() {
+            next[j + 1] = (row[j] + usize::from(wc != gc))
+                .min(row[j + 1] + 1)
+                .min(next[j] + 1);
+        }
+        row = next;
+    }
+    row.into_iter().min().unwrap() * 4 <= w.len()
+}
+
+/// Lowercase without whitespace, the form [`ocr_matches`] compares.
+pub fn ocr_norm(s: &str) -> String {
+    s.split_whitespace().collect::<String>().to_lowercase()
+}
+
+/// Two OCR readings of the same text: equal up to noise, or one a cut-off reading of the
+/// other ("Use the current in" for "Use the current implied DC point"), at least a third of it.
+pub fn ocr_similar(a: &str, b: &str) -> bool {
+    let (a, b) = (ocr_norm(a), ocr_norm(b));
+    let (short, long) = if a.chars().count() <= b.chars().count() {
+        (a, b)
+    } else {
+        (b, a)
+    };
+    let n = short.chars().count();
+    if n * 3 < long.chars().count() || (n < 4 && short != long) {
+        return false;
+    }
+    ocr_matches(&long, &short)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ocr_match_tolerates_noise() {
+        assert!(ocr_matches("fileeview", "fileview")); // one stray char
+        assert!(ocr_matches("xfilex", "file")); // neighbours caught by the padding
+        assert!(!ocr_matches("saveas", "loadlut")); // different text
+        assert!(!ocr_matches("go", "no")); // short text: exact only
+        assert!(!ocr_matches("", "file"));
+        assert!(ocr_matches("", ""));
+    }
+
+    #[test]
+    fn ocr_similar_accepts_jitter_and_cut_off_readings() {
+        assert!(ocr_similar(
+            "Use the current implied...",
+            "Use the current in"
+        ));
+        assert!(ocr_similar("File eView", "File View"));
+        assert!(!ocr_similar(
+            "Use the current implied DC operating point",
+            "Use"
+        ));
+        assert!(!ocr_similar("Save", "Load"));
+        assert!(!ocr_similar("go", "gone"));
+        assert!(ocr_similar("OK", "ok"));
+    }
+}

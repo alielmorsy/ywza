@@ -106,6 +106,14 @@ impl X {
             .first()
             .copied()
             .unwrap_or(0);
+        let state = self.state(w);
+        let maximized = [
+            self.a._NET_WM_STATE_MAXIMIZED_VERT,
+            self.a._NET_WM_STATE_MAXIMIZED_HORZ,
+        ]
+        .iter()
+        .all(|s| state.contains(s))
+            || state.contains(&self.a._NET_WM_STATE_FULLSCREEN);
         Ok(WindowInfo {
             id,
             title: facts.title,
@@ -115,6 +123,8 @@ impl X {
             monitor: monitor_of(&rect, &monitors),
             minimized: hidden,
             hidden: false,
+            focused: self.active() == Some(w),
+            maximized,
         })
     }
 

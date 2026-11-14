@@ -7,7 +7,7 @@ use super::{
     Ctx, Tool, ToolOutput, WindowArg,
 };
 
-/// List a window's UI elements, one per line with numeric ids: `[3] edit "Name" = "value"`. Toggles show `= on/off`, sliders and spinners their value; flags: `selected` (chosen radio/option/tab), `busy` (loading), `in "Question"` (a radio's group), `+menu`, `disabled`. An open dialog of the window (file picker) is one line naming its own window id: get_elements that window to use it. `ocr` lines are text read from pixels. Required before element actions; replaces the previous list of that window.
+/// List a window's UI elements, one per line with numeric ids: `[3] edit "Name" = "value"`. Toggles show `= on/off`, sliders and spinners their value; flags: `selected` (chosen radio/option/tab), `busy` (loading), `in "Question"` (a radio's group), `+menu`, `disabled`. An open dialog of the window (file picker) is one line naming its own window id: get_elements that window to use it. `ocr` lines are text read from pixels: their ids follow the text across re-reads, but one line may span neighbours (menu titles like "Options ADT"), so click those with `text` instead. Required before element actions; replaces the previous list of that window.
 #[derive(Deserialize, JsonSchema)]
 pub struct GetElements {
     /// Window id from list_windows/launch, e.g. "w3412106".

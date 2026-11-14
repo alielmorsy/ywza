@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
-use ywza_proto::{
-    client, AgentMsg, ApprovalMode, ClientMsg, DeviceInfo, SessionEvent, SessionId,
-};
+use ywza_proto::{client, AgentMsg, ApprovalMode, ClientMsg, DeviceInfo, SessionEvent, SessionId};
 
 use crate::{llm, remote::Remote, Agent};
 

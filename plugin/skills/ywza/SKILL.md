@@ -25,6 +25,8 @@ An already-open browser is just a window: drive it with ywza. Do not hunt for a 
 - Screenshot only for what the tree cannot show: images, canvas, layout. Never to read text or state.
 - An action the user denies stays denied. Do not retry it another way.
 - Never reload or navigate back (`alt+left`, F5) on a page holding unsaved input.
+- Always pass `window` to `press_keys`: without it the keys go to the focused window, which may not be the one in front.
+- Menus: click by `text`, never by keyboard arrows or by the id of an `ocr` line (see references/elements.md).
 
 ## Quick reference
 
@@ -34,6 +36,10 @@ An already-open browser is just a window: drive it with ywza. Do not hunt for a 
 | Wait for a long task | `wait` window + `element` on what will change (Stop button) |
 | Fill a form step | one `get_elements`, then one `batch` |
 | Open a split button's menu | `click` with `expand: true` on a `+menu` element |
+| Menu bar, menu, toolbar, OCR-only app | `click` + `text`: `"ADT > Sizing > Show plots"` walks the path |
+| Icon with no element or text | `click` + `x`/`y` in pixels of the window's `screenshot` |
+| Wait for a chat/LLM answer | `wait` + `window` alone (+ `quiet_ms: 5000`) |
+| Wait for a window or terminal output | `wait` + `title`, or `term` + `text` |
 | Native file dialog | its own window id from the `dialog` line |
 | Text missing from the list | `get_elements` with `accurate_ocr: true` |
 | Show the user a window | `show_screenshot` (you do not see it) |

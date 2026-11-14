@@ -31,6 +31,9 @@ impl Tool for RunCommand {
     async fn run(self, _: &Ctx) -> ToolOutput {
         let mut c = crate::platform::shell(&self.command);
         c.stdin(std::process::Stdio::null()).kill_on_drop(true);
+        // Apps started from the command (`virtuoso &`) then expose real elements.
+        #[cfg(not(windows))]
+        c.envs(ywza_desktop::A11Y_ENV.iter().copied());
         if let Some(d) = &self.cwd {
             c.current_dir(d);
         }

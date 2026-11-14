@@ -8,6 +8,7 @@ x11rb::atom_manager! {
         WM_STATE,
         _NET_SUPPORTED,
         _NET_CLIENT_LIST,
+        _NET_CLIENT_LIST_STACKING,
         _NET_ACTIVE_WINDOW,
         _NET_CLOSE_WINDOW,
         _NET_CURRENT_DESKTOP,

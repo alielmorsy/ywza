@@ -43,6 +43,12 @@ pub fn expand(snap: &Snapshot, id: u32) -> Result<()> {
     }
 }
 
+/// A real click at a screen point of `window` (brought to the front first).
+pub fn click_at(window: WindowId, at: (i32, i32), button: Button, count: u32) -> Result<()> {
+    let _lock = InputLock::foreground(Some(window))?;
+    real_click(window, at, button, count, 0)
+}
+
 pub fn long_press(snap: &Snapshot, id: u32, ms: u64) -> Result<()> {
     let _lock = InputLock::foreground(Some(snap.window.id))?;
     let (e, _) = uia::live(snap, id)?;

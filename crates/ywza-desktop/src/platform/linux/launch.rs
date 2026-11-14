@@ -84,6 +84,7 @@ pub fn launch(program: &str, args: &[&str], cwd: Option<&Path>) -> Result<Launch
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
     }
+    cmd.envs(crate::A11Y_ENV.iter().copied());
     let mut child = cmd
         .stdin(Stdio::null())
         .spawn()

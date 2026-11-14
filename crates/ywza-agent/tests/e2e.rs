@@ -50,7 +50,7 @@ async fn bad_tool_arguments_come_back_as_an_error_result_naming_the_field() {
     assert!(
         events.iter().any(|e| matches!(e,
             SessionEvent::ToolResult { ok: false, text, .. }
-                if text.contains("missing field `element`"))),
+                if text.contains("missing field `text`"))),
         "{events:?}"
     );
     assert!(

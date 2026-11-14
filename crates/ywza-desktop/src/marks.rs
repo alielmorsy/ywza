@@ -88,6 +88,8 @@ mod tests {
                 monitor: 0,
                 minimized: false,
                 hidden: false,
+                focused: false,
+                maximized: false,
             },
             seq: 1,
             elements: Vec::new(),

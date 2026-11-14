@@ -44,12 +44,13 @@ pub fn active() -> Option<Target> {
     if id == u32::MAX {
         return None;
     }
-    let user = query(id, WTSUserName)
-        .filter(|u| !u.is_empty())
-        .map(|u| match query(id, WTSDomainName) {
-            Some(d) if !d.is_empty() => format!(r"{d}\{u}"),
-            _ => u,
-        });
+    let user =
+        query(id, WTSUserName)
+            .filter(|u| !u.is_empty())
+            .map(|u| match query(id, WTSDomainName) {
+                Some(d) if !d.is_empty() => format!(r"{d}\{u}"),
+                _ => u,
+            });
     Some(Target { id, user })
 }
 
@@ -271,7 +272,11 @@ mod tests {
             r#""C:\Program Files\ywza\ywza-agent.exe" run"#
         );
         assert_eq!(
-            command_line(exe, Some("trace"), Some(Path::new(r"C:\ProgramData\ywza\agent.log"))),
+            command_line(
+                exe,
+                Some("trace"),
+                Some(Path::new(r"C:\ProgramData\ywza\agent.log"))
+            ),
             r#""C:\Program Files\ywza\ywza-agent.exe" -vv --log-file "C:\ProgramData\ywza\agent.log" run"#
         );
     }

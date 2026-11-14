@@ -26,7 +26,7 @@ First line: `window w123 "Title" (process) 1280x900 mon 0 snapshot 7`. Then one 
 | `+menu` | has a dropdown besides its main action: `click` with `expand: true` |
 | `disabled` | cannot be used yet (often a required field is missing) |
 | `(id=...)` | unnamed element, shown by automation id |
-| `ocr` | text read from pixels; clicking hits its centre |
+| `ocr` | text read from pixels; clicking hits its centre, and one line may span neighbours ("Options ADT"): click those with `text` |
 
 An unnamed clickable may borrow the label it wraps or sits next to. The line is what the tool will act on.
 
@@ -50,11 +50,27 @@ An unnamed clickable may borrow the label it wraps or sits next to. The line is 
 
 ## Actions
 
-- `click`: `count: 2` double-clicks, `button: right` opens context menus.
-- `type_text`: replaces content unless `append: true`. Long or non-Latin text is pasted and the clipboard restored. `submit: true` presses Enter after verifying. Without `element` it types into the focused control. An error saying the text "does not contain it" means the field differs from what you sent: read the element line before retrying.
+- `click`: `count: 2` double-clicks, `button: right` opens context menus. Instead of `element`: `text` (visible text) or `x`+`y` (screenshot pixels), see Menus below.
+- `type_text`: replaces content unless `append: true`. Long or non-Latin text is pasted and the clipboard restored. On an `ocr` box it clicks the box first; where the field cannot be read back, nothing changing in the window is an error, not a silent success. `submit: true` presses Enter once the text is in, and errors if Enter changed nothing. Without `element` it types into the focused control. An error saying the text "does not contain it" means the field differs from what you sent: read the element line before retrying.
 - `press_keys`: `"ctrl+a"`, `"tab tab enter"`. With `window` the window comes forward, but its own open dialog keeps focus.
 - `scroll`: `dy` > 0 is down, in wheel notches. Read the diff for newly visible elements.
 - `long_press`: hold for `ms`.
+
+## Menus and toolbars
+
+Menu bars, Motif/Qt menus and custom toolbars often have no element tree and ignore the keyboard, so their items are `ocr` lines. Menu bar titles are split at the gaps between them, and an `ocr` id stays with its text and place, also when a menu closes and opens again. To find out what a menu holds:
+
+1. `click` the menu title (by id or `text`). The diff lists the items that opened, `+[57] ocr "Show plots"`, with their ids.
+2. `click` the item by id. Reopening the same menu later gives the same ids.
+
+When you already know the names, `click` with `text` does it in one call:
+
+- `{"window": "w1", "text": "ADT"}` clicks the word, even inside a merged `ocr` line. It tries element names first, then text read from the pixels, and tolerates OCR misreads.
+- `{"window": "w1", "text": "ADT > Sizing > Show plots"}` walks the whole path in one call. Each item is looked for first in what the previous click opened, so a title that also appears elsewhere is not hit by mistake. If an item is missing, the menus it opened are closed with Escape and the error lists what the menu showed: fix the path and retry.
+- Text on screen more than once: the error lists the matches; pass `nth`.
+- No text at all (an icon): take one `screenshot` of the window and `click` with `x`, `y` in its pixels.
+
+Do not navigate menus with arrow keys and Enter unless `text` fails: the highlighted item is invisible to you.
 
 ## Batch
 
@@ -73,8 +89,10 @@ It stops at the first failure and returns one line per action plus the changes. 
 
 ## Wait
 
-- `wait` + `window` + `text`: returns as soon as an element whose name or value contains the text appears, with its line. Add `gone: true` to wait for a spinner or "Loading" to leave.
+- `wait` + `window` + `text`: returns as soon as an element whose name or value contains the text appears, with its line. OCR-only windows work too (misreads tolerated). Add `gone: true` to wait for a spinner or "Loading" to leave.
 - `wait` + `window` + `element`: returns when that element changes or disappears (up to 10 minutes). Use for long jobs.
+- `wait` + `window` alone: returns once the window has changed and then stayed still for `quiet_ms` (default 2000), with the changes. Use it for chat apps and LLM answers instead of a fixed pause; it also returns when the app stops to ask something. A blinking caret does not count as a change.
+- `wait` + `title`: a window with that title appears (`gone: true`: none is left). `wait` + `term` + `text`: the terminal shows the text.
 - `wait` + `ms` alone: plain pause, last resort.
 
 ## Screenshots

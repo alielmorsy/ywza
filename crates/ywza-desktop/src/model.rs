@@ -36,6 +36,9 @@ pub struct WindowInfo {
     pub minimized: bool,
     /// Hidden by its app (closed to the tray); `focus_window` shows it again.
     pub hidden: bool,
+    /// Has the keyboard focus (the active window).
+    pub focused: bool,
+    pub maximized: bool,
 }
 
 impl fmt::Display for WindowInfo {
@@ -50,6 +53,12 @@ impl fmt::Display for WindowInfo {
         }
         if self.hidden {
             write!(f, " [hidden]")?;
+        }
+        if self.maximized {
+            write!(f, " [maximized]")?;
+        }
+        if self.focused {
+            write!(f, " [focused]")?;
         }
         Ok(())
     }

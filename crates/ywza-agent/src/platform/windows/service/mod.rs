@@ -72,7 +72,11 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
         };
         let _ = unsafe { SetServiceStatus(handle, &s) };
     };
-    report(SERVICE_RUNNING, SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN, false);
+    report(
+        SERVICE_RUNNING,
+        SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN,
+        false,
+    );
     let pending = PENDING.lock().unwrap().take();
     let result = pending.map_or(Ok(()), |(opts, rx)| follow(&opts, rx));
     if let Err(e) = &result {

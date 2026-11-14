@@ -66,7 +66,7 @@ fn topmost_on(wins: &[desk::WindowInfo], monitor: usize) -> Option<WindowId> {
         .map(|w| w.id)
 }
 
-/// PNG of a window or monitor. Costly: use only when get_elements cannot answer (visual layout, images, canvas). With `marks`, element boxes are drawn with their ids.
+/// PNG of a window or monitor. Costly: use only when get_elements cannot answer (visual layout, images, canvas). With `marks`, element boxes are drawn with their ids. click `x`/`y` take pixels of a window screenshot as returned.
 #[derive(Deserialize, JsonSchema)]
 pub struct Screenshot {
     /// Window id from list_windows/launch, e.g. "w3412106".
@@ -201,6 +201,8 @@ mod tests {
             monitor,
             minimized,
             hidden: false,
+            focused: false,
+            maximized: false,
         };
         let wins = [
             win(1, 0, true),

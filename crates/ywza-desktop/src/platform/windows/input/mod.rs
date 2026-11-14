@@ -11,7 +11,7 @@ mod text;
 
 pub use foreground::set_idle_before_input;
 pub use keyboard::press_keys;
-pub use mouse::{click, expand, long_press, scroll};
+pub use mouse::{click, click_at, expand, long_press, scroll};
 pub use text::type_text;
 
 pub(crate) use raw::{absolute, key};

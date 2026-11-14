@@ -1,7 +1,7 @@
 use super::conn::X;
 use crate::{Error, Image, Rect, Result, WindowId};
 use x11rb::connection::Connection;
-use x11rb::protocol::xproto::{self, ConnectionExt as _, ImageFormat, Window};
+use x11rb::protocol::xproto::{self, AtomEnum, ConnectionExt as _, ImageFormat, MapState, Window};
 
 impl X {
     /// RGBA pixels of a drawable region (32 bits per pixel ZPixmap only).
@@ -68,29 +68,75 @@ pub fn capture_window(id: WindowId) -> Result<Image> {
     }
     let w = id as Window;
     let client = x.client_rect(w)?;
-    // The window's own pixels (right under a compositor even when covered), else the
-    // screen area where it sits.
-    match x.grab(w, Rect::new(0, 0, client.w, client.h)) {
-        Ok(mut img) => {
-            // Open menus are separate windows: paint them in so OCR sees their items.
-            for (p, r) in x.popups(w) {
+    let g = x.conn.get_geometry(x.root)?.reply()?;
+    let screen = Rect::new(0, 0, g.width as i32, g.height as i32);
+    // Open menus are separate windows that may hang outside the window (a menu below a
+    // short window): the capture grows to hold them, so OCR sees all their items.
+    let popups = x.popups(w);
+    let area = popups
+        .iter()
+        .fold(client, |a, (_, r)| union(a, *r))
+        .intersect(&screen);
+    // Uncovered: the screen itself, which is what the user sees and stays current where a
+    // compositor's copy of the window lags (seen with Qt chat views). Covered: the window's
+    // own pixels (right under a compositor), else the screen area where it sits.
+    let own = match x.uncovered(w, &client) {
+        true => None,
+        false => x.grab(w, Rect::new(0, 0, client.w, client.h)).ok(),
+    };
+    match own {
+        Some(own) => {
+            let mut img = Image {
+                width: area.w.max(0) as u32,
+                height: area.h.max(0) as u32,
+                rgba: vec![0; area.area().max(0) as usize * 4],
+                origin: (area.x, area.y),
+            };
+            paste(&mut img, &own, client.x - area.x, client.y - area.y);
+            for (p, r) in popups {
                 if let Ok(pimg) = x.grab(p, Rect::new(0, 0, r.w, r.h)) {
-                    paste(&mut img, &pimg, r.x - client.x, r.y - client.y);
+                    paste(&mut img, &pimg, r.x - area.x, r.y - area.y);
                 }
             }
-            Ok(Image {
-                origin: (client.x, client.y),
-                ..img
-            })
+            Ok(img)
         }
-        Err(_) => {
-            let g = x.conn.get_geometry(x.root)?.reply()?;
-            let r = client.intersect(&Rect::new(0, 0, g.width as i32, g.height as i32));
-            Ok(Image {
-                origin: (r.x, r.y),
-                ..x.grab(x.root, r)?
-            })
-        }
+        None => Ok(Image {
+            origin: (area.x, area.y),
+            ..x.grab(x.root, area)?
+        }),
+    }
+}
+
+fn union(a: Rect, b: Rect) -> Rect {
+    let (x, y) = (a.x.min(b.x), a.y.min(b.y));
+    let right = (a.x + a.w).max(b.x + b.w);
+    let bottom = (a.y + a.h).max(b.y + b.h);
+    Rect::new(x, y, right - x, bottom - y)
+}
+
+impl X {
+    /// No other viewable app window above `w` in the stacking order overlaps `r`.
+    fn uncovered(&self, w: Window, r: &Rect) -> bool {
+        let stack = self.prop32(
+            self.root,
+            self.a._NET_CLIENT_LIST_STACKING,
+            AtomEnum::WINDOW,
+        );
+        let Some(i) = stack.iter().position(|&s| s == w) else {
+            return false;
+        };
+        stack[i + 1..].iter().all(|&o| {
+            let viewable = self
+                .conn
+                .get_window_attributes(o)
+                .ok()
+                .and_then(|c| c.reply().ok())
+                .is_some_and(|a| a.map_state == MapState::VIEWABLE);
+            !viewable
+                || self
+                    .visible_rect(o)
+                    .map_or(true, |v| v.intersect(r).is_empty())
+        })
     }
 }
 

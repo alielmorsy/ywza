@@ -30,6 +30,8 @@ fn window() -> WindowInfo {
         monitor: 1,
         minimized: false,
         hidden: false,
+        focused: false,
+        maximized: false,
     }
 }
 
@@ -204,7 +206,10 @@ fn big_diff_collapses() {
     let new = snap(many(200, 25).collect(), Some(&old));
     let d = diff(&old, &new);
     let lines: Vec<&str> = d.lines().collect();
-    assert_eq!(lines[0], "30 removed, 25 added (sample; get_elements lists all)");
+    assert_eq!(
+        lines[0],
+        "30 removed, 25 added (sample; get_elements lists all)"
+    );
     assert_eq!(lines[1], "-[1] -[2] -[3] -[4] -[5] -[6] -[7] -[8] …");
     assert_eq!(lines[2], "+[31] button \"B\"");
     assert_eq!(lines.len(), 2 + 12 + 1);
@@ -405,4 +410,21 @@ fn recheck_rules() {
         .starts_with("name now"));
     renamed.enabled = false;
     assert_eq!(recheck(save, &renamed, &WIN, &WIN), Err("disabled".into()));
+}
+
+#[test]
+fn ocr_jitter_is_no_change() {
+    let mut old = snap(vec![], None);
+    merge_ocr(
+        &mut old,
+        vec![(
+            "Use the current implied".into(),
+            Rect::new(10, 700, 300, 20),
+        )],
+    );
+    let mut new = old.clone();
+    new.elements[0].name = "Use the current in".into();
+    assert_eq!(diff(&old, &new), "(no changes)\n");
+    new.elements[0].name = "Delete".into();
+    assert_eq!(diff(&old, &new), format!("~{}\n", new.elements[0].line()));
 }

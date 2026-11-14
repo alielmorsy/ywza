@@ -66,11 +66,17 @@ mod tests {
             },
         };
         let image = |m: AgentMsg| match m {
-            AgentMsg::Event { event: SessionEvent::ToolResult { image, .. }, .. } => image,
+            AgentMsg::Event {
+                event: SessionEvent::ToolResult { image, .. },
+                ..
+            } => image,
             _ => unreachable!(),
         };
         assert!(image(redact(shown(), &Permissions::all())).is_some());
-        let chat_only = Permissions { view: false, ..Permissions::all() };
+        let chat_only = Permissions {
+            view: false,
+            ..Permissions::all()
+        };
         assert!(image(redact(shown(), &chat_only)).is_none());
     }
 

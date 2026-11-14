@@ -90,7 +90,11 @@ pub fn type_text(snap: &Snapshot, id: Option<u32>, text: &str, append: bool) -> 
         return Ok(());
     }
     if id.is_some() && !append {
-        let keys = if text.is_empty() { "ctrl+a delete" } else { "ctrl+a" };
+        let keys = if text.is_empty() {
+            "ctrl+a delete"
+        } else {
+            "ctrl+a"
+        };
         x::press_keys(Some(snap.window.id), keys)?;
     }
     x::type_text(Some(snap.window.id), text)
