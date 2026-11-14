@@ -1,4 +1,4 @@
-package dev.ywza.app
+package aie.ywza
 
 import android.content.Intent
 import android.graphics.Color
