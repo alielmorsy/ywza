@@ -36,7 +36,7 @@ fn with_x<T>(mut f: impl FnMut(&X, &mut State) -> Result<T>) -> Result<T> {
             s.x = Some(x);
         }
         let x = s.x.take().unwrap();
-        let r = f(&x, &mut *s).and_then(|v| {
+        let r = f(&x, &mut s).and_then(|v| {
             x.conn.flush()?;
             Ok(v)
         });

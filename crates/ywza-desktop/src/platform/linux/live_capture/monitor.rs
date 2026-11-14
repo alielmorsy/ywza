@@ -177,7 +177,7 @@ fn monitor_rect(x: &X, index: usize) -> Result<Rect> {
 /// 32-bit ZPixmap pixels (B,G,R,X on little-endian servers, X,R,G,B on big-endian) to opaque BGRA.
 fn bgrx_to_bgra(src: &[u8], msb: bool, out: &mut Vec<u8>) {
     out.clear();
-    out.extend(src.chunks_exact(4).flat_map(|p| {
+    out.extend(src.as_chunks::<4>().0.iter().flat_map(|p| {
         if msb {
             [p[3], p[2], p[1], 255]
         } else {
