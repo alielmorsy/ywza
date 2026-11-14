@@ -34,6 +34,7 @@ An already-open browser is just a window: drive it with ywza. Do not hunt for a 
 |---|---|
 | Wait for a result, spinner gone | `wait` window + `text` (+ `gone: true`) |
 | Wait for a long task | `wait` window + `element` on what will change (Stop button) |
+| Find one control in a big window | `find_elements` window + `text`, `role`, `near` or `region` |
 | Fill a form step | one `get_elements`, then one `batch` |
 | Open a split button's menu | `click` with `expand: true` on a `+menu` element |
 | Menu bar, menu, toolbar, OCR-only app | `click` + `text`: `"ADT > Sizing > Show plots"` walks the path |
@@ -41,10 +42,15 @@ An already-open browser is just a window: drive it with ywza. Do not hunt for a 
 | Wait for a chat/LLM answer | `wait` + `window` alone (+ `quiet_ms: 5000`) |
 | Wait for a window or terminal output | `wait` + `title`, or `term` + `text` |
 | Native file dialog | its own window id from the `dialog` line |
+| Type a password or token | `type_text` with `{{vault:<key>}}`; never ask for the secret |
 | Text missing from the list | `get_elements` with `accurate_ocr: true` |
 | Show the user a window | `show_screenshot` (you do not see it) |
 | One-shot shell work | `run_command` |
 | Move files between devices | `copy` with `device:path` |
+| Repeat a task done before | `list_plans`, then `run_plan` name + `params`; on a stop, `patch_plan` the step and `run_plan` with `from` |
+| Save a sequence for later | `save_plan` (steps take `window` and `element` ids; they are stored as anchors) |
+| Name an unnamed icon button | `label_element`; later lists show `"name" (learned)` |
+| Guard a batch step | `expect: "<element name>"` on the action |
 
 ## References
 
@@ -53,4 +59,5 @@ Read the one that matches the task:
 - `references/elements.md`: element lines, flags, diffs, ids, OCR, batch and wait details.
 - `references/web-forms.md`: browsers, dropdowns, radios, type-ahead, dates, file uploads, sign-in popups, multi-step forms.
 - `references/terminals.md`: terminals and the AI coding CLIs that run in them.
-- `references/devices.md`: paired devices, file copy, approvals.
+- `references/devices.md`: paired devices, file copy, fanout, clipboard, finding which device has an app, approvals.
+- `references/watchers.md`: persistent zero-token triggers (windows, elements, text, terminals, schedules).

@@ -1,10 +1,15 @@
 pub mod bridge;
+pub mod clip;
 pub mod config;
 pub mod cp;
 pub mod devices;
+pub mod fan;
 pub mod live;
 pub mod pair;
 pub mod prompt;
+pub mod remote;
+pub mod resume;
 pub mod screenshot;
 pub mod sessions;
 pub mod show;
+pub mod watch;

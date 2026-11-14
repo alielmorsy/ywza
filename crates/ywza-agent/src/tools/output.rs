@@ -13,6 +13,8 @@ pub struct ToolOutput {
     pub image_png: Option<Vec<u8>>,
     /// Older results with the same key are replaced by "(element list superseded)" in the LLM history.
     pub supersedes_key: Option<String>,
+    /// Element actions that diff: whether the UI visibly changed. None: not measured.
+    pub changed: Option<bool>,
 }
 
 impl ToolOutput {

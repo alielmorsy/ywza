@@ -10,6 +10,7 @@ mod live;
 mod mcp;
 #[cfg(mobile)]
 mod mobile;
+mod xfer;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -27,6 +28,8 @@ pub fn run() {
             commands::remove_device,
             commands::send,
             commands::live_channel,
+            xfer::push_file,
+            xfer::push_bytes,
             mcp::mcp_status,
             mcp::mcp_set,
         ])

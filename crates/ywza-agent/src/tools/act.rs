@@ -1,6 +1,6 @@
 //! Element actions: validate against the stored snapshot, act, re-snapshot, report.
 
-use ywza_desktop::{self as desk, Snapshot, WindowId};
+use ywza_desktop::{self as desk, Delta, Snapshot, Tier, WindowId};
 
 use super::{
     ocr::{check_ocr, keep_ocr, snapshot_with_ocr},
@@ -23,18 +23,16 @@ pub enum Report {
     Changed(&'static str),
 }
 
-/// `desk::diff` of two identical snapshots.
-pub const NO_CHANGES: &str = "(no changes)\n";
-
 /// Validates + runs an element action on the stored snapshot, re-snapshots (ids carried
-/// over from the stored one, so they stay stable) and reports per `mode`. Stale: nothing
-/// done, the fresh snapshot is returned instead.
+/// over from the stored one, so they stay stable) and reports per `mode`. `f` returns the
+/// tier it acted through (None for actions without one), named in the success text.
+/// Stale: nothing done, the fresh snapshot is returned instead.
 pub async fn act(
     cx: &Ctx,
     w: WindowId,
     element: Option<u32>,
     mode: Report,
-    f: impl FnOnce(&Snapshot) -> desk::Result<()> + Send + 'static,
+    f: impl FnOnce(&Snapshot) -> desk::Result<Option<Tier>> + Send + 'static,
 ) -> R {
     let ocr = cx.ocr;
     let snap = cx.snap(w).ok_or_else(|| {
@@ -65,8 +63,9 @@ pub async fn act(
     let Ok(mut fresh) = fresh else {
         cx.forget(w);
         return match res {
-            Ok(()) => Ok(ToolOutput::ok(format!(
-                "done; window w{w} is gone (closed)"
+            Ok(tier) => Ok(ToolOutput::ok(format!(
+                "done{}; window w{w} is gone (closed)",
+                via(tier)
             ))),
             Err(e) => Err(desk_err(e)),
         };
@@ -76,33 +75,45 @@ pub async fn act(
         keep_ocr(w, ocr, &old, &mut fresh).await;
     }
     let out = match res {
-        Ok(()) if mode == Report::Verified => Ok(ToolOutput::ok("ok: text written")),
-        Ok(()) if mode == Report::Quiet => Ok(ToolOutput::ok("ok")),
-        Ok(()) => {
+        Ok(tier) if mode == Report::Verified => {
+            Ok(ToolOutput::ok(format!("ok: text written{}", via(tier))))
+        }
+        Ok(tier) if mode == Report::Quiet => Ok(ToolOutput::ok(format!("ok{}", via(tier)))),
+        Ok(tier) => {
             let d = desk::diff(&old, &fresh);
-            if let (Report::Changed(why), true) = (mode, d == NO_CHANGES) {
+            if let (Report::Changed(why), true) = (mode, d.is_empty()) {
                 cx.store(w, fresh);
                 return Err(ToolOutput::err(why));
             }
-            Ok(ToolOutput::ok(if d == NO_CHANGES {
-                "done; no visible change".to_string()
-            } else {
-                format!("done; changes:\n{d}")
-            }))
+            Ok(ToolOutput {
+                changed: Some(!d.is_empty()),
+                ..ToolOutput::ok(if d.is_empty() {
+                    format!("done{}; no visible change", via(tier))
+                } else {
+                    format!("done{}; changes:
+{}", via(tier), desk::render_diff(&d))
+                })
+            })
         }
         Err(desk::Error::Stale { id, reason }) => Err(stale(w, id, &reason, Ok(fresh.clone()))),
         Err(e) => {
             let mut out = desk_err(e);
             // A batch reports the changes once, at its end.
             let d = desk::diff(&old, &fresh);
-            if mode != Report::Quiet && d != NO_CHANGES {
-                out.text.push_str(&format!("\nchanges:\n{d}"));
+            if mode != Report::Quiet && !d.is_empty() {
+                out.text
+                    .push_str(&format!("\nchanges:\n{}", desk::render_diff(&d)));
             }
             Err(out)
         }
     };
     cx.store(w, fresh);
     out
+}
+
+/// ` (via takeover)`: how the action reached the app, placed after the answer's first word.
+pub fn via(tier: Option<Tier>) -> String {
+    tier.map(|t| format!(" (via {t})")).unwrap_or_default()
 }
 
 /// A fresh snapshot (with OCR when the trigger rule says so), stored as the window's latest.
@@ -113,8 +124,12 @@ async fn refresh(cx: &Ctx, w: WindowId, prev: Snapshot) -> desk::Result<Snapshot
 }
 
 /// Waits for `w` to settle, stores the final snapshot and returns the diff from `base`
-/// (None if the window has no stored snapshot).
-pub async fn settle_diff(cx: &Ctx, w: WindowId, base: &Snapshot) -> Option<String> {
+/// (None if the window has no stored snapshot, Err if it is gone).
+pub async fn settle_diff(
+    cx: &Ctx,
+    w: WindowId,
+    base: &Snapshot,
+) -> Option<desk::Result<Vec<Delta>>> {
     let cur = cx.snap(w)?;
     let had_ocr = cur.elements.iter().any(|e| e.kind == "ocr");
     let r = blocking(move || {
@@ -122,14 +137,17 @@ pub async fn settle_diff(cx: &Ctx, w: WindowId, base: &Snapshot) -> Option<Strin
         desk::snapshot(w, Some(&cur)).map(|s| (s, cur))
     })
     .await;
-    let Ok((mut fresh, cur)) = r else {
-        cx.forget(w);
-        return Some("window closed\n".into());
+    let (mut fresh, cur) = match r {
+        Ok(v) => v,
+        Err(e) => {
+            cx.forget(w);
+            return Some(Err(e));
+        }
     };
     if had_ocr {
         keep_ocr(w, cx.ocr, &cur, &mut fresh).await;
     }
     let d = desk::diff(base, &fresh);
     cx.store(w, fresh);
-    Some(d)
+    Some(Ok(d))
 }

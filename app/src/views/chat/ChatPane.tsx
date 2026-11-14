@@ -29,7 +29,7 @@ export function ChatPane({ dev, compact }: { dev: string; compact?: boolean }) {
   return (
     <div className="glow flex min-h-0 min-w-0 flex-1 flex-col">
       {compact && <Switcher dev={dev} session={session} />}
-      <Messages key={session ?? "new"} who={label(dev)} events={events} running={running} approvals={approvals} fresh={!session} alone={alone && !compact} compact={compact} onExample={fill} />
+      <Messages key={session ?? "new"} who={label(dev)} dev={dev} session={session} events={events} running={running} approvals={approvals} fresh={!session} alone={alone && !compact} compact={compact} onExample={fill} />
       <Composer dev={dev} session={session} running={running} compact={compact} text={text} setText={setText} inputRef={input} />
     </div>
   );

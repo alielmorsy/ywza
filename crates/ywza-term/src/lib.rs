@@ -10,8 +10,12 @@ mod id;
 mod info;
 pub mod keys;
 mod manager;
+mod marks;
 mod owned;
 mod platform;
+mod render;
+mod shell;
+mod track;
 
 pub use attach::{attached_keys, attached_read, attached_write, list_attachable, Attachable, Host};
 pub use error::{Error, Result};
@@ -20,5 +24,6 @@ pub use id::TermId;
 pub use info::{Kind, TermInfo};
 pub use manager::TermManager;
 pub use owned::{OwnedTerm, RING_CAP};
+pub use track::{RunOutcome, ShellInfo};
 
 pub(crate) use error::err;

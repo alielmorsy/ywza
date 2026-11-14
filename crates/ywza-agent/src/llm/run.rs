@@ -3,10 +3,16 @@ use std::time::Instant;
 use data_encoding::BASE64;
 use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
-use ywza_proto::{SessionEvent, SessionId};
+use ywza_proto::{Llm, SessionEvent, SessionId};
 
-use super::{client::complete, push_tool_result, Executor, Msg};
+use super::{
+    client::complete,
+    push_tool_result,
+    usage::{history_chars, RunUsage},
+    Executor, Msg,
+};
 use crate::{
+    sos::Blocker,
     tools::{ToolOutput, SHOW_SCREENSHOT},
     Agent,
 };
@@ -16,6 +22,8 @@ use crate::{
 pub struct Opts {
     pub model: Option<String>,
     pub effort: Option<String>,
+    /// Every tool runs on a paired device (the executor is a `Remote`): no blocker detection.
+    pub remote: bool,
 }
 
 /// Runs the loop until the model answers without tool calls (Ok(summary)), the step limit,
@@ -40,11 +48,28 @@ pub async fn run(
     if opts.effort.is_some() {
         llm.effort = opts.effort.clone();
     }
+    let mut usage = RunUsage::new(&llm);
+    let result = steps(agent, sid, history, cancel, &llm, opts, exec, &mut usage).await;
+    agent.emit(sid, usage.event());
+    result
+}
+
+async fn steps(
+    agent: &Agent,
+    sid: SessionId,
+    history: &mut Vec<Msg>,
+    cancel: &CancellationToken,
+    llm: &Llm,
+    opts: &Opts,
+    exec: &impl Executor,
+    usage: &mut RunUsage,
+) -> Result<String, String> {
     let tools = exec.tools();
+    let mut streak = 0;
     for step in 0..llm.max_steps {
         let started = Instant::now();
-        let msg = tokio::select! {
-            r = complete(&agent.http, &llm, &tools, history) => match r {
+        let (msg, reported) = tokio::select! {
+            r = complete(&agent.http, llm, &tools, history) => match r {
                 Ok(m) => m,
                 Err(e) => {
                     tracing::error!(session = %sid.0, error = %e, "LLM request failed");
@@ -62,6 +87,12 @@ pub async fn run(
         );
         let text = msg["content"].as_str().unwrap_or_default().to_string();
         let calls = msg["tool_calls"].as_array().cloned().unwrap_or_default();
+        usage.add_step(
+            reported,
+            || history_chars(history),
+            msg.to_string().len(),
+            calls.len() as u32,
+        );
         let mut stored = json!({"role":"assistant","content":msg["content"].clone()});
         if !calls.is_empty() {
             stored["tool_calls"] = Value::Array(calls.clone());
@@ -76,10 +107,12 @@ pub async fn run(
         }
 
         let mut images = Vec::new();
+        let mut blocker = None;
         for call in &calls {
             let id = call["id"].as_str().unwrap_or_default().to_string();
             let name = call["function"]["name"].as_str().unwrap_or_default();
             // Every tool call must get a result, even after cancel, or the next request is rejected.
+            let mut local_args = None;
             let out = if cancel.is_cancelled() {
                 ToolOutput::err("cancelled")
             } else {
@@ -97,17 +130,27 @@ pub async fn run(
                             Some(mode) => agent.gate(sid, mode, name, &args, device, cancel).await,
                             None => Ok(()),
                         };
-                        match gated {
+                        let out = match gated {
                             Err(why) => ToolOutput::err(why),
                             Ok(()) => tokio::select! {
-                                o = exec.call(device, name, &args) => o,
+                                o = exec.call(sid, device, name, &args) => o,
                                 _ = cancel.cancelled() => ToolOutput::err("cancelled"),
                             },
+                        };
+                        // shortcut: blockers on remote devices are not detected; the remote
+                        // agent would need its own SOS, or the check a snapshot of its windows.
+                        if device.is_none() && !opts.remote {
+                            local_args = Some(args);
                         }
+                        out
                     }
                 }
             };
             agent.emit_tool_result(sid, &id, name, &out);
+            if let Some(args) = &local_args {
+                let found = agent.check_blocker(sid, name, args, &out, &mut streak).await;
+                blocker = blocker.or(found);
+            }
             if let (Some(png), true, false) = (&out.image_png, llm.vision, name == SHOW_SCREENSHOT)
             {
                 images.push(json!({"type":"image_url","image_url":{
@@ -123,6 +166,14 @@ pub async fn run(
                 vec![json!({"type":"text","text":"Images from the tool results above."})];
             content.extend(images);
             history.push(Msg::new(json!({"role":"user","content":content})));
+        }
+        let note = match blocker {
+            None => None,
+            Some(Blocker::Hint(hint)) => Some(hint),
+            Some(Blocker::Pause(p)) => Some(agent.ask_for_help(sid, p, cancel).await?),
+        };
+        if let Some(note) = note {
+            history.push(Msg::new(json!({"role":"user","content":note})));
         }
     }
     tracing::warn!(session = %sid.0, max_steps = llm.max_steps, "step limit reached");

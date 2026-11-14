@@ -1,9 +1,9 @@
 use anyhow::{anyhow, bail, Result};
 use iroh::endpoint::{Connection, SendStream};
 use tokio::{sync::mpsc, task::JoinHandle};
-use ywza_proto::{read_frame, write_frame, AgentMsg, ClientMsg, Control};
 
 use super::Stats;
+use crate::{read_frame, write_frame, AgentMsg, ClientMsg, Control};
 
 /// One device connection used by a copy. Replies are read in their own task, so waiting for
 /// one can sit in a `select!` beside the entry streams without losing half-read frames.

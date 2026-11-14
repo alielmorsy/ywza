@@ -101,7 +101,9 @@ impl TermManager {
                     kind: Kind::Owned,
                     name: t.command.clone(),
                     pid: t.pid(),
-                    cwd: t.cwd.as_ref().map(|c| c.display().to_string()),
+                    cwd: t
+                        .shell_cwd()
+                        .or_else(|| t.cwd.as_ref().map(|c| c.display().to_string())),
                     title: t.title(),
                     status: Some(match t.exit_status() {
                         None => "running".to_string(),

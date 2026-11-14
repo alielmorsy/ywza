@@ -4,6 +4,7 @@
 
 mod actions;
 mod bus;
+mod chromium;
 mod frame;
 mod live;
 mod node;

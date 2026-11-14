@@ -7,7 +7,7 @@ use std::{
 
 use schemars::JsonSchema;
 use serde::Deserialize;
-use ywza_desktop::{self as desk, Snapshot, WindowId};
+use ywza_desktop::{self as desk, WindowId};
 
 use ywza_term::TermId;
 
@@ -18,6 +18,7 @@ use super::{
     util::blocking,
     Ctx, ElementArg, TermArg, Tool, ToolOutput, WindowArg,
 };
+use crate::watch::{term_line, text_finder, title_match};
 
 const SLEEP_MAX: u64 = 60_000;
 const WATCH_MAX: u64 = 600_000;
@@ -28,6 +29,9 @@ const OCR_MISSES: u32 = 2;
 /// Consecutive failed re-reads (other than the window being gone) before giving up.
 const READ_FAILS: u32 = 5;
 const QUIET_DEFAULT: u64 = 2000;
+/// With working UI events: re-read at least this often (lost events), at most this often (event bursts).
+const RECHECK: Duration = Duration::from_secs(2);
+const EVENT_GAP: Duration = Duration::from_millis(100);
 
 /// Pause for `ms` milliseconds (max 60000). The forms below instead return as soon as their condition holds, waiting up to `ms` (max 600000). `window` + `element`: that element changes (name, value, toggle state, selected, busy, enabled) or disappears, or its window closes; reports the changes. Use it to wait out long tasks in one call, e.g. until a "Stop" button turns back into "Start". `window` + `text`: an element (or text read from the pixels, OCR misreads tolerated) containing `text` appears, with its line; with `gone`, once none is left (a spinner, "Loading"). `window` alone: the window changes and then stays still for `quiet_ms`, e.g. a chat app finishing its answer or stopping to ask something; reports the changes. `title`: a window whose title contains it appears (with `gone`: none is left). `term` + `text`: the terminal's output shows `text` (with `gone`: no longer does).
 #[derive(Deserialize, JsonSchema)]
@@ -82,9 +86,10 @@ impl Tool for Wait {
     }
 }
 
-/// Polls `id` against the stored snapshot until its line differs or it is gone, then settles
-/// and reports the window's changes since the call started.
-// ponytail: re-walks the whole window each poll; watch the single UIA node if big windows get slow.
+/// Re-reads `id` against the stored snapshot until its line differs or it is gone, then settles
+/// and reports the window's changes since the call started. Re-reads follow UI events when the
+/// window delivers them, else poll.
+// ponytail: re-walks the whole window each read; watch the single UIA node if big windows get slow.
 async fn watch(cx: &Ctx, w: WindowId, id: u32, ms: u64) -> ToolOutput {
     let Some(base) = cx.snap(w) else {
         return ToolOutput::err(format!("no element list for w{w}; call get_elements first"));
@@ -97,11 +102,28 @@ async fn watch(cx: &Ctx, w: WindowId, id: u32, ms: u64) -> ToolOutput {
     let start = Instant::now();
     let deadline = start + Duration::from_millis(ms);
     let (mut misses, mut fails) = (0, 0);
+    let mut count = if ocr {
+        0
+    } else {
+        blocking(move || desk::wait_activity(w, u64::MAX, Duration::ZERO))
+            .await
+            .count
+    };
+    let mut last_read = start;
     loop {
-        if Instant::now() >= deadline {
+        let now = Instant::now();
+        if now >= deadline {
             return ToolOutput::ok(format!("no change to element {id} after {ms} ms"));
         }
-        tokio::time::sleep(if ocr { OCR_POLL } else { POLL }).await;
+        if ocr {
+            tokio::time::sleep(OCR_POLL).await;
+        } else {
+            let wait = (deadline - now).min(RECHECK);
+            let a = blocking(move || desk::wait_activity(w, count, wait)).await;
+            count = a.count;
+            let gap = if a.live { EVENT_GAP } else { POLL };
+            tokio::time::sleep(gap.saturating_sub(last_read.elapsed())).await;
+        }
         let changed = if ocr {
             misses = match check_ocr(w, rect, name.clone(), cx.ocr).await {
                 Ok(()) => 0,
@@ -128,9 +150,14 @@ async fn watch(cx: &Ctx, w: WindowId, id: u32, ms: u64) -> ToolOutput {
         if changed {
             break;
         }
+        last_read = Instant::now();
     }
     let secs = start.elapsed().as_secs_f32();
-    let d = settle_diff(cx, w, &base).await.unwrap_or_default();
+    let d = match settle_diff(cx, w, &base).await {
+        None => String::new(),
+        Some(Err(_)) => "window closed\n".into(),
+        Some(Ok(d)) => desk::render_diff(&d),
+    };
     ToolOutput::ok(format!(
         "element {id} changed after {secs:.1} s; changes:\n{}",
         d.trim_end()
@@ -140,22 +167,7 @@ async fn watch(cx: &Ctx, w: WindowId, id: u32, ms: u64) -> ToolOutput {
 /// Re-reads `w` until an element whose name or value contains `text` shows up (or, with
 /// `gone`, until none is left). The last read is stored, so the returned ids are usable.
 async fn wait_text(cx: &Ctx, w: WindowId, text: &str, gone: bool, ms: u64) -> ToolOutput {
-    let want = text.to_lowercase();
-    let want_ocr = desk::ocr_norm(text);
-    let hit = move |s: &Snapshot| {
-        s.elements
-            .iter()
-            .find(|e| {
-                if e.kind == "ocr" {
-                    return desk::ocr_matches(&desk::ocr_norm(&e.name), &want_ocr);
-                }
-                e.name.to_lowercase().contains(&want)
-                    || e.value
-                        .as_ref()
-                        .is_some_and(|v| v.to_lowercase().contains(&want))
-            })
-            .map(|e| e.line())
-    };
+    let hit = text_finder(text);
     let start = Instant::now();
     let deadline = start + Duration::from_millis(ms);
     let mut prev = cx.snap(w);
@@ -237,7 +249,10 @@ async fn wait_quiet(cx: &Ctx, w: WindowId, ms: u64, quiet: u64) -> ToolOutput {
     let head = format!("w{w} changed, then stayed still; {secs:.1} s");
     ToolOutput::ok(match base {
         Some(base) => match settle_diff(cx, w, &base).await {
-            Some(d) => format!("{head}; changes:\n{}", d.trim_end()),
+            Some(Ok(d)) => {
+                format!("{head}; changes:\n{}", desk::render_diff(&d).trim_end())
+            }
+            Some(Err(_)) => format!("{head}; changes:\nwindow closed"),
             None => head,
         },
         None => format!("{head}; get_elements to see it"),
@@ -251,9 +266,7 @@ async fn wait_title(title: &str, gone: bool, ms: u64) -> ToolOutput {
     let deadline = start + Duration::from_millis(ms);
     loop {
         let wins = blocking(desk::list_windows).await.unwrap_or_default();
-        let found = wins
-            .into_iter()
-            .find(|w| w.title.to_lowercase().contains(&want));
+        let found = wins.into_iter().find(|w| title_match(w, &want));
         let secs = start.elapsed().as_secs_f32();
         match (found, gone) {
             (Some(win), false) => return ToolOutput::ok(format!("found after {secs:.1} s: {win}")),
@@ -278,7 +291,7 @@ async fn wait_term(cx: &Ctx, term: TermId, text: &str, gone: bool, ms: u64) -> T
             Ok(o) => o,
             Err(e) => return ToolOutput::err(e.0),
         };
-        let line = out.lines().rev().find(|l| l.to_lowercase().contains(&want));
+        let line = term_line(&out, &want);
         let secs = start.elapsed().as_secs_f32();
         match (line, gone) {
             (Some(l), false) => {
@@ -297,9 +310,9 @@ async fn wait_term(cx: &Ctx, term: TermId, text: &str, gone: bool, ms: u64) -> T
 #[cfg(all(test, windows))]
 mod tests {
     use serde_json::{json, Value};
-    use ywza_proto::OcrEngine;
+    use ywza_proto::{OcrEngine, SessionId};
 
-    use crate::tools::Tools;
+    use crate::tools::{Space, Tools};
 
     /// A WinForms window: "Stop" turns into "Start" after 2 s, "Extra" is removed after
     /// 4 s, the window closes after 6 s.
@@ -327,9 +340,13 @@ $f.Add_Shown({ $t.Start() }); [Windows.Forms.Application]::Run($f)
             .spawn()
             .unwrap();
         let t = Tools::default();
+        let space = Space {
+            session: SessionId::new(),
+            sub: None,
+        };
         let call = |n: &'static str, a: Value| {
             let t = &t;
-            async move { t.call(n, &a, OcrEngine::Auto).await }
+            async move { t.call(space, n, &a, OcrEngine::Auto).await }
         };
         let mut w = None;
         for _ in 0..50 {

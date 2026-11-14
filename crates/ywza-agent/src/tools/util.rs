@@ -78,15 +78,20 @@ impl Tool for Notify {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use ywza_proto::OcrEngine;
+    use ywza_proto::{OcrEngine, SessionId};
 
-    use crate::tools::Tools;
+    use crate::tools::{Space, Tools};
 
     #[tokio::test]
     async fn run_command_echo_and_timeout() {
         let t = Tools::default();
+        let space = Space {
+            session: SessionId::new(),
+            sub: None,
+        };
         let out = t
             .call(
+                space,
                 "run_command",
                 &json!({"command":"echo hi"}),
                 OcrEngine::Auto,
@@ -100,6 +105,7 @@ mod tests {
         };
         let out = t
             .call(
+                space,
                 "run_command",
                 &json!({"command": slow, "timeout_s": 1}),
                 OcrEngine::Auto,

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { LOCAL, pairDevice, useStore } from "../api";
 import { Icon } from "../Icon";
 import { setPairing, setTab, toast } from "./store";
+import { pairCode } from "../views/pairCode";
 import { Back } from "./ui";
 
 const group = (c: string) => c.replace(/(\d{3})(?=\d)/, "$1 ");
@@ -14,12 +15,12 @@ const pairError = (e: string) =>
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "scan", "0", "del"] as const;
 
-/** The QR on the other device holds its 6-digit code. The plugin loads on demand so the desktop preview still starts. */
+/** The QR on the other device holds ywza://pair/<code>. The plugin loads on demand so the desktop preview still starts. */
 async function scanCode() {
   const { scan, Format, requestPermissions } = await import("@tauri-apps/plugin-barcode-scanner");
   if ((await requestPermissions()) !== "granted") throw new Error("Camera access is off. Allow it in Settings, or type the code.");
-  const digits = (await scan({ formats: [Format.QRCode] })).content.replace(/\D/g, "");
-  if (digits.length !== 6) throw new Error("That QR code is not a pairing code. Open Let a device in on the other device.");
+  const digits = pairCode((await scan({ formats: [Format.QRCode] })).content);
+  if (!digits) throw new Error("That QR code is not a pairing code. Open Let a device in on the other device.");
   return digits;
 }
 

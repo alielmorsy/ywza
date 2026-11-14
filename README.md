@@ -130,8 +130,28 @@ ywza pair 123456 --name desktop
 ywza -d desktop prompt "Take a screenshot and tell me what's open"
 ```
 
+`ywza-agent pair` also prints a QR code, and the phone app can scan it instead of typing the digits.
 The code works once and expires after 10 minutes. On Windows, if the connection times out, run
 `dist/windows-firewall.bat` as administrator with the path to `ywza-agent.exe`.
+
+## Secrets
+
+Keep passwords and tokens away from the model with the vault on the machine that types them:
+
+```bash
+ywza-agent vault set github   # reads the value from stdin
+ywza-agent vault list
+```
+
+The model types `{{vault:github}}`. The agent fills in the value as it types. Tool results show the placeholder
+instead of the value, and screenshots blur the value and password fields. Secrets live in `vault.toml` next to
+`config.toml`.
+
+## Token receipt
+
+Each agent run ends with a receipt in the app and the CLI. It shows the tokens used and an estimate of what a
+screenshot-based agent would have used for the same steps. To show cost as well, set `price_in` and `price_out`
+under `[llm]` in `config.toml`, in USD per million tokens.
 
 ## Use it from an MCP client
 

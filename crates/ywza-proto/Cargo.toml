@@ -20,7 +20,7 @@ sha2 = "0.10"
 spake2 = "0.4"
 thiserror = "2"
 toml = "0.8"
-tokio = { version = "1", features = ["fs", "io-util", "rt", "time"] }
+tokio = { version = "1", features = ["fs", "io-util", "macros", "rt", "sync", "time"] }
 tracing = "0.1"
 tracing-appender = { version = "0.2", optional = true }
 tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "json"] }

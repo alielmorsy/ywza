@@ -19,7 +19,9 @@ use anyhow::{anyhow, bail, Context, Result};
 use data_encoding::BASE64;
 use iroh::Endpoint;
 use serde_json::Value;
-use ywza_proto::{client, read_frame, write_frame, AgentMsg, ClientMsg, Control, ToolInfo};
+use ywza_proto::{
+    client, read_frame, write_frame, AgentMsg, ClientMsg, Control, SessionId, ToolInfo,
+};
 
 use crate::{
     llm::{remote_system_prompt, Executor},
@@ -82,13 +84,19 @@ impl Link {
         }
     }
 
-    async fn call(&mut self, name: &str, args: &Value) -> Result<ToolOutput, CallError> {
+    async fn call(
+        &mut self,
+        sid: SessionId,
+        name: &str,
+        args: &Value,
+    ) -> Result<ToolOutput, CallError> {
         self.next += 1;
         let id = self.next;
         let msg = ClientMsg::CallTool {
             call: id,
             name: name.into(),
             args: args.clone(),
+            space: Some(sid),
         };
         write_frame(&mut self.c.send, &msg)
             .await
@@ -117,6 +125,7 @@ impl Link {
                     ok,
                     image_png: png_base64.and_then(|p| BASE64.decode(p.as_bytes()).ok()),
                     supersedes_key,
+                    changed: None,
                 })
             }
             AgentMsg::Error { message } => Ok(ToolOutput::err(message)),
@@ -145,6 +154,11 @@ pub struct Remote {
 impl Remote {
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// The endpoint every link of the agent dials from (`cli.key`); copies dial from it too.
+    pub fn endpoint(&self) -> &Endpoint {
+        &self.ep
     }
 
     /// The device's OS and monitor lines, as of the last `Remotes::open`.
@@ -243,14 +257,20 @@ impl Executor for Remote {
         remote_system_prompt(&self.name, s.os.as_deref(), &s.monitors)
     }
 
-    async fn call(&self, _device: Option<&str>, name: &str, args: &Value) -> ToolOutput {
+    async fn call(
+        &self,
+        sid: SessionId,
+        _device: Option<&str>,
+        name: &str,
+        args: &Value,
+    ) -> ToolOutput {
         let mut retried = false;
         loop {
             let mut link = match self.link().await {
                 Ok(l) => l,
                 Err(e) => return ToolOutput::err(format!("{}: {e:#}", self.name)),
             };
-            match link.call(name, args).await {
+            match link.call(sid, name, args).await {
                 Ok(out) => {
                     self.put(link);
                     return out;

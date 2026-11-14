@@ -1,3 +1,4 @@
+use super::anchor::{same_place, Anchor};
 use super::model::{Element, Raw};
 use crate::Rect;
 
@@ -81,10 +82,13 @@ pub(crate) fn classify(raw: &Raw, window: &Rect) -> Option<Element> {
             String::new()
         },
         labeled: false,
+        learned: false,
         rect: raw.rect,
         patterns: raw.patterns,
         key: raw.key.clone(),
         popup: raw.bounds.is_some(),
+        parent: None,
+        anchor: Anchor::default(),
         handle: None,
     })
 }
@@ -108,17 +112,11 @@ pub(crate) fn recheck(old: &Element, raw: &Raw, old_win: &Rect, win: &Rect) -> R
     if now.kind != old.kind {
         return Err(format!("now a {}", now.kind));
     }
-    if now.name != old.name && !(old.labeled && now.name.is_empty()) {
+    if now.name != old.name && !((old.labeled || old.learned) && now.name.is_empty()) {
         return Err(format!("name now {:?}", now.name));
     }
-    // Compare relative to the window so a moved window does not invalidate everything.
-    const TOLERANCE: i32 = 10;
-    let (a, b) = (old.rect, now.rect);
-    let moved = ((b.x - win.x) - (a.x - old_win.x)).abs() > TOLERANCE
-        || ((b.y - win.y) - (a.y - old_win.y)).abs() > TOLERANCE
-        || (b.w - a.w).abs() > TOLERANCE
-        || (b.h - a.h).abs() > TOLERANCE;
-    if moved {
+    let b = now.rect;
+    if !same_place(&old.rect, old_win, &b, win) {
         return Err(format!("moved to {},{} {}x{}", b.x, b.y, b.w, b.h));
     }
     Ok(())

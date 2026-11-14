@@ -7,10 +7,10 @@
 
 use std::time::{Duration, Instant};
 
-use ywza_desktop::{self as desk, Button, Image, Rect, Snapshot, WindowId};
+use ywza_desktop::{self as desk, Button, Image, Rect, Snapshot, Tier, WindowId};
 
 use super::{
-    act::{settle_diff, NO_CHANGES},
+    act::{settle_diff, via},
     ocr::{engine, read_lines, snapshot_with_ocr},
     output::{desk_err, MODEL_IMAGE_MAX, R},
     util::blocking,
@@ -41,7 +41,7 @@ fn split_path(text: &str) -> Vec<&str> {
 }
 
 /// Element names compare without case, spaces, mnemonics and trailing dots ("Save _As…").
-fn label_norm(s: &str) -> String {
+pub(super) fn label_norm(s: &str) -> String {
     desk::ocr_norm(s)
         .trim_end_matches(['.', '…', ':'])
         .replace(['&', '_'], "")
@@ -202,25 +202,35 @@ async fn settle_pixels(w: WindowId, max: Duration) {
     }
 }
 
-async fn click_spot(snap: Snapshot, spot: Spot, button: Button, count: u32) -> desk::Result<()> {
+async fn click_spot(
+    snap: Snapshot,
+    spot: Spot,
+    button: Button,
+    count: u32,
+    real: bool,
+) -> desk::Result<Tier> {
     let w = snap.window.id;
     blocking(move || match spot.element {
-        Some(id) => desk::click(&snap, id, button, count),
-        None => desk::click_at(w, spot.rect.center(), button, count),
+        Some(id) => desk::click(&snap, id, button, count, real),
+        None => desk::click_at(w, spot.rect.center(), button, count).map(|_| Tier::Takeover),
     })
     .await
 }
 
 /// After an action without element ids: "ok" in a batch, else the changes since `base`.
-async fn finish(cx: &Ctx, w: WindowId, base: Option<Snapshot>, what: String) -> R {
+/// `what` already names the tier.
+async fn finish(cx: &Ctx, w: WindowId, base: Option<Snapshot>, what: String, tier: Tier) -> R {
     if cx.quiet {
-        return Ok(ToolOutput::ok("ok"));
+        return Ok(ToolOutput::ok(format!("ok{}", via(Some(tier)))));
     }
     settle_pixels(w, SETTLE_MAX).await;
     Ok(ToolOutput::ok(match base {
         Some(base) => match settle_diff(cx, w, &base).await {
-            Some(d) if d == NO_CHANGES => format!("{what}; no visible change"),
-            Some(d) => format!("{what}; changes:\n{}", d.trim_end()),
+            Some(Ok(d)) if d.is_empty() => format!("{what}; no visible change"),
+            Some(Ok(d)) => {
+                format!("{what}; changes:\n{}", desk::render_diff(&d).trim_end())
+            }
+            Some(Err(_)) => format!("{what}; changes:\nwindow closed"),
             None => what,
         },
         None => format!("{what}; get_elements to see the window now"),
@@ -235,11 +245,13 @@ pub async fn click_text(
     nth: Option<u32>,
     button: Button,
     count: u32,
+    real: bool,
 ) -> R {
     let path = split_path(text);
     let mut base: Option<Snapshot> = None;
     let mut before: Option<Vec<Spot>> = None;
     let mut what = String::new();
+    let mut tier = Tier::Takeover;
     for (i, label) in path.iter().enumerate() {
         let last = i + 1 == path.len();
         let (mut snap, mut spots) = look(cx, w, label).await?;
@@ -264,19 +276,20 @@ pub async fn click_text(
             Err(e) => return Err(ToolOutput::err(e)),
         };
         base.get_or_insert_with(|| snap.clone());
-        what = format!("clicked {:?} at {},{}", spot.text, spot.rect.x, spot.rect.y);
+        let place = format!("{:?} at {},{}", spot.text, spot.rect.x, spot.rect.y);
         let (b, c) = if last {
             (button, count)
         } else {
             (Button::Left, 1)
         };
-        click_spot(snap, spot, b, c).await.map_err(desk_err)?;
+        tier = click_spot(snap, spot, b, c, real).await.map_err(desk_err)?;
+        what = format!("clicked{} {place}", via(Some(tier)));
         if !last {
             settle_pixels(w, SETTLE_MAX).await;
         }
         before = Some(spots);
     }
-    finish(cx, w, base, what).await
+    finish(cx, w, base, what, tier).await
 }
 
 fn pick<'a>(
@@ -354,7 +367,8 @@ pub async fn click_point(cx: &Ctx, w: WindowId, x: i32, y: i32, button: Button, 
     blocking(move || desk::click_at(w, at, button, count))
         .await
         .map_err(desk_err)?;
-    finish(cx, w, base, format!("clicked at {x},{y}")).await
+    let what = format!("clicked{} at {x},{y}", via(Some(Tier::Takeover)));
+    finish(cx, w, base, what, Tier::Takeover).await
 }
 
 #[cfg(test)]

@@ -7,6 +7,7 @@ use ywza_desktop as desk;
 use ywza_proto::{AgentMsg, ClientMsg, ElementInfo, MonitorInfo, ScreenRect};
 
 use crate::{
+    live::editable,
     tools::{blocking, monitor_info, parse_window},
     Agent,
 };
@@ -85,7 +86,7 @@ impl Agent {
         };
         // Element boxes and the window rect must come from the same moment.
         let snap = if elements {
-            match self.tools.latest_snapshot(id, win.rect).await {
+            match self.tools.latest_snapshot(None, id, win.rect).await {
                 Ok(snap) => Some(snap),
                 Err(e) => return error(format!("window_info: {e}")),
             }
@@ -95,16 +96,8 @@ impl Agent {
         let (rect, monitor) = snap.as_ref().map_or((win.rect, win.monitor), |s| {
             (s.window.rect, s.window.monitor)
         });
-        let (ox, oy) = mons
-            .iter()
-            .find(|m| m.index == monitor)
-            .map_or((0, 0), |m| (m.rect.x, m.rect.y));
-        let rel = |r: desk::Rect| ScreenRect {
-            x: r.x - ox,
-            y: r.y - oy,
-            width: r.w.max(0) as u32,
-            height: r.h.max(0) as u32,
-        };
+        let origin = origin(&mons, monitor);
+        let rel = |r: desk::Rect| rel_rect(origin, r);
         let elements = snap.map(|snap| {
             snap.elements
                 .iter()
@@ -113,6 +106,7 @@ impl Agent {
                     role: e.kind.into(),
                     name: e.name.clone(),
                     rect: rel(e.rect),
+                    editable: editable(e.kind, &e.patterns),
                 })
                 .collect()
         });
@@ -123,6 +117,23 @@ impl Agent {
             rect: rel(rect),
             elements,
         }
+    }
+}
+
+/// The origin of monitor `index`, or (0, 0) when it is unknown.
+pub(crate) fn origin(mons: &[desk::Monitor], index: usize) -> (i32, i32) {
+    mons.iter()
+        .find(|m| m.index == index)
+        .map_or((0, 0), |m| (m.rect.x, m.rect.y))
+}
+
+/// `r` relative to a monitor's origin.
+pub(crate) fn rel_rect((ox, oy): (i32, i32), r: desk::Rect) -> ScreenRect {
+    ScreenRect {
+        x: r.x - ox,
+        y: r.y - oy,
+        width: r.w.max(0) as u32,
+        height: r.h.max(0) as u32,
     }
 }
 

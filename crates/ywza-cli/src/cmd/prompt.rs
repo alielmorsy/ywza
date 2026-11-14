@@ -37,7 +37,10 @@ pub async fn run(
                 if ours != Some(session) {
                     continue;
                 }
-                println!("{}", format_event(&event, verbose, color));
+                let line = format_event(&event, verbose, color);
+                if !line.is_empty() {
+                    println!("{line}");
+                }
                 match event {
                     SessionEvent::Done { .. } => return Ok(()),
                     SessionEvent::Failed { .. } => bail!("session failed"),

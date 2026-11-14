@@ -12,7 +12,7 @@ use crate::{
     local, net,
     remote::Remotes,
     sessions::Sessions,
-    tools::{ToolOutput, Tools},
+    tools::{Space, ToolOutput, Tools},
 };
 
 pub struct Agent {
@@ -22,6 +22,8 @@ pub struct Agent {
     pub tools: Tools,
     pub remotes: Remotes,
     pub approvals: Pending,
+    /// Sessions paused on a blocker, waiting for the user.
+    pub sos: crate::sos::Sos,
     pub pairing: net::pair::Pairing,
     pub tx: broadcast::Sender<AgentMsg>,
     pub http: reqwest::Client,
@@ -39,6 +41,10 @@ impl Agent {
         // reqwest is built without a bundled provider; iroh already links ring.
         let _ = rustls::crypto::ring::default_provider().install_default();
         std::fs::create_dir_all(&dir)?;
+        crate::vault::init(&dir);
+        crate::labels::init(&dir);
+        crate::plans::init(&dir);
+        let watching = crate::watch::init(&dir);
         let config = ConfigStore::load(dir.join("config.toml"))?;
         let key = ywza_proto::load_or_create_secret_key(&dir.join("agent.key"))?;
         let local_client =
@@ -66,6 +72,7 @@ impl Agent {
             tools: Default::default(),
             remotes: Default::default(),
             approvals: Default::default(),
+            sos: Default::default(),
             pairing: Default::default(),
             tx: broadcast::channel(1024).0,
             http: reqwest::Client::new(),
@@ -74,6 +81,9 @@ impl Agent {
             local_only,
         });
         tokio::spawn(net::watch_relay(agent.endpoint.clone()));
+        if watching {
+            crate::watch::spawn(agent.clone());
+        }
         tokio::spawn(net::accept_loop(agent.clone()));
         tokio::spawn(net::watch_pairing_requests(agent.clone()));
         match local::bind(&agent.dir).await {
@@ -142,11 +152,23 @@ impl Agent {
         );
     }
 
-    /// Runs a tool with the configured input idle time and OCR engine.
-    pub async fn run_tool(&self, name: &str, args: &Value) -> ToolOutput {
+    /// Runs a tool with the configured input idle time and OCR engine. Vault placeholders in
+    /// typed text are filled in first and vault values in the output are hidden again.
+    pub async fn run_tool(&self, space: Space, name: &str, args: &Value) -> ToolOutput {
         let cfg = self.config.get();
         ywza_desktop::set_idle_before_input(cfg.desktop.idle_before_input_ms.into());
-        self.tools.call(name, args, cfg.ocr.engine).await
+        // Taken before the call: it reads the element list the call's ids refer to.
+        let rec = crate::plans::record::before(&self.tools, space, name, args);
+        let args = match crate::vault::substitute(name, args) {
+            Ok(a) => a,
+            Err(e) => return ToolOutput::err(e),
+        };
+        let mut out = self.tools.call(space, name, &args, cfg.ocr.engine).await;
+        crate::vault::scrub(&mut out.text);
+        if let Some(rec) = rec {
+            crate::plans::record::after(rec, &out);
+        }
+        out
     }
 
     /// A client's `screenshot` request: no marks, sent only to that client. Full resolution

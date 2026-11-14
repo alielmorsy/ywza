@@ -4,7 +4,7 @@
 use serde_json::Value;
 use ywza_proto::{AgentMsg, SessionEvent, SessionId};
 
-use crate::Agent;
+use crate::{tools::Space, Agent};
 
 pub fn session(agent: &Agent, client_name: &str) -> SessionId {
     let sid = agent.sessions.create(&format!("MCP: {client_name}"));
@@ -20,6 +20,7 @@ pub fn session(agent: &Agent, client_name: &str) -> SessionId {
 
 pub fn end_session(agent: &Agent, sid: SessionId) {
     tracing::info!(session = %sid.0, "tool session ended");
+    agent.tools.drop_session(sid);
     agent.emit(
         sid,
         SessionEvent::Done {
@@ -28,17 +29,19 @@ pub fn end_session(agent: &Agent, sid: SessionId) {
     );
 }
 
-/// Runs a tool for an external client, logging it in `sid` like the agent's own calls. No approval step.
+/// Runs a tool for an external client, logging it in `sid` like the agent's own calls. No approval
+/// step. `sub` is the caller's own session on a peer, kept apart from other callers' element ids.
 pub async fn call_tool(
     agent: &Agent,
     sid: SessionId,
+    sub: Option<SessionId>,
     call: u64,
     name: String,
     args: Value,
 ) -> AgentMsg {
     let id = format!("mcp_{call}");
     agent.emit_tool_call(sid, &id, &name, &args, None);
-    let out = agent.run_tool(&name, &args).await;
+    let out = agent.run_tool(Space { session: sid, sub }, &name, &args).await;
     agent.emit_tool_result(sid, &id, &name, &out);
     AgentMsg::ToolResult {
         call,

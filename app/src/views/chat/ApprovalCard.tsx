@@ -32,7 +32,8 @@ export function ApprovalCard({ a, newest }: { a: Approval; newest: boolean }) {
     <div ref={group} role="group" aria-label={`Approval needed: ${a.tool}`} tabIndex={-1} onKeyDown={keys}
       className="rounded-md border border-warn/45 bg-warn-soft px-3 py-2.5">
       <div className="flex items-center gap-2 font-semibold text-warn"><Icon name="shield" /><span>Approval needed</span><span className="mono min-w-0 truncate">{a.tool}</span></div>
-      <div className="mt-1 break-words text-text select-text">{a.summary}</div>
+      {a.image && <img src={`data:image/png;base64,${a.image}`} alt="The element this action targets, boxed" className="mt-2 max-h-56 max-w-full rounded-md border border-line object-contain" />}
+      <div className="mt-1.5 break-words text-text select-text">{a.summary}</div>
       {a.detail && (
         <details className="mt-1.5">
           <summary className="w-fit cursor-pointer text-xs text-text-2 hover:text-text">Show arguments</summary>

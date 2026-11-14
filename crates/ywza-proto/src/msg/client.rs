@@ -83,6 +83,10 @@ pub enum ClientMsg {
         name: String,
         #[serde(default)]
         args: Value,
+        /// The caller's own session, when it is not this connection's: keeps its element ids
+        /// apart from the connection's other callers.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        space: Option<SessionId>,
     },
     /// The monitors (answered with `Monitors`).
     ListMonitors,
@@ -118,6 +122,36 @@ pub enum ClientMsg {
         xfer: u64,
         files: u64,
     },
+    /// The user is done with what a `Help` event asked for; the session continues. `note` is
+    /// passed on to the AI.
+    Resume {
+        session: SessionId,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        note: String,
+    },
+    /// Starts (or retargets) this connection's lens: the agent then sends `Lens` messages with
+    /// the window's tappable elements and keeps them current. `window` is `w<id>`; absent, the
+    /// lens follows the focused window on the live view's monitor (the foreground window when
+    /// no live view runs). The live view's monitor is read now: send this after `LiveStart`.
+    /// Needs `view`. The lens ends on `LensStop`, a new `LensStart`, losing `view` or disconnect.
+    LensStart {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        window: Option<String>,
+    },
+    LensStop,
+    /// Acts on a lens element (`id` from `Lens`), answered with `ToolResult` carrying `call`.
+    /// `text` absent clicks the element; present types it, replacing the field's content, and
+    /// `submit` then presses Enter. Runs like the `click` and `type_text` tools (vault values,
+    /// background actions). Needs `control`; fails when no lens runs.
+    LensAct {
+        call: u64,
+        window: String,
+        element: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        text: Option<String>,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        submit: bool,
+    },
 }
 
 impl ClientMsg {
@@ -146,6 +180,10 @@ impl ClientMsg {
             Self::Pull { .. } => "pull",
             Self::Push { .. } => "push",
             Self::PushEnd { .. } => "push_end",
+            Self::Resume { .. } => "resume",
+            Self::LensStart { .. } => "lens_start",
+            Self::LensStop => "lens_stop",
+            Self::LensAct { .. } => "lens_act",
         }
     }
 }
@@ -262,8 +300,18 @@ mod tests {
                 call: 4,
                 name: "wait".into(),
                 args: json!({"ms":1}),
+                space: None,
             },
             json!({"type":"call_tool","call":4,"name":"wait","args":{"ms":1}}),
+        );
+        check(
+            CallTool {
+                call: 4,
+                name: "wait".into(),
+                args: json!({}),
+                space: Some(sid()),
+            },
+            json!({"type":"call_tool","call":4,"name":"wait","args":{},"space":SID}),
         );
         assert_eq!(
             serde_json::from_value::<ClientMsg>(
@@ -274,6 +322,7 @@ mod tests {
                 call: 4,
                 name: "wait".into(),
                 args: json!({}),
+                space: None,
             }
         );
         check(
@@ -295,6 +344,48 @@ mod tests {
         check(
             PushEnd { xfer: 2, files: 3 },
             json!({"type":"push_end","xfer":2,"files":3}),
+        );
+        check(LensStart { window: None }, json!({"type":"lens_start"}));
+        check(
+            LensStart {
+                window: Some("w3".into()),
+            },
+            json!({"type":"lens_start","window":"w3"}),
+        );
+        check(LensStop, json!({"type":"lens_stop"}));
+        check(
+            LensAct {
+                call: 5,
+                window: "w3".into(),
+                element: 7,
+                text: None,
+                submit: false,
+            },
+            json!({"type":"lens_act","call":5,"window":"w3","element":7}),
+        );
+        check(
+            LensAct {
+                call: 6,
+                window: "w3".into(),
+                element: 8,
+                text: Some("hi".into()),
+                submit: true,
+            },
+            json!({"type":"lens_act","call":6,"window":"w3","element":8,"text":"hi","submit":true}),
+        );
+        check(
+            Resume {
+                session: sid(),
+                note: "done".into(),
+            },
+            json!({"type":"resume","session":SID,"note":"done"}),
+        );
+        check(
+            Resume {
+                session: sid(),
+                note: String::new(),
+            },
+            json!({"type":"resume","session":SID}),
         );
         check(
             Input {

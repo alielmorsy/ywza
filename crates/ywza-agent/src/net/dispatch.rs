@@ -3,14 +3,21 @@
 use std::{future::Future, sync::Arc};
 
 use iroh::endpoint::Connection;
+use serde_json::Value;
 use tokio::sync::mpsc::UnboundedSender;
-use ywza_proto::{AgentMsg, ClientMsg, InputEvent, SessionId};
+use ywza_proto::{AgentMsg, ClientMsg, InputEvent, MouseButton, SessionId};
 
 use super::{
     peer,
     xfer::{self, Pushes},
 };
-use crate::{live::Live, mcp, net::pair, Agent};
+use crate::{
+    live::{lens_act, to_pixels, Lens, Live},
+    mcp,
+    net::pair,
+    tools::parse_window,
+    Agent,
+};
 
 pub struct Client {
     agent: Arc<Agent>,
@@ -21,8 +28,12 @@ pub struct Client {
     direct: UnboundedSender<AgentMsg>,
     /// Dropped (stopping capture) on live_stop, a new live_start, losing `view`, or disconnect.
     live: Option<Live>,
+    /// Dropped on lens_stop, a new lens_start, losing `view`, or disconnect.
+    lens: Option<Lens>,
     /// Created on the first `call_tool`, so its calls show up as one session.
     mcp: Option<SessionId>,
+    /// The last normalized pointer position from `MouseMove`, for mapping taps to elements.
+    pointer: (f32, f32),
     pub pushes: Pushes,
 }
 
@@ -41,13 +52,17 @@ impl Client {
             local,
             direct,
             live: None,
+            lens: None,
             mcp: None,
+            pointer: (0.0, 0.0),
             pushes: Pushes::default(),
         }
     }
 
-    pub fn stop_live(&mut self) {
+    /// Stops everything that shows the screen (live view and lens).
+    pub fn stop_view(&mut self) {
         self.live = None;
+        self.lens = None;
     }
 
     /// Ends the client's tool-call session, if it made calls.
@@ -74,17 +89,44 @@ impl Client {
             ClientMsg::LiveStart { monitor } => self.live_start(monitor),
             ClientMsg::LiveStop => self.live = None,
             ClientMsg::Input { event } => self.input(event),
+            ClientMsg::LensStart { window } => self.lens_start(window),
+            ClientMsg::LensStop => self.lens = None,
+            ClientMsg::LensAct {
+                call,
+                window,
+                element,
+                text,
+                submit,
+            } => match &self.lens {
+                Some(l) => {
+                    let (agent, space) = (self.agent.clone(), l.space());
+                    self.reply_later(async move {
+                        lens_act(&agent, space, call, window, element, text, submit).await
+                    });
+                }
+                None => self.send(AgentMsg::ToolResult {
+                    call,
+                    ok: false,
+                    text: "lens is not running; send lens_start first".into(),
+                    png_base64: None,
+                }),
+            },
             ClientMsg::CreatePairing => {
                 let agent = self.agent.clone();
                 self.reply_later(async move { pair::create(&agent).await });
             }
-            ClientMsg::CallTool { call, name, args } => {
+            ClientMsg::CallTool {
+                call,
+                name,
+                args,
+                space,
+            } => {
                 let agent = self.agent.clone();
                 let sid = *self
                     .mcp
                     .get_or_insert_with(|| mcp::session(&agent, &self.name));
                 self.reply_later(
-                    async move { mcp::call_tool(&agent, sid, call, name, args).await },
+                    async move { mcp::call_tool(&agent, sid, space, call, name, args).await },
                 );
             }
             ClientMsg::Approve {
@@ -161,7 +203,43 @@ impl Client {
         }
     }
 
+    fn lens_start(&mut self, window: Option<String>) {
+        self.lens = None;
+        let target = match window {
+            Some(w) => match parse_window(&Value::String(w.clone())) {
+                Some(id) => Some(id),
+                None => {
+                    return self.send(AgentMsg::Error {
+                        message: format!("lens: bad window id `{w}`"),
+                    })
+                }
+            },
+            None => None,
+        };
+        let monitor = self.live.as_ref().map(|l| l.monitor);
+        self.lens = Some(Lens::start(
+            self.agent.clone(),
+            target,
+            monitor,
+            self.direct.clone(),
+        ));
+    }
+
     fn input(&mut self, event: InputEvent) {
+        match (&event, &self.live) {
+            (InputEvent::MouseMove { x, y }, _) => self.pointer = (*x, *y),
+            (
+                InputEvent::MouseButton {
+                    button: MouseButton::Left,
+                    down: true,
+                },
+                Some(l),
+            ) => {
+                let (x, y) = to_pixels(l.rect, self.pointer.0, self.pointer.1);
+                self.agent.sos.touch(x, y);
+            }
+            _ => {}
+        }
         match &self.live {
             Some(l) => l.input(event),
             None if !matches!(event, InputEvent::MouseMove { .. }) => self.send(AgentMsg::Error {

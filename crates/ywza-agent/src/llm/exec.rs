@@ -1,10 +1,13 @@
 use std::future::Future;
 
 use serde_json::Value;
-use ywza_proto::ToolInfo;
+use ywza_proto::{SessionId, ToolInfo};
 
 use super::system_prompt;
-use crate::{tools::ToolOutput, Agent};
+use crate::{
+    tools::{Space, ToolOutput},
+    Agent,
+};
 
 /// Where the model's tool calls run: this machine, or a paired device (`crate::remote`).
 pub trait Executor: Sync {
@@ -17,6 +20,7 @@ pub trait Executor: Sync {
     /// `device` comes from `route`.
     fn call(
         &self,
+        sid: SessionId,
         device: Option<&str>,
         name: &str,
         args: &Value,
@@ -34,7 +38,17 @@ impl Executor for Local<'_> {
         system_prompt(&crate::tools::monitors_text().await)
     }
 
-    async fn call(&self, _device: Option<&str>, name: &str, args: &Value) -> ToolOutput {
-        self.0.run_tool(name, args).await
+    async fn call(
+        &self,
+        sid: SessionId,
+        _device: Option<&str>,
+        name: &str,
+        args: &Value,
+    ) -> ToolOutput {
+        let space = Space {
+            session: sid,
+            sub: None,
+        };
+        self.0.run_tool(space, name, args).await
     }
 }

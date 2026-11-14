@@ -1,13 +1,14 @@
 use schemars::{json_schema, JsonSchema, Schema, SchemaGenerator};
 use serde::Deserialize;
 use serde_json::Value;
-use ywza_desktop::{Snapshot, WindowId};
+use ywza_desktop::{render_diff, Snapshot, WindowId};
 
 use super::{
-    act::{settle_diff, NO_CHANGES},
-    args::parse_window,
+    act::settle_diff,
+    args::{parse_element, parse_window},
     Ctx, Tool, ToolOutput, WindowArg,
 };
+use crate::plans::guard;
 
 /// Tools a `batch` may run.
 pub const BATCH_TOOLS: &[&str] = &[
@@ -66,6 +67,14 @@ pub fn parse_batch(window: Option<&Value>, list: &[Value]) -> Result<Vec<Step>, 
         .collect()
 }
 
+/// The `expect` guard of an element action: a message when the element in the window's stored
+/// list is named differently. Anything the guard cannot check is left to the tool.
+fn guard_failure(cx: &Ctx, args: &Value, want: &str) -> Option<String> {
+    let snap = cx.snap(parse_window(&args["window"])?)?;
+    let e = snap.get(args.get("element").and_then(parse_element)?)?;
+    (!guard::contains(&e.name, want)).then(|| format!("guard failed: [{}] is now {}", e.id, e.line()))
+}
+
 /// Outcome of one batch action; `error` set = it failed.
 pub struct StepResult {
     pub tool: String,
@@ -94,7 +103,7 @@ fn actions_schema(_: &mut SchemaGenerator) -> Schema {
         "type": "array",
         "minItems": 1,
         "description": format!(
-            "Each item is {{\"tool\": ...}} plus that tool's arguments. Tools: {}.",
+            "Each item is {{\"tool\": ...}} plus that tool's arguments. Tools: {}. An item may add \"expect\": text its element's name must contain, else it fails.",
             BATCH_TOOLS.join(", ")
         ),
         "items": {
@@ -106,7 +115,7 @@ fn actions_schema(_: &mut SchemaGenerator) -> Schema {
     })
 }
 
-/// Run several UI actions in order in one call, stopping at the first failure. Element ids come from the window's latest get_elements, from before the batch. Inner actions inherit `window` unless they set their own. Returns one line per action, then the element changes since the batch started (or the fresh list if an id went stale).
+/// Run several UI actions in order in one call, stopping at the first failure. Element ids come from the window's latest get_elements, from before the batch. Inner actions inherit `window` unless they set their own. An action with `expect` (text its element's name must contain, any case) fails if the element is named differently. Returns one line per action, then the element changes since the batch started (or the fresh list if an id went stale).
 #[derive(Deserialize, JsonSchema)]
 pub struct Batch {
     /// Window id from list_windows/launch, e.g. "w3412106".
@@ -137,7 +146,16 @@ impl Tool for Batch {
                     baselines.push((w, s));
                 }
             }
-            let out = inner.call(&step.tool, step.args.clone()).await;
+            let mut args = step.args.clone();
+            let expect = args.as_object_mut().and_then(|a| a.remove("expect"));
+            let guarded = expect
+                .as_ref()
+                .and_then(Value::as_str)
+                .and_then(|want| guard_failure(cx, &args, want));
+            let out = match guarded {
+                Some(msg) => ToolOutput::err(msg),
+                None => inner.call(&step.tool, args).await,
+            };
             results.push(StepResult {
                 tool: step.tool.clone(),
                 error: (!out.ok).then(|| out.text.clone()),
@@ -164,10 +182,10 @@ impl Tool for Batch {
                 } else {
                     "changes".into()
                 };
-                text += &if d == NO_CHANGES {
-                    format!("\n{head}: none visible")
-                } else {
-                    format!("\n{head}:\n{}", d.trim_end())
+                text += &match d {
+                    Ok(d) if d.is_empty() => format!("\n{head}: none visible"),
+                    Ok(d) => format!("\n{head}:\n{}", render_diff(&d).trim_end()),
+                    Err(_) => format!("\n{head}:\nwindow closed"),
                 };
             }
         }
@@ -183,10 +201,17 @@ impl Tool for Batch {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use ywza_proto::OcrEngine;
+    use ywza_proto::{OcrEngine, SessionId};
 
     use super::*;
-    use crate::tools::Tools;
+    use crate::tools::{Space, Tools};
+
+    fn space() -> Space {
+        Space {
+            session: SessionId::new(),
+            sub: None,
+        }
+    }
 
     fn steps(args: Value) -> Result<Vec<Step>, String> {
         let list = args["actions"].as_array().cloned().unwrap_or_default();
@@ -254,7 +279,7 @@ mod tests {
     async fn batch_of_waits_reports_each_action() {
         let t = Tools::default();
         let args = json!({"window":"w1","actions":[{"tool":"wait","ms":1},{"tool":"wait","ms":2}]});
-        let out = t.call("batch", &args, OcrEngine::Auto).await;
+        let out = t.call(space(), "batch", &args, OcrEngine::Auto).await;
         assert!(out.ok, "{out:?}");
         assert_eq!(out.text, "1 wait ok\n2 wait ok");
     }
@@ -267,7 +292,7 @@ mod tests {
             {"tool":"wait","ms":1},
             {"tool":"click","element":3},
             {"tool":"wait","ms":1}]});
-        let out = t.call("batch", &args, OcrEngine::Auto).await;
+        let out = t.call(space(), "batch", &args, OcrEngine::Auto).await;
         assert!(!out.ok);
         assert!(
             out.text

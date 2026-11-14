@@ -114,6 +114,7 @@ pub(super) fn raw_from(el: &IUIAutomationElement) -> Result<Raw> {
             },
             key: Var::get(el, UIA_RuntimeIdPropertyId).ints(),
             bounds: None,
+            parent: None,
             patterns,
         })
     }

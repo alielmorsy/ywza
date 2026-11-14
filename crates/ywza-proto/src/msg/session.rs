@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+use super::ScreenRect;
+
 /// Conversation identifier; a UUID rendered as a string on the wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -75,6 +77,39 @@ pub enum SessionEvent {
     Failed {
         error: String,
     },
+    /// Token receipt, once per run just before done/failed. `screenshot_estimate`: input plus
+    /// output tokens a screenshot-based agent would have used for the same steps. Costs need prices.
+    Usage {
+        input: u64,
+        output: u64,
+        cached: u64,
+        requests: u32,
+        tool_calls: u32,
+        screenshot_estimate: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cost: Option<f64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        screenshot_cost: Option<f64>,
+    },
+    /// The run paused because the AI needs the user (`kind`: otp, uac, credentials, captcha,
+    /// login or stuck) until a `Resume` arrives. `window` is `w<id>`; `rect` is the window's
+    /// rect relative to `monitor`.
+    Help {
+        kind: String,
+        reason: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        window: Option<String>,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        monitor: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rect: Option<ScreenRect>,
+    },
+    /// The user handed back; `digest` is what the AI was told about their changes.
+    Resumed {
+        digest: String,
+    },
 }
 
 #[cfg(test)]
@@ -128,6 +163,52 @@ mod tests {
         check(
             Failed { error: "e".into() },
             json!({"type":"failed","error":"e"}),
+        );
+        check(
+            Usage {
+                input: 10,
+                output: 2,
+                cached: 4,
+                requests: 1,
+                tool_calls: 0,
+                screenshot_estimate: 12,
+                cost: Some(0.5),
+                screenshot_cost: None,
+            },
+            json!({"type":"usage","input":10,"output":2,"cached":4,"requests":1,
+                "tool_calls":0,"screenshot_estimate":12,"cost":0.5}),
+        );
+        check(
+            Help {
+                kind: "otp".into(),
+                reason: "r".into(),
+                window: Some("w123".into()),
+                title: "Sign in".into(),
+                monitor: Some(0),
+                rect: Some(ScreenRect {
+                    x: 1,
+                    y: 2,
+                    width: 3,
+                    height: 4,
+                }),
+            },
+            json!({"type":"help","kind":"otp","reason":"r","window":"w123","title":"Sign in",
+                "monitor":0,"rect":{"x":1,"y":2,"width":3,"height":4}}),
+        );
+        check(
+            Help {
+                kind: "stuck".into(),
+                reason: "r".into(),
+                window: None,
+                title: String::new(),
+                monitor: None,
+                rect: None,
+            },
+            json!({"type":"help","kind":"stuck","reason":"r"}),
+        );
+        check(
+            Resumed { digest: "d".into() },
+            json!({"type":"resumed","digest":"d"}),
         );
     }
 }

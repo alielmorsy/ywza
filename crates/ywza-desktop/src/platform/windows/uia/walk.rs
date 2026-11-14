@@ -2,7 +2,7 @@ use super::handle::Handle;
 use super::raw::{automation, cache_request, raw_from};
 use crate::platform::windows::util::{hwnd, window_id};
 use crate::platform::windows::wm;
-use crate::snapshot::Raw;
+use crate::snapshot::{merge_popup, Raw};
 use crate::{Rect, Result, Snapshot, WindowId};
 use ::windows::Win32::UI::Accessibility::{
     IUIAutomation, IUIAutomationCacheRequest, IUIAutomationElement,
@@ -21,20 +21,19 @@ pub fn snapshot(window: WindowId, prev: Option<&Snapshot>) -> Result<Snapshot> {
     let popups = wm::popup_windows(&info);
     let dialogs: Vec<WindowId> = popups.iter().filter(|p| p.1).map(|p| p.0).collect();
     let mut raws = collect(&uia, &cache, window, None, &dialogs)?;
+    if super::chromium::needs_wake(&raws, window) && super::chromium::wake(window) {
+        raws = collect(&uia, &cache, window, None, &dialogs)?;
+    }
     for (popup, dialog) in popups {
         let bounds = wm::visible_rect(hwnd(popup));
         if dialog {
             raws.push((dialog_pointer(popup, bounds), None));
             continue;
         }
-        for (raw, handle) in collect(&uia, &cache, popup, Some(bounds), &[]).unwrap_or_default() {
-            if raws
-                .iter()
-                .all(|(r, _)| r.key.is_empty() || r.key != raw.key)
-            {
-                raws.push((raw, handle));
-            }
-        }
+        merge_popup(
+            &mut raws,
+            collect(&uia, &cache, popup, Some(bounds), &[]).unwrap_or_default(),
+        );
     }
     Ok(Snapshot::build(info, raws, prev))
 }
@@ -59,8 +58,8 @@ fn dialog_pointer(id: WindowId, rect: Rect) -> Raw {
 }
 
 /// All control-view descendants of a window in document order, each once, tagged
-/// with `bounds` for popups. The `skip` windows (owned dialogs UIA nests under their
-/// owner) are left out with their subtree.
+/// with `bounds` for popups and the index of their parent (always earlier). The `skip`
+/// windows (owned dialogs UIA nests under their owner) are left out with their subtree.
 ///
 /// A TreeWalker with a RuntimeId visited set, not `FindAll(Descendants)`: WinUI 3
 /// hosts expose a WebView2 HWND twice (as a Win32 child and under the XAML WebView2
@@ -89,13 +88,14 @@ fn collect(
         };
         let mut seen = std::collections::HashSet::new();
         let mut raws = Vec::new();
-        // Each node with the name of its nearest named group (radio questions).
-        let mut stack: Vec<_> = children(&root)
+        // Each node with the name of its nearest named group (radio questions) and its
+        // parent's index.
+        let mut stack: Vec<(IUIAutomationElement, String, Option<usize>)> = children(&root)
             .into_iter()
-            .map(|c| (c, String::new()))
+            .map(|c| (c, String::new(), None))
             .collect();
         let mut visits = 0;
-        while let Some((el, group)) = stack.pop() {
+        while let Some((el, group, parent)) = stack.pop() {
             visits += 1;
             if visits > MAX_NODES {
                 break;
@@ -117,9 +117,15 @@ fn collect(
             } else {
                 group.clone()
             };
-            stack.extend(children(&el).into_iter().map(|c| (c, inner.clone())));
+            let at = raws.len();
+            stack.extend(
+                children(&el)
+                    .into_iter()
+                    .map(|c| (c, inner.clone(), Some(at))),
+            );
             raw.bounds = bounds;
             raw.group = group;
+            raw.parent = parent;
             raws.push((raw, Some(Handle(el))));
         }
         Ok(raws)

@@ -1,10 +1,13 @@
 import { useLayoutEffect, useRef } from "react";
 import { Icon } from "../../Icon";
-import type { Approval, SEvent } from "../../api";
+import { helpOf, type Approval, type SEvent } from "../../api";
 import { setPairing } from "../../nav";
 import { LetIn } from "../PairDialog";
 import { ApprovalCard } from "./ApprovalCard";
+import { HelpCard } from "./HelpCard";
 import { Markdown } from "./Markdown";
+import { Receipt } from "./Receipt";
+import { ResumedRow } from "./ResumedRow";
 import { ShownImage } from "./ShownImage";
 import { ToolRow } from "./ToolRow";
 
@@ -13,9 +16,9 @@ type Result = Extract<SEvent, { type: "tool_result" }>;
 const EXAMPLES = ["What's open on the screen?", "Open Notepad and write a shopping list"];
 
 /** `alone`: This PC with nothing paired yet; the empty chat leads with pairing. */
-interface Props { who: string; events: SEvent[]; running: boolean; approvals: Approval[]; fresh: boolean; alone?: boolean; compact?: boolean; onExample: (t: string) => void }
+interface Props { who: string; dev: string; session: string | null; events: SEvent[]; running: boolean; approvals: Approval[]; fresh: boolean; alone?: boolean; compact?: boolean; onExample: (t: string) => void }
 
-export function Messages({ who, events, running, approvals, fresh, alone, compact, onExample }: Props) {
+export function Messages({ who, dev, session, events, running, approvals, fresh, alone, compact, onExample }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
 
@@ -33,6 +36,7 @@ export function Messages({ who, events, running, approvals, fresh, alone, compac
   }
   const pending = approvals.filter((a) => !a.resolved);
   const newest = pending[pending.length - 1];
+  const help = helpOf(events);
   const col = compact ? "" : "mx-auto w-full max-w-[720px]";
   const prose = `${col} leading-[1.5] break-words text-text select-text`;
 
@@ -66,13 +70,19 @@ export function Messages({ who, events, running, approvals, fresh, alone, compac
             return e.image ? <div key={i} className={col}><ShownImage png={e.image} /></div> : null;
           case "done":
             return e.summary.trim() && e.summary.trim() !== lastAssistant ? <Markdown key={i} className={prose}>{e.summary}</Markdown> : null;
+          case "usage":
+            return <Receipt key={i} u={e} className={col} />;
           case "failed":
             return <div key={i} className={`${col} flex items-start gap-2 break-words whitespace-pre-wrap text-bad select-text`}><Icon name="warn" className="mt-px" />{e.error}</div>;
+          case "help":
+            return session ? <div key={i} className={col}><HelpCard h={e} open={e === help} dev={dev} session={session} /></div> : null;
+          case "resumed":
+            return <div key={i} className={col}><ResumedRow digest={e.digest} /></div>;
           default: return null;
         }
       })}
       {approvals.map((a) => <div key={a.request} className={col}><ApprovalCard a={a} newest={a === newest} /></div>)}
-      {running && !newest && <div className={`${col} animate-pulse text-text-3`} role="status">Working</div>}
+      {running && !newest && !help && <div className={`${col} animate-pulse text-text-3`} role="status">Working</div>}
     </div>
   );
 }

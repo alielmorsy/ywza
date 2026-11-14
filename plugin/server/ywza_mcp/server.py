@@ -1,5 +1,6 @@
 import json
 import sys
+from .fanout import FANOUT, fanout
 from .files import COPY, copy
 from .local import YwzaError
 
@@ -30,7 +31,7 @@ def mcp_result(devs, method, params):
     if method == "ping":
         return {}
     if method == "tools/list":
-        tools = [LIST_DEVICES, COPY]
+        tools = [LIST_DEVICES, COPY, FANOUT]
         for t in devs.tools():
             schema = t["parameters"]
             props = {**schema.get("properties", {}), "device": DEVICE_ARG}
@@ -54,6 +55,9 @@ def mcp_result(devs, method, params):
                 ok, text = copy(args.get("src", ""), args.get("dst", ""), devs.names())
             except OSError as e:
                 ok, text = False, str(e)
+            return {"content": [{"type": "text", "text": text}], "isError": not ok}
+        if params["name"] == "fanout":
+            ok, text = fanout(devs, args.get("tool"), args.get("args"), args.get("devices"))
             return {"content": [{"type": "text", "text": text}], "isError": not ok}
         try:
             y = devs.get(args.pop("device", None))

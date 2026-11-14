@@ -165,6 +165,11 @@ async fn target(app: &AppHandle, device: &str) -> Result<(Endpoint, Ticket), Str
     Ok((endpoint(app, &key, relay).await?, ticket))
 }
 
+/// The endpoint paired `device` is dialed from (shared with its control connection).
+pub async fn device_endpoint(app: &AppHandle, device: &str) -> Result<Endpoint, String> {
+    Ok(target(app, device).await?.0)
+}
+
 fn client_name(device: &str) -> String {
     if device == LOCAL {
         return "ywza-app".into();

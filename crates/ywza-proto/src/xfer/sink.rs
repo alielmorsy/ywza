@@ -17,9 +17,13 @@ pub struct Sink {
 
 impl Sink {
     /// cp semantics: into `dest/name` if `dest` is an existing folder, else `dest` itself.
+    /// A trailing separator makes `dest` a folder, created when missing.
     pub fn new(dest: &Path, name: &str) -> io::Result<Self> {
         if name.is_empty() || safe_rel(name).is_none_or(|p| p.components().count() != 1) {
             return Err(io::Error::other(format!("bad source name `{name}`")));
+        }
+        if dest.to_string_lossy().ends_with(['/', '\\']) {
+            std::fs::create_dir_all(dest)?;
         }
         let root = if dest.is_dir() {
             dest.join(name)

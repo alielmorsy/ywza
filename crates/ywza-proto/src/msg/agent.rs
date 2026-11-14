@@ -44,6 +44,9 @@ pub struct ElementInfo {
     pub name: String,
     /// Relative to the window's monitor.
     pub rect: ScreenRect,
+    /// A text field whose content can be replaced (`LensAct` with `text`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub editable: bool,
 }
 
 /// A device paired with this agent.
@@ -95,12 +98,15 @@ pub enum AgentMsg {
     /// A tool call waits for a client's `Approve`. Sent to every client that can see sessions,
     /// and again after `GetSession` (and, to local clients, after `Welcome`) while pending.
     /// `detail` is the call's arguments, plus the device name for a session on a device.
+    /// `image`: base64 PNG of the window region around the element the call targets, boxed.
     ApprovalRequest {
         request: u64,
         session: SessionId,
         tool: String,
         summary: String,
         detail: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        image: Option<String>,
     },
     /// The request was answered (by any client) or dropped with its session.
     ApprovalResolved {
@@ -181,6 +187,29 @@ pub enum AgentMsg {
     },
     Error {
         message: String,
+    },
+    /// A watcher's condition held: `text` says what happened. `watcher` is its id, for
+    /// turning it off (`watcher_set`).
+    WatchFired {
+        watcher: String,
+        name: String,
+        text: String,
+    },
+    /// Lens (`LensStart`): the tappable elements of the followed window, for chips over the
+    /// live view. `window` is `w<id>`; `monitor`, `rect` and the element rects are relative to
+    /// that monitor's origin, as in `WindowInfo`. `full` true: `elements` is the whole list and
+    /// replaces the client's (`removed` is empty); the first message and every change of window
+    /// are full. `full` false: upsert `elements` by `id`, then drop the `removed` ids. Element
+    /// ids are the lens's own: pass them back in `LensAct`. At most 300 elements.
+    Lens {
+        window: String,
+        title: String,
+        monitor: u32,
+        rect: ScreenRect,
+        full: bool,
+        elements: Vec<ElementInfo>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        removed: Vec<u32>,
     },
 }
 
@@ -282,9 +311,22 @@ mod tests {
                 tool: "run_command".into(),
                 summary: "ls".into(),
                 detail: "{}".into(),
+                image: None,
             },
             json!({"type":"approval_request","request":3,"session":SID,"tool":"run_command",
                    "summary":"ls","detail":"{}"}),
+        );
+        check(
+            ApprovalRequest {
+                request: 4,
+                session: sid(),
+                tool: "click".into(),
+                summary: "click [1] button \"OK\"".into(),
+                detail: "{}".into(),
+                image: Some("iVBOR".into()),
+            },
+            json!({"type":"approval_request","request":4,"session":SID,"tool":"click",
+                   "summary":"click [1] button \"OK\"","detail":"{}","image":"iVBOR"}),
         );
         check(
             ApprovalResolved {
@@ -370,10 +412,43 @@ mod tests {
                     role: "button".into(),
                     name: "OK".into(),
                     rect,
+                    editable: false,
                 }]),
             },
             json!({"type":"window_info","window":"w3","title":"t","monitor":1,"rect":rect_json,
                    "elements":[{"id":7,"role":"button","name":"OK","rect":rect_json}]}),
+        );
+        check(
+            Lens {
+                window: "w3".into(),
+                title: "t".into(),
+                monitor: 1,
+                rect,
+                full: true,
+                elements: vec![ElementInfo {
+                    id: 8,
+                    role: "edit".into(),
+                    name: "Name".into(),
+                    rect,
+                    editable: true,
+                }],
+                removed: Vec::new(),
+            },
+            json!({"type":"lens","window":"w3","title":"t","monitor":1,"rect":rect_json,"full":true,
+                   "elements":[{"id":8,"role":"edit","name":"Name","rect":rect_json,"editable":true}]}),
+        );
+        check(
+            Lens {
+                window: "w3".into(),
+                title: "t".into(),
+                monitor: 1,
+                rect,
+                full: false,
+                elements: Vec::new(),
+                removed: vec![8, 9],
+            },
+            json!({"type":"lens","window":"w3","title":"t","monitor":1,"rect":rect_json,"full":false,
+                   "elements":[],"removed":[8,9]}),
         );
         check(
             ToolResult {

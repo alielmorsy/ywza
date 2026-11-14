@@ -4,6 +4,9 @@
 //! - `pair`: asks the running agent for a one-time 6-digit pairing code (via
 //!   `<config_dir>/pairing-request`, answered in `<config_dir>/pairing.code`) and prints it.
 //!   Valid 10 minutes, single use.
+//! - `vault set <key>|list|remove <key>`: manages the secrets in `<config_dir>/vault.toml`.
+//! - `plans list|show <name>|delete <name>|save <name> [<session-id>]`: manages the plans in
+//!   `<config_dir>/plans`; `save` compiles the steps a session recorded (default: the latest).
 //! - `ticket`: prints `<config_dir>/agent.ticket` (address only; for local clients holding `local-client.key`).
 //! - `service [--user <name>]` (Linux, root): keeps a `run` agent on whatever X11 session seat0
 //!   shows; see `platform/linux/service`. On Windows the SCM runs it (as LocalSystem) to keep
@@ -57,7 +60,7 @@ fn take_log_file(args: &mut Vec<String>) -> Result<Option<PathBuf>, ()> {
 }
 
 const USAGE: &str =
-    "usage: ywza-agent [-v|-vv|-q] [--log-file <path>] [run|pair|ticket|service [--user <name>]]";
+    "usage: ywza-agent [-v|-vv|-q] [--log-file <path>] [run|pair|ticket|vault set <key>|list|remove <key>|plans list|show <name>|delete <name>|save <name> [<session-id>]|service [--user <name>]]";
 
 /// `[log]` from the config file for early init; a bad file is reported when the agent loads it.
 fn log_config(
@@ -135,6 +138,8 @@ fn main() -> anyhow::Result<()> {
             Ok(())
         }),
         "pair" => rt.block_on(pair(dir)),
+        "vault" => ywza_agent::vault::cli(&dir, &args[2..]),
+        "plans" => ywza_agent::plans::cli::run(&dir, &args[2..]),
         "ticket" => {
             let path = dir.join("agent.ticket");
             let t = std::fs::read_to_string(&path)
@@ -147,6 +152,19 @@ fn main() -> anyhow::Result<()> {
             std::process::exit(2);
         }
     }
+}
+
+/// Dark modules print as spaces and the light ground as blocks, so phones read it off a dark terminal.
+fn pairing_qr(code: &str) -> String {
+    use qrcode::{render::unicode::Dense1x2, QrCode};
+    QrCode::new(format!("ywza://pair/{code}"))
+        .map(|q| {
+            q.render::<Dense1x2>()
+                .dark_color(Dense1x2::Light)
+                .light_color(Dense1x2::Dark)
+                .build()
+        })
+        .unwrap_or_default()
 }
 
 async fn pair(dir: PathBuf) -> anyhow::Result<()> {
@@ -167,6 +185,7 @@ async fn pair(dir: PathBuf) -> anyhow::Result<()> {
         }
         let (code, secs) = text.split_once(' ').unwrap_or((text, "600"));
         println!("{code}");
+        eprintln!("{}", pairing_qr(code));
         let minutes = secs.parse::<u64>().map_or(10, |s| s.div_ceil(60));
         eprintln!(
             "Valid for {minutes} minutes, one device, one try. On the other device run: ywza pair {code} --name <name>"
@@ -175,4 +194,15 @@ async fn pair(dir: PathBuf) -> anyhow::Result<()> {
     }
     let _ = std::fs::remove_file(dir.join("pairing-request"));
     anyhow::bail!("no answer from the agent; is `ywza-agent run` running?")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pairing_qr_renders() {
+        let qr = pairing_qr("123456");
+        assert!(qr.lines().count() > 10 && qr.contains('\u{2588}'));
+    }
 }

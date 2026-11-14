@@ -1,12 +1,14 @@
 use super::clipboard::Held;
-use super::foreground::{wait_idle, with_foreground};
+use super::foreground::wait_idle;
+use super::ghost::{give_back, takeover, Block};
 use super::keyboard::{char_key, chord};
 use super::lock::InputLock;
+use super::message;
 use super::mouse::warp;
 use super::raw::{mouse, send, unicode};
 use crate::platform::windows::util::hwnd;
 use crate::platform::windows::{uia, wm};
-use crate::{Error, Result, Snapshot};
+use crate::{Error, Result, Snapshot, Tier};
 use ::windows::Win32::Foundation::{LPARAM, POINT, WPARAM};
 use ::windows::Win32::UI::Input::KeyboardAndMouse::*;
 use ::windows::Win32::UI::WindowsAndMessaging::{
@@ -18,7 +20,8 @@ use std::time::{Duration, Instant};
 /// Types into an element, checking each time that the text arrived. It focuses the
 /// element itself, so callers must not click it first. `append` false replaces the
 /// content, true types at its end.
-/// - native controls: ValuePattern SetValue, read back;
+/// - native controls: ValuePattern SetValue, read back; else WM_SETTEXT for classic
+///   Win32 edits (see `message`);
 /// - Chromium web content (rich editors drop SetValue, see `uia::is_web`): posted
 ///   characters to the render widget while the window stays in the background, when
 ///   the element already has focus in its page and is empty. When it is not focused
@@ -28,32 +31,61 @@ use std::time::{Duration, Instant};
 ///   end when appending), type, and give the foreground back. Empty text deletes the
 ///   selection; long or non-keyboard text is pasted (see `pastes`).
 ///
+/// `real` skips the pattern and message tiers and keeps the takeover as it always was
+/// (the previous foreground comes back unconditionally); without it the foreground
+/// comes back only when nothing opened.
+///
 /// Before every batch of keys the element is re-validated (same RuntimeId, name and
 /// kind), so keys never go to a control that changed under us (another chat opened).
-/// With `id` None, types at the cursor of the window's focused control.
-pub fn type_text(snap: &Snapshot, id: Option<u32>, text: &str, append: bool) -> Result<()> {
+/// With `id` None, types at the cursor of the window's focused control (pasted when
+/// `focus_pastes`) and reads that control back when it is readable.
+pub fn type_text(
+    snap: &Snapshot,
+    id: Option<u32>,
+    text: &str,
+    append: bool,
+    real: bool,
+) -> Result<Tier> {
     let window = snap.window.id;
     let Some(id) = id else {
         let _lock = InputLock::foreground(Some(window))?;
-        return with_foreground(Some(window), || send_text(text));
+        let (el, _held) = takeover(real, window, || {
+            let el = uia::focused();
+            if focus_pastes(text) {
+                let held = Held::put(text)?;
+                send(&chord(&[VK_CONTROL, VIRTUAL_KEY(b'V' as u16)]))?;
+                return Ok((el, Some(held)));
+            }
+            send_text(text)?;
+            Ok((el, None))
+        })?;
+        if let Some(el) = el {
+            verify("the focused control", &el, text, true)?;
+        }
+        return Ok(Tier::Takeover);
     };
-    {
+    if !real {
         let _lock = InputLock::window(window)?;
         let (e, el) = uia::live(snap, id)?;
         if let Some(el) = el {
             let settable = e.patterns.value && !e.patterns.value_readonly;
             if uia::is_web(&el) {
                 if background_type(snap, id, &el, text)? {
-                    return Ok(());
+                    return Ok(Tier::Message);
                 }
-            } else if settable {
-                let value = if append {
-                    uia::text(&el).map(|cur| cur + text)
-                } else {
-                    Some(text.to_string())
-                };
-                if value.is_some_and(|v| uia::set_value(&el, &v) && uia::value_is(&el, &v)) {
-                    return Ok(());
+            } else {
+                if settable {
+                    let value = if append {
+                        uia::text(&el).map(|cur| cur + text)
+                    } else {
+                        Some(text.to_string())
+                    };
+                    if value.is_some_and(|v| uia::set_value(&el, &v) && uia::value_is(&el, &v)) {
+                        return Ok(Tier::Pattern);
+                    }
+                }
+                if message::set_text(&el, text, append) {
+                    return Ok(Tier::Message);
                 }
             }
         }
@@ -62,9 +94,11 @@ pub fn type_text(snap: &Snapshot, id: Option<u32>, text: &str, append: bool) -> 
     let _lock = InputLock::foreground(Some(window))?;
     let (e, el) = uia::live(snap, id)?;
     if el.is_none() {
-        return with_foreground(Some(window), || send_text(text)); // OCR box: no UIA object
+        takeover(real, window, || send_text(text))?; // OCR box: no UIA object
+    } else {
+        takeover_type(snap, id, e.rect.center(), append, text, real)?;
     }
-    takeover_type(snap, id, e.rect.center(), append, text)
+    Ok(Tier::Takeover)
 }
 
 /// Path A: WM_CHAR posted to the Chromium render widget, no focus change, no
@@ -86,7 +120,7 @@ fn background_type(snap: &Snapshot, id: u32, el: &uia::Uia, text: &str) -> Resul
     for u in text.encode_utf16() {
         unsafe { PostMessageW(Some(target), WM_CHAR, WPARAM(u as usize), LPARAM(1))? };
     }
-    verify(id, el, text, true)?;
+    verify(&format!("element {id}"), el, text, true)?;
     Ok(true)
 }
 
@@ -103,14 +137,29 @@ fn pastes(text: &str) -> bool {
             .any(|c| !c.is_control() && char_key(c).is_none())
 }
 
-/// Path B: brief foreground takeover with real keys; the previous foreground window
-/// and the cursor are restored afterwards.
-fn takeover_type(snap: &Snapshot, id: u32, at: (i32, i32), append: bool, text: &str) -> Result<()> {
+/// At the focused control multi-line text is pasted too: typed Enter and Unicode packets
+/// came out reordered and mixed up in a freshly opened Windows 11 Notepad tab.
+fn focus_pastes(text: &str) -> bool {
+    pastes(text) || text.contains('\n')
+}
+
+/// Path B: brief foreground takeover with real keys; the cursor and the previous
+/// foreground window are restored afterwards (ghost mode: the window only when nothing
+/// opened, and the user's own input is blocked meanwhile when we may).
+fn takeover_type(
+    snap: &Snapshot,
+    id: u32,
+    at: (i32, i32),
+    append: bool,
+    text: &str,
+    real: bool,
+) -> Result<()> {
     wait_idle()?;
     let prev = unsafe { GetForegroundWindow() };
     let mut cursor = POINT::default();
     unsafe { GetCursorPos(&mut cursor)? };
     let target = hwnd(snap.window.id);
+    let block = (!real).then(Block::on);
     wm::bring_to_front(target)?;
     let typed = (|| {
         let (_, el) = uia::live(snap, id)?;
@@ -155,18 +204,21 @@ fn takeover_type(snap: &Snapshot, id: u32, at: (i32, i32), append: bool, text: &
     unsafe {
         let _ = SetCursorPos(cursor.x, cursor.y);
     }
-    if !prev.0.is_null() && prev != target {
+    if !real {
+        give_back(prev, target);
+    } else if !prev.0.is_null() && prev != target {
         let _ = wm::bring_to_front(prev);
     }
+    drop(block);
     // `_held` restores the clipboard once the paste is verified (or not).
     let (el, _held) = typed?;
-    verify(id, &el, text, append)
+    verify(&format!("element {id}"), &el, text, append)
 }
 
 /// Polls the element's text (keys are processed asynchronously), longer for longer
 /// text. Replacing with "" needs the field empty, anything else needs it to contain
 /// the text. Unreadable text (password fields) is not checked.
-fn verify(id: u32, el: &uia::Uia, text: &str, append: bool) -> Result<()> {
+fn verify(what: &str, el: &uia::Uia, text: &str, append: bool) -> Result<()> {
     let ms = (1000 + 5 * text.chars().count() as u64).min(10_000);
     let deadline = Instant::now() + Duration::from_millis(ms);
     loop {
@@ -175,9 +227,9 @@ fn verify(id: u32, el: &uia::Uia, text: &str, append: bool) -> Result<()> {
             Some(t) if arrived(&t, text, append) => return Ok(()),
             Some(_) if Instant::now() >= deadline => {
                 let what = if text.is_empty() && !append {
-                    format!("cleared element {id}, but it is not empty")
+                    format!("cleared {what}, but it is not empty")
                 } else {
-                    format!("typed into element {id}, but its text does not contain it")
+                    format!("typed into {what}, but its text does not contain it")
                 };
                 return Err(Error::Os(format!("{what}; check it before retrying")));
             }
@@ -261,5 +313,7 @@ mod tests {
         assert!(!pastes("hello"));
         assert!(pastes(&"a".repeat(PASTE_FROM + 1)));
         assert!(pastes("ok 🙂")); // no key on any layout
+        assert!(!focus_pastes("hello"));
+        assert!(focus_pastes("Smoke curls\nMolten rivers"));
     }
 }

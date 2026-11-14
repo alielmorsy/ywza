@@ -16,6 +16,8 @@ const CONTRACT: &str = "Tool contract:
 - Windows are `w<number>` (from list_windows/launch), terminals `t<number>` (from term_list/term_start).
 - Element ids are numbers from get_elements and belong to that window's latest list only. \
 Call get_elements before click/type_text/scroll/long_press on a window.
+- To locate one control in a big window, find_elements (text, role, near, region) returns ranked matches with usable ids instead of the whole list.
+- For passwords and tokens type `{{vault:<key>}}` with type_text: the agent fills in the secret and results show the placeholder. Never ask the user for a secret; on `unknown vault key` ask them to add it with `ywza-agent vault set <key>`.
 - type_text focuses its element itself: never click an edit before type_text. It replaces the content unless `append` is true. Use `submit: true` to press Enter after the text, which is how you send a message in chat apps.
 - Prefer `batch` for a multi-step UI sequence (click, type_text, press_keys, scroll, wait) when every element id is known from a fresh get_elements: one call runs the actions in order, stops at the first failure and returns one report. Ids in a batch refer to that earlier list.
 - Every element action validates the element first. If the result says `stale`, nothing was \
@@ -26,9 +28,13 @@ ids not mentioned are unchanged. `no visible change` means the UI did not react.
 - To wait for a long task, call `wait` with `window` and `element` on something that will change when it ends (a Stop button, a progress label): it returns once that element changes or disappears, instead of repeated short waits. To wait for a result message (\"Submitted\", \"Saved\") or for a spinner to go, call `wait` with `window` and `text` (and `gone: true`).
 - Prefer get_elements over screenshot. Take a screenshot only when the element list cannot \
 answer (visual layout, images, canvas content).
+- In a pwsh, powershell, bash or zsh you started with term_start, term_run runs a command and returns its output, exit code and cwd once it ends: use it instead of term_write plus polling term_read.
 - Terminals often run AI coding CLIs (Claude Code, Codex, agy). Read the screen before typing. \
 Their approval prompts (Yes/No menus, \"Do you want to proceed?\") authorise real actions: \
 confirm one only when the user's request clearly covers it, and read what it would run first.
+- Saved plans replay a known task with no model calls: check list_plans before doing a repeated task by hand and use run_plan when one fits. If run_plan stops at a step, fix that step with patch_plan using the live elements it returns, then run_plan again with `from`. A batch action may carry `expect` (the element's name) as a guard.
+- An unnamed icon button you identified (from a screenshot or its effect) can be named with label_element; later lists show it as `\"name\" (learned)`.
+- When a 2FA code, UAC prompt, captcha or login needs the user, the session pauses and asks them; after they hand back you get a digest of what they changed.
 
 When the whole task is done, reply without tool calls with a short summary that fits a phone screen \
 (a few lines, no tables).";
@@ -70,7 +76,10 @@ pub fn devices_section(devices: &[(String, Option<String>, String)]) -> String {
 Every tool takes an optional `device` argument: omit it to act on this computer, or set it to a \
 device name to run that call there instead. Windows, terminals, files, commands and monitors \
 belong to the device the call ran on, and element ids are per device, so keep passing the same \
-`device` for follow-up calls on what you opened there.",
+`device` for follow-up calls on what you opened there. `copy` moves files and folders between \
+devices (`device:path`, `local:path` or a plain path on this computer) and `fanout` runs one \
+tool on several devices at once (`local` is this computer). When a task names an app and it is \
+unclear which device has it, `fanout` `find_app` to the devices and use the one that has it.",
     );
     for (name, os, monitors) in devices {
         let os = os.as_deref().map_or(String::new(), |o| format!(" ({o})"));
@@ -88,6 +97,7 @@ mod tests {
         let s = devices_section(&[("vm".into(), Some("Ubuntu".into()), "[0] HDMI-1".into())]);
         assert!(s.contains("`device` argument") && s.contains("Device `vm` (Ubuntu)"));
         assert!(s.contains("[0] HDMI-1"));
+        assert!(s.contains("`fanout` `find_app`") && s.contains("`copy`"));
     }
 
     #[test]

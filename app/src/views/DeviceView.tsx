@@ -5,6 +5,8 @@ import { Access } from "./Access";
 import { ChatView } from "./chat/ChatView";
 import { LiveView } from "./live/LiveView";
 import { deviceLabel, dotClass, liveBlock, statusText } from "./devices";
+import { FiredNotice } from "./watchers/FiredNotice";
+import { WatchersButton } from "./watchers/WatchersDialog";
 
 const Pane = ({ on, children }: { on: boolean; children: ReactNode }) => (
   <div className="absolute inset-0 overflow-hidden" hidden={!on}>{children}</div>
@@ -36,6 +38,7 @@ export function DeviceView({ dev, selected }: { dev: string; selected: boolean }
           <span className="truncate">{statusText(d)}</span>
         </span>
         <span className="flex-1" />
+        <WatchersButton dev={dev} />
         <div className="seg" role="group" aria-label="View">
           {segs.map((s) => (
             <button key={s.v} aria-pressed={view === s.v} aria-disabled={!!s.off} title={s.off ?? `${s.label} (Ctrl+Shift+${s.key})`}
@@ -45,6 +48,7 @@ export function DeviceView({ dev, selected }: { dev: string; selected: boolean }
           ))}
         </div>
       </header>
+      <FiredNotice dev={dev} />
       <div className="relative min-h-0 flex-1">
         <Pane on={view === "chat"}><ChatView dev={dev} active={selected && view === "chat"} /></Pane>
         {liveSeen && <Pane on={view === "live"}><LiveView dev={dev} active={selected && view === "live"} /></Pane>}

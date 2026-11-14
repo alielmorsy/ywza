@@ -38,6 +38,10 @@ An unnamed clickable may borrow the label it wraps or sits next to. The line is 
 - Elements that persist (a Next button) keep their id across steps. Regenerated content gets new ids. Never guess an id you have not seen.
 - `stale` means nothing was done; the result carries the fresh list.
 
+## Finding one element
+
+`find_elements` with `window` and any of `text`, `role` (an element kind such as `button`), `near` (an id or a text) and `region` (`top`, `bottom`, `left`, `right`, `center`) returns the best matches in the same line format, best first. Use it for "the Send button near the compose box" in a big window instead of reading the whole list. Its ids are the window's latest list, so `click` and `type_text` take them directly.
+
 ## Diffs after an action
 
 ```
@@ -52,9 +56,13 @@ An unnamed clickable may borrow the label it wraps or sits next to. The line is 
 
 - `click`: `count: 2` double-clicks, `button: right` opens context menus. Instead of `element`: `text` (visible text) or `x`+`y` (screenshot pixels), see Menus below.
 - `type_text`: replaces content unless `append: true`. Long or non-Latin text is pasted and the clipboard restored. On an `ocr` box it clicks the box first; where the field cannot be read back, nothing changing in the window is an error, not a silent success. `submit: true` presses Enter once the text is in, and errors if Enter changed nothing. Without `element` it types into the focused control. An error saying the text "does not contain it" means the field differs from what you sent: read the element line before retrying.
+- Secrets: type `{{vault:<key>}}` in `type_text` (also batch steps and `term_write`). The agent fills in the value; tool results show the placeholder instead of the secret and screenshots blur it and password fields. The user adds keys with `ywza-agent vault set <key>` on that device. An `unknown vault key` error means the user must add it: ask, never request the secret itself.
 - `press_keys`: `"ctrl+a"`, `"tab tab enter"`. With `window` the window comes forward, but its own open dialog keeps focus.
 - `scroll`: `dy` > 0 is down, in wheel notches. Read the diff for newly visible elements.
 - `long_press`: hold for `ms`.
+
+Background actions: `click`, `type_text` and `scroll` act without moving the user's mouse or taking focus whenever they can, and the result names how: `done (via pattern); ...`, `ok: text written (via window message)`, `done (via takeover); ...`. `pattern` and `window message` touch nothing on screen. `takeover` used the real mouse and keyboard briefly and put the cursor and the previous window back where it was safe (a menu or dialog it opened stays in front).
+If an app ignores a background action (`no visible change` after a `pattern` or `window message` result), repeat it with `real: true` to force the real mouse and keyboard.
 
 ## Menus and toolbars
 

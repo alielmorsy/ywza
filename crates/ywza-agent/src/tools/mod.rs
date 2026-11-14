@@ -6,19 +6,25 @@
 //! ywza-ocr calls `RoInitialize` itself.
 
 mod act;
+mod apps;
 mod args;
 mod batch;
+mod clip;
 mod ctx;
 mod elements;
 mod find;
 mod input;
+mod label;
 mod ocr;
 mod output;
+mod plan;
+mod query;
 mod schema;
 mod screen;
 mod terminal;
 mod util;
 mod wait;
+mod watchers;
 mod windows;
 
 use std::{future::Future, pin::Pin};
@@ -29,7 +35,7 @@ use serde_json::{json, Value};
 
 pub use args::{parse_window, ElementArg, TermArg, WindowArg};
 pub use batch::{format_steps, parse_batch, Step, StepResult, BATCH_TOOLS};
-pub use ctx::{Ctx, ToolSpec, Tools};
+pub use ctx::{Ctx, Space, ToolSpec, Tools};
 pub use output::{downscale, ToolOutput, MODEL_IMAGE_MAX};
 pub use screen::{capture, monitor_info, monitor_line, monitors_text, SHOW_SCREENSHOT};
 pub use util::blocking;
@@ -86,6 +92,7 @@ pub fn registry() -> Vec<Entry> {
         entry::<windows::CloseWindow>(),
         entry::<windows::Launch>(),
         entry::<elements::GetElements>(),
+        entry::<query::FindElements>(),
         entry::<input::Click>(),
         entry::<input::LongPress>(),
         entry::<input::TypeText>(),
@@ -99,15 +106,28 @@ pub fn registry() -> Vec<Entry> {
         entry::<terminal::TermRead>(),
         entry::<terminal::TermWrite>(),
         entry::<terminal::TermKeys>(),
+        entry::<terminal::TermRun>(),
         entry::<util::RunCommand>(),
         entry::<wait::Wait>(),
         entry::<util::Notify>(),
+        entry::<label::LabelElement>(),
+        entry::<plan::ListPlans>(),
+        entry::<plan::RunPlan>(),
+        entry::<plan::SavePlan>(),
+        entry::<plan::PatchPlan>(),
+        entry::<clip::ClipboardGet>(),
+        entry::<clip::ClipboardSet>(),
+        entry::<apps::FindApp>(),
+        entry::<watchers::WatcherCreate>(),
+        entry::<watchers::WatcherList>(),
+        entry::<watchers::WatcherSet>(),
+        entry::<watchers::WatcherDelete>(),
     ]
 }
 
 #[cfg(test)]
 mod tests {
-    use ywza_proto::OcrEngine;
+    use ywza_proto::{OcrEngine, SessionId};
 
     use super::*;
 
@@ -124,6 +144,7 @@ mod tests {
                 "close_window",
                 "launch",
                 "get_elements",
+                "find_elements",
                 "click",
                 "long_press",
                 "type_text",
@@ -137,9 +158,22 @@ mod tests {
                 "term_read",
                 "term_write",
                 "term_keys",
+                "term_run",
                 "run_command",
                 "wait",
                 "notify",
+                "label_element",
+                "list_plans",
+                "run_plan",
+                "save_plan",
+                "patch_plan",
+                "clipboard_get",
+                "clipboard_set",
+                "find_app",
+                "watcher_create",
+                "watcher_list",
+                "watcher_set",
+                "watcher_delete",
             ]
         );
     }
@@ -154,7 +188,14 @@ mod tests {
             .collect();
         assert_eq!(
             risky,
-            ["close_window", "term_write", "term_keys", "run_command"]
+            [
+                "close_window",
+                "term_write",
+                "term_keys",
+                "term_run",
+                "run_command",
+                "watcher_create",
+            ]
         );
         assert!(!tools.risky("click"));
         assert!(tools.risky("not_a_tool"));
@@ -189,9 +230,13 @@ mod tests {
     #[tokio::test]
     async fn bad_arguments_are_error_outputs_naming_the_field() {
         let t = Tools::default();
+        let space = Space {
+            session: SessionId::new(),
+            sub: None,
+        };
         let call = |name: &'static str, args: Value| {
             let t = &t;
-            async move { t.call(name, &args, OcrEngine::Auto).await }
+            async move { t.call(space, name, &args, OcrEngine::Auto).await }
         };
         let out = call("click", json!({"window":"w1"})).await;
         assert!(!out.ok && out.text.contains("exactly one of"), "{out:?}");

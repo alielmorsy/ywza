@@ -54,10 +54,18 @@ impl Permissions {
         let (ok, name) = match msg {
             Hello { .. } => return None,
             WindowInfo { elements: true, .. } => (self.tools, "tools"),
-            Screenshot { .. } | LiveStart { .. } | LiveStop | ListMonitors | WindowInfo { .. } => {
+            Screenshot { .. }
+            | LiveStart { .. }
+            | LiveStop
+            | ListMonitors
+            | WindowInfo { .. }
+            | LensStart { .. }
+            | LensStop => {
                 (self.view, "view")
             }
-            Input { .. } | Pull { .. } | Push { .. } | PushEnd { .. } => (self.control, "control"),
+            Input { .. } | Pull { .. } | Push { .. } | PushEnd { .. } | LensAct { .. } => {
+                (self.control, "control")
+            }
             Prompt { device, devices, .. } if device.is_some() || !devices.is_empty() => {
                 if self.chat {
                     (self.drive, "drive")
@@ -69,6 +77,7 @@ impl Permissions {
             Prompt { .. }
             | Approve { .. }
             | Cancel { .. }
+            | Resume { .. }
             | ListSessions
             | GetSession { .. }
             | ListModels => (self.chat, "chat"),
@@ -153,6 +162,13 @@ mod tests {
                 Some("tools"),
             ),
             (Cancel { session: sid }, Some("chat")),
+            (
+                Resume {
+                    session: sid,
+                    note: String::new(),
+                },
+                Some("chat"),
+            ),
             (ListSessions, Some("chat")),
             (GetSession { session: sid }, Some("chat")),
             (ListTools, Some("tools")),
@@ -161,6 +177,7 @@ mod tests {
                     call: 1,
                     name: "wait".into(),
                     args: serde_json::Value::Null,
+                    space: None,
                 },
                 Some("tools"),
             ),

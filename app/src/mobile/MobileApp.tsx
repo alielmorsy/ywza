@@ -1,14 +1,15 @@
 import { useEffect } from "react";
 import { send, useStore } from "../api";
 import { Icon, Sprite, type IconName } from "../Icon";
-import "./mobile.css";
 import { Banner } from "./Banner";
 import { DeviceMenu } from "./DeviceMenu";
+import { FiredBanner } from "./Fired";
 import { Inbox, usePendingCount } from "./Inbox";
 import { Live } from "./Live";
 import { Pair } from "./Pair";
 import { RunDetail } from "./RunDetail";
 import { Runs } from "./RunList";
+import { ShareSheet } from "./Share";
 import { Sheet } from "./Sheet";
 import { Wall } from "./Wall";
 import { useRuns } from "./runs";
@@ -40,6 +41,7 @@ export default function MobileApp() {
     <div className="m-root">
       <Sprite />
       <Banner />
+      <FiredBanner />
       <main className="relative flex min-h-0 flex-1 flex-col">
         {tab === "wall" && <Wall />}
         {tab === "runs" && (run ? <RunDetail run={run} /> : <Runs />)}
@@ -65,6 +67,7 @@ export default function MobileApp() {
       <Sheet />
       {pairing && <Pair />}
       <DeviceMenu />
+      <ShareSheet />
       <Toast />
     </div>
   );

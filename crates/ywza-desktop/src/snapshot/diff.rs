@@ -1,85 +1,72 @@
 use super::model::{Element, Snapshot};
-use std::fmt::Write;
+use super::ocr::ocr_similar;
+use std::collections::{HashMap, HashSet};
 
-/// Above this many removed (or added) elements, that side is summarised.
-const COLLAPSE: usize = 20;
-const SAMPLE_REMOVED: usize = 8;
-const SAMPLE_ADDED: usize = 12;
+/// One change between two snapshots; the old/new elements are kept whole so the
+/// renderer can pick the short or long text form.
+#[derive(Debug, Clone)]
+pub enum Delta {
+    Added(Element),
+    Removed(Element),
+    Changed { old: Element, new: Element },
+}
 
-/// Changes from `old` to `new`, matched by key: `+[20] dialog "Save as"`, `-[12]`,
-/// `~[3] = "new value"`. Other keyless elements match on kind and name; OCR lines on their id
-/// (carried over by position), and a re-read that differs only by OCR noise is no change.
-/// A page change (many removed or added) starts with a count line and lists a sample.
-pub fn diff(old: &Snapshot, new: &Snapshot) -> String {
-    let ocr = |a: &Element, b: &Element| a.kind == "ocr" && b.kind == "ocr";
-    let same = |a: &Element, b: &Element| {
-        if ocr(a, b) {
-            a.id == b.id
-        } else if a.key.is_empty() || b.key.is_empty() {
-            a.key.is_empty() && b.key.is_empty() && a.kind == b.kind && a.name == b.name
-        } else {
-            a.key == b.key
-        }
-    };
-    let same_name = |a: &Element, b: &Element| {
-        a.name == b.name || (ocr(a, b) && super::ocr::ocr_similar(&a.name, &b.name))
-    };
-    let removed: Vec<String> = old
-        .elements
-        .iter()
-        .filter(|o| !new.elements.iter().any(|n| same(o, n)))
-        .map(|o| format!("-[{}]", o.id))
-        .collect();
-    // In document order; true = added.
-    let mut rest: Vec<(bool, String)> = Vec::new();
-    for n in &new.elements {
-        match old.elements.iter().find(|o| same(o, n)) {
-            None => rest.push((true, format!("+{}", n.line()))),
-            Some(o)
-                if o.kind == n.kind
-                    && same_name(o, n)
-                    && o.enabled == n.enabled
-                    && o.selected == n.selected
-                    && o.busy == n.busy =>
-            {
-                if o.value != n.value {
-                    rest.push((false, format!("~[{}]{}", n.id, n.value_text())));
-                }
-            }
-            Some(_) => rest.push((false, format!("~{}", n.line()))),
-        }
-    }
-    let r = removed.len();
-    let a = rest.iter().filter(|(added, _)| *added).count();
-    let mut out = String::new();
-    if r > COLLAPSE || a > COLLAPSE {
-        let _ = writeln!(
-            out,
-            "{r} removed, {a} added (sample; get_elements lists all)"
-        );
-    }
-    if r > COLLAPSE {
-        let _ = writeln!(out, "{} …", removed[..SAMPLE_REMOVED].join(" "));
+/// Identity of an element: its key; OCR lines their id (carried over by position);
+/// other keyless elements their kind and name.
+#[derive(Hash, PartialEq, Eq)]
+enum Ident<'a> {
+    Key(&'a [i32]),
+    Ocr(u32),
+    Named(&'static str, &'a str),
+}
+
+fn ident(e: &Element) -> Ident<'_> {
+    if e.kind == "ocr" {
+        Ident::Ocr(e.id)
+    } else if e.key.is_empty() {
+        Ident::Named(e.kind, e.name.as_str())
     } else {
-        for l in &removed {
-            let _ = writeln!(out, "{l}");
+        Ident::Key(e.key.as_slice())
+    }
+}
+
+/// Names equal, or OCR readings of the same text up to noise.
+fn same_name(a: &Element, b: &Element) -> bool {
+    a.name == b.name || (a.kind == "ocr" && b.kind == "ocr" && ocr_similar(&a.name, &b.name))
+}
+
+/// Whether only the value may differ between two matched elements.
+pub(super) fn same_shape(a: &Element, b: &Element) -> bool {
+    a.kind == b.kind
+        && same_name(a, b)
+        && a.enabled == b.enabled
+        && a.selected == b.selected
+        && a.busy == b.busy
+}
+
+/// Changes from `old` to `new`, matched by identity, first match wins: removals in
+/// old order, then additions and changes in new order.
+pub fn diff(old: &Snapshot, new: &Snapshot) -> Vec<Delta> {
+    let mut first: HashMap<Ident<'_>, &Element> = HashMap::new();
+    for o in &old.elements {
+        first.entry(ident(o)).or_insert(o);
+    }
+    let kept: HashSet<Ident<'_>> = new.elements.iter().map(ident).collect();
+    let mut out = Vec::new();
+    for o in &old.elements {
+        if !kept.contains(&ident(o)) {
+            out.push(Delta::Removed(o.clone()));
         }
     }
-    let mut shown = 0;
-    for (added, l) in &rest {
-        if *added && a > COLLAPSE {
-            shown += 1;
-            if shown > SAMPLE_ADDED {
-                continue;
-            }
+    for n in &new.elements {
+        match first.get(&ident(n)) {
+            None => out.push(Delta::Added(n.clone())),
+            Some(o) if same_shape(o, n) && o.value == n.value => {}
+            Some(&o) => out.push(Delta::Changed {
+                old: o.clone(),
+                new: n.clone(),
+            }),
         }
-        let _ = writeln!(out, "{l}");
-    }
-    if a > COLLAPSE {
-        let _ = writeln!(out, "+… {} more added", a - SAMPLE_ADDED);
-    }
-    if out.is_empty() {
-        out.push_str("(no changes)\n");
     }
     out
 }

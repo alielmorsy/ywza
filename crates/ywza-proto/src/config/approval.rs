@@ -51,9 +51,19 @@ pub struct Approval {
 impl Approval {
     /// The first matching rule's action; None when no rule matches.
     pub fn decide(&self, tool: &str, summary: &str) -> Option<Action> {
+        self.decide_any(tool, &[summary])
+    }
+
+    /// Like `decide`, a rule's pattern matching if it matches any of the `summaries`.
+    pub fn decide_any(&self, tool: &str, summaries: &[&str]) -> Option<Action> {
         self.rules
             .iter()
-            .find(|r| r.tool == tool && r.pattern.as_deref().is_none_or(|p| glob(p, summary)))
+            .find(|r| {
+                r.tool == tool
+                    && r.pattern
+                        .as_deref()
+                        .is_none_or(|p| summaries.iter().any(|s| glob(p, s)))
+            })
             .map(|r| r.action)
     }
 
@@ -130,6 +140,8 @@ mod tests {
         assert_eq!(a.decide("run_command", "RM -rf x"), Some(Action::Deny));
         assert_eq!(a.decide("run_command", "ls"), Some(Action::Ask));
         assert_eq!(a.decide("click", "rm x"), None);
+        assert_eq!(a.decide_any("run_command", &["ls", "rm y"]), Some(Action::Deny));
+        assert_eq!(a.decide_any("run_command", &[]), Some(Action::Ask));
     }
 
     #[test]

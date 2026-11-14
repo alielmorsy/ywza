@@ -108,7 +108,7 @@ async fn serve_client(agent: Arc<Agent>, incoming: Incoming) -> anyhow::Result<(
                 perms = now;
                 *shared_perms.lock().unwrap() = perms;
                 if !perms.view {
-                    client.stop_live();
+                    client.stop_view();
                 }
                 continue;
             }

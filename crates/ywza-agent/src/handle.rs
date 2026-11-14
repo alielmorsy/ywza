@@ -69,10 +69,15 @@ impl Agent {
                 }
                 match self.sessions.begin(sid) {
                     Ok((cancel, history)) => {
+                        let remote = device.is_some();
                         let run = Run {
                             device,
                             devices,
-                            opts: llm::Opts { model, effort },
+                            opts: llm::Opts {
+                                model,
+                                effort,
+                                remote,
+                            },
                         };
                         tokio::spawn(self.clone().run_prompt(sid, text, cancel, history, run));
                         None
@@ -83,6 +88,11 @@ impl Agent {
             ClientMsg::Cancel { session } => {
                 (!self.sessions.cancel(session)).then(|| AgentMsg::Error {
                     message: "session is not running".into(),
+                })
+            }
+            ClientMsg::Resume { session, note } => {
+                (!self.sos.resume(session, note)).then(|| AgentMsg::Error {
+                    message: "session is not waiting for help".into(),
                 })
             }
             ClientMsg::GetConfig => Some(AgentMsg::Config {
@@ -133,6 +143,9 @@ impl Agent {
             | ClientMsg::LiveStart { .. }
             | ClientMsg::LiveStop
             | ClientMsg::Input { .. }
+            | ClientMsg::LensStart { .. }
+            | ClientMsg::LensStop
+            | ClientMsg::LensAct { .. }
             | ClientMsg::CallTool { .. }
             | ClientMsg::Approve { .. }
             | ClientMsg::Pull { .. }
@@ -213,6 +226,8 @@ impl Agent {
         }
         // Free the session before announcing the end, so an immediate follow-up prompt is accepted.
         self.sessions.finish(sid, history);
+        self.tools.drop_session(sid);
+        self.sos.forget(sid);
         self.emit(
             sid,
             match result {

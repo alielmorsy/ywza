@@ -4,6 +4,7 @@ import { Markdown } from "../views/chat/Markdown";
 import { stopRun } from "./actions";
 import { ShownImage } from "../views/chat/ShownImage";
 import { ApproveCard } from "./ApproveCard";
+import { HelpCard } from "./HelpCard";
 import { STATE_CLASS } from "./RunList";
 import { ago, isActive, pendingOf, STATE_TEXT, type Item, type Run } from "./runs";
 import { closeRun, openLive, useLabel } from "./store";
@@ -66,8 +67,9 @@ export function RunDetail({ run }: { run: Run }) {
         {!run.turns.length && <p className="animate-pulse text-text-3" role="status">Loading the run</p>}
         <div className="flex flex-col gap-2">
           {run.approvals.map((a) => <ApproveCard key={a.request} a={a} device={run.current} />)}
+          {run.help && <HelpCard run={run} />}
         </div>
-        {run.state === "working" && !pend.length && <p className="animate-pulse px-1 py-2 text-text-3" role="status">Working</p>}
+        {run.state === "working" && !pend.length && !run.help && <p className="animate-pulse px-1 py-2 text-text-3" role="status">Working</p>}
         {run.state === "offline" && <p className="py-2 text-text-2">Driver offline. Reconnect {L(run.driver)} to continue this run.</p>}
         {run.state === "failed" && <p className="py-2 text-text-2">Run failed. Send a follow-up below to try again.</p>}
         {run.state === "stopped" && <p className="py-2 text-text-2">You stopped this run. Send a follow-up below to continue it.</p>}

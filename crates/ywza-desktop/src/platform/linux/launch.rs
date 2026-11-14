@@ -65,6 +65,25 @@ fn kind_on_disk(p: &Path) -> Option<Kind> {
     })
 }
 
+/// First executable file called `name` in `dirs`.
+fn in_dirs(name: &str, dirs: &[PathBuf], is_exe: &dyn Fn(&Path) -> bool) -> Option<PathBuf> {
+    dirs.iter().map(|d| d.join(name)).find(|p| is_exe(p))
+}
+
+/// The executable `launch` would start for `program`, without starting it. None for
+/// documents, folders and URIs (`xdg-open` handles those) and unknown names.
+pub fn find_program(program: &str) -> Option<String> {
+    let is_exe = |p: &Path| kind_on_disk(p) == Some(Kind::Exe);
+    let Target::Exe(exe) = classify(program, None, &kind_on_disk) else {
+        return None;
+    };
+    if exe.contains('/') {
+        return is_exe(Path::new(&exe)).then_some(exe);
+    }
+    let dirs: Vec<PathBuf> = std::env::split_paths(&std::env::var_os("PATH")?).collect();
+    in_dirs(&exe, &dirs, &is_exe).map(|p| p.to_string_lossy().into_owned())
+}
+
 /// Starts a program, document or URI. For `xdg-open` targets `Launched::pid` is the
 /// opener, which usually exits at once; `wait_for_window` then accepts any new window.
 pub fn launch(program: &str, args: &[&str], cwd: Option<&Path>) -> Result<Launched> {
@@ -111,6 +130,14 @@ mod tests {
 
     fn c(program: &str, files: &[(&str, Kind)]) -> Target {
         classify(program, Some(Path::new("/work")), &fs(files))
+    }
+
+    #[test]
+    fn path_search_takes_the_first_executable() {
+        let dirs = [PathBuf::from("/a"), PathBuf::from("/b")];
+        let is_exe = |p: &Path| p == Path::new("/b/tool") || p == Path::new("/a/other");
+        assert_eq!(in_dirs("tool", &dirs, &is_exe), Some(PathBuf::from("/b/tool")));
+        assert_eq!(in_dirs("none", &dirs, &is_exe), None);
     }
 
     #[test]

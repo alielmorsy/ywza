@@ -23,17 +23,8 @@ const DIGITS: [[u8; 5]; 10] = [
 /// Draws each element's box and ID onto an image captured from the same screen area.
 pub fn draw_marks(img: &mut Image, snapshot: &Snapshot) {
     for e in &snapshot.elements {
-        let r = Rect {
-            x: e.rect.x - img.origin.0,
-            y: e.rect.y - img.origin.1,
-            ..e.rect
-        };
-        for t in 0..2 {
-            fill(img, Rect::new(r.x, r.y + t, r.w, 1), MARK);
-            fill(img, Rect::new(r.x, r.y + r.h - 1 - t, r.w, 1), MARK);
-            fill(img, Rect::new(r.x + t, r.y, 1, r.h), MARK);
-            fill(img, Rect::new(r.x + r.w - 1 - t, r.y, 1, r.h), MARK);
-        }
+        let r = local(img, e.rect);
+        border(img, r);
         let digits = e.id.to_string();
         let tag = Rect::new(r.x, r.y, digits.len() as i32 * 4 * SCALE + SCALE, 7 * SCALE);
         fill(img, tag, MARK);
@@ -49,6 +40,29 @@ pub fn draw_marks(img: &mut Image, snapshot: &Snapshot) {
                 }
             }
         }
+    }
+}
+
+/// Boxes one screen-coordinate rect, without an ID tag.
+pub fn draw_box(img: &mut Image, screen: Rect) {
+    let r = local(img, screen);
+    border(img, r);
+}
+
+fn local(img: &Image, r: Rect) -> Rect {
+    Rect {
+        x: r.x - img.origin.0,
+        y: r.y - img.origin.1,
+        ..r
+    }
+}
+
+fn border(img: &mut Image, r: Rect) {
+    for t in 0..2 {
+        fill(img, Rect::new(r.x, r.y + t, r.w, 1), MARK);
+        fill(img, Rect::new(r.x, r.y + r.h - 1 - t, r.w, 1), MARK);
+        fill(img, Rect::new(r.x + t, r.y, 1, r.h), MARK);
+        fill(img, Rect::new(r.x + r.w - 1 - t, r.y, 1, r.h), MARK);
     }
 }
 
@@ -100,5 +114,18 @@ mod tests {
         assert_eq!(&img.rgba[(5 * 40 + 5) * 4..][..4], &MARK); // top-left corner marked
         let png = encode_png(&img).unwrap();
         assert_eq!(&png[1..4], b"PNG");
+    }
+
+    #[test]
+    fn draw_box_maps_screen_coordinates_onto_the_image() {
+        let mut img = Image {
+            width: 20,
+            height: 20,
+            rgba: vec![0; 20 * 20 * 4],
+            origin: (50, 50),
+        };
+        draw_box(&mut img, Rect::new(52, 53, 6, 6));
+        assert_eq!(&img.rgba[(3 * 20 + 2) * 4..][..4], &MARK);
+        assert_eq!(&img.rgba[(10 * 20 + 10) * 4..][..4], &[0; 4]);
     }
 }

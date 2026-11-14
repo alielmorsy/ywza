@@ -1,5 +1,66 @@
+use super::diff::{same_shape, Delta};
 use super::model::{Element, Snapshot};
 use std::fmt::Write;
+
+/// Above this many removed (or added) elements, that side is summarised.
+const COLLAPSE: usize = 20;
+const SAMPLE_REMOVED: usize = 8;
+const SAMPLE_ADDED: usize = 12;
+
+/// Text form of a diff: `+[20] dialog "Save as"`, `-[12]`, `~[3] = "new value"`.
+/// A page change (many removed or added) starts with a count line and lists a sample.
+pub fn render_diff(deltas: &[Delta]) -> String {
+    let removed: Vec<String> = deltas
+        .iter()
+        .filter_map(|d| match d {
+            Delta::Removed(o) => Some(format!("-[{}]", o.id)),
+            _ => None,
+        })
+        .collect();
+    let r = removed.len();
+    let a = deltas
+        .iter()
+        .filter(|d| matches!(d, Delta::Added(_)))
+        .count();
+    let mut out = String::new();
+    if r > COLLAPSE || a > COLLAPSE {
+        let _ = writeln!(
+            out,
+            "{r} removed, {a} added (sample; get_elements lists all)"
+        );
+    }
+    if r > COLLAPSE {
+        let _ = writeln!(out, "{} …", removed[..SAMPLE_REMOVED].join(" "));
+    } else {
+        for l in &removed {
+            let _ = writeln!(out, "{l}");
+        }
+    }
+    let mut shown = 0;
+    for d in deltas {
+        let _ = match d {
+            Delta::Removed(_) => continue,
+            Delta::Added(n) => {
+                shown += 1;
+                if a > COLLAPSE && shown > SAMPLE_ADDED {
+                    continue;
+                }
+                writeln!(out, "+{}", n.line())
+            }
+            Delta::Changed { old, new } if same_shape(old, new) => {
+                writeln!(out, "~[{}]{}", new.id, new.value_text())
+            }
+            Delta::Changed { new, .. } => writeln!(out, "~{}", new.line()),
+        };
+    }
+    if a > COLLAPSE {
+        let _ = writeln!(out, "+… {} more added", a - SAMPLE_ADDED);
+    }
+    if out.is_empty() {
+        out.push_str("(no changes)\n");
+    }
+    out
+}
 
 impl Snapshot {
     /// The compact text form the AI reads.
@@ -40,6 +101,9 @@ impl Element {
         let mut s = format!("[{}] {}", self.id, self.kind);
         if !self.name.is_empty() {
             let _ = write!(s, " {:?}", self.name);
+            if self.learned {
+                s += " (learned)";
+            }
         } else if !self.automation_id.is_empty() {
             let _ = write!(s, " (id={})", self.automation_id);
         }

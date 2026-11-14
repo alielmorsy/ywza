@@ -1,5 +1,5 @@
 // Runs as the phone shows them: sessions of the paired devices' own agents, with their events folded into steps.
-import { getState, useStore, type Approval, type Sid, type State } from "../api";
+import { getState, helpOf, useStore, type Approval, type Help, type Sid, type State } from "../api";
 import { phoneName } from "./devices";
 
 export type RunState = "working" | "needs" | "done" | "stopped" | "failed" | "offline";
@@ -10,6 +10,8 @@ export interface Turn { user: string; items: Item[] }
 export interface Run {
   id: Sid; title: string; driver: string; scope: string[]; state: RunState; current: string;
   turns: Turn[]; steps: Step[]; approvals: Approval[]; updated: number; since?: number; last: string;
+  /** Set while the agent waits for the human to take over and resume. */
+  help?: Help;
 }
 
 const short = (v: unknown) => {
@@ -53,9 +55,10 @@ function build(s: State): Run[] {
     if (end && x.status === "running" && !answered.has(end.key)) end.live = true;
     if (x.status === "running" && !since.has(x.id)) since.set(x.id, Date.now());
     const mine = apps.filter((a) => a.device === driver && a.session === x.id);
-    const state: RunState = x.status === "failed" ? (stopped ? "stopped" : "failed") : x.status === "done" ? "done" : !s.devices[driver]?.connected ? "offline" : mine.some((a) => !a.resolved) ? "needs" : "working";
+    const help = helpOf(s.events[x.id]);
+    const state: RunState = x.status === "failed" ? (stopped ? "stopped" : "failed") : x.status === "done" ? "done" : !s.devices[driver]?.connected ? "offline" : help || mine.some((a) => !a.resolved) ? "needs" : "working";
     return {
-      id: x.id, title: x.title || "Untitled run", driver, state, turns, steps: all, approvals: mine, updated: x.updated_ms,
+      id: x.id, title: x.title || "Untitled run", driver, state, turns, steps: all, approvals: mine, help, updated: x.updated_ms,
       since: x.status === "running" ? since.get(x.id) : undefined,
       scope: [...new Set([driver, ...(x.devices ?? []).map((n) => phoneName(s, driver, n))])],
       current: end?.device ?? driver,

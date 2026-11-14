@@ -1,18 +1,21 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from "react";
-import { useStore, type Monitor, type Rect } from "../api";
+import { resume, useStore } from "../api";
 import { Icon } from "../Icon";
 import { useAccess } from "../views/live/access";
 import { drawFull } from "../views/live/draw";
+import { toBox, useLens } from "../views/live/lens";
+import { LensEditor, LensLayer } from "../views/live/LensChips";
 import { MonitorPicker } from "../views/live/MonitorPicker";
 import type { Sink } from "../views/live/streams";
 import { setMonitor, useLiveStream } from "../views/live/useLiveStream";
 import { ApproveCard } from "./ApproveCard";
 import { useDeviceNames } from "./devices";
 import { KeyPad } from "./live/KeyPad";
+import { LensPanel } from "./live/Lens";
 import { useGestures } from "./live/useGestures";
 import { NONE, reveal } from "./live/zoom";
 import { devicesOf, pendingOf, useRuns } from "./runs";
-import { closeLive, lockLive, openRun, setKb, switchLive, useLabel, useM, type LiveState } from "./store";
+import { closeLive, lockLive, openRun, setKb, switchLive, toast, useLabel, useM, type LiveState } from "./store";
 import { tileInfo, DEV_COLOR, DEV_TEXT } from "./tiles";
 import { StepLine } from "./ui";
 
@@ -30,14 +33,6 @@ function fly(el: HTMLElement, from: DOMRect, enter: boolean, done?: () => void) 
   const away = `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width})`;
   const a = el.animate(enter ? [{ transform: away }, { transform: "none" }] : [{ transform: "none" }, { transform: away, opacity: 0.6 }], { duration: 340, easing: EASE, fill: enter ? "none" : "forwards" });
   if (done) a.onfinish = done;
-}
-
-/** A monitor rect (pixels) in the unzoomed coordinates of the canvas's box, where object-contain may letterbox it. */
-function toBox(c: HTMLCanvasElement, mon: Monitor, r: Rect) {
-  const W = c.clientWidth, H = c.clientHeight;
-  if (!c.width || !c.height || !W || !H) return null;
-  const k = Math.min(W / c.width, H / c.height), w = c.width * k, h = c.height * k;
-  return { x: (W - w) / 2 + (r.x / mon.width) * w, y: (H - h) / 2 + (r.y / mon.height) * h, w: (r.width / mon.width) * w, h: (r.height / mon.height) * h };
 }
 
 export function Live() {
@@ -67,9 +62,11 @@ function Screen({ live }: { live: LiveState }) {
   const { live: streaming, monitor } = useLiveStream(dev, sink, ok);
   const monitors = d?.monitors;
   const mon = monitors?.find((m) => m.index === monitor);
+  const lens = useLens(dev, { live: streaming, monitor, canAct: canControl, fail: toast });
   const info = tileInfo(dev, d, runs);
   const run = runs.find((r) => r.id === live.follow) ?? info.run ?? runs.find((r) => devicesOf(r).includes(dev));
   const followed = runs.find((r) => r.id === live.follow);
+  const helping = followed?.help ? followed : runs.find((r) => r.help && r.current === dev);
   const steps = (info.run ?? run)?.steps.filter((s) => s.device === dev).slice(-6) ?? [];
   const pend = runs.flatMap(pendingOf).filter((a) => runs.find((r) => r.id === a.session)?.current === dev);
   const controlling = ok && canControl && control;
@@ -168,13 +165,17 @@ function Screen({ live }: { live: LiveState }) {
       <Icon name={controlling ? "pointer" : "eye"} />{controlling ? "Control" : "View"}
     </button>
   );
+  const lensBtn = (
+    <button type="button" className={`m-btn sm ${lens.on ? "primary" : ""}`} aria-pressed={lens.on} onClick={() => lens.setOn(!lens.on)}
+      title="Smart lens: tappable boxes over the focused window"><Icon name="spark" />Lens</button>
+  );
   const kbBtn = controlling && (
     <button type="button" className={`m-btn sm !px-2.5 ${kb ? "primary" : ""} ${focus && !kb ? "m-want" : ""}`} aria-pressed={kb} aria-label="Keyboard"
       title={focus ? "A text field has focus" : "Keyboard"} onClick={() => setKb(!kb)}><Icon name="keyboard" /></button>
   );
 
   return (
-    <div className={`absolute inset-x-0 top-[env(safe-area-inset-top)] flex flex-col bg-ground ${kb ? "bottom-0" : "bottom-[var(--tabs-h)]"} ${full ? "z-[55]" : kb ? "z-[45]" : "z-20"}`} onPointerDown={down} onPointerUp={up}>
+    <div className={`absolute inset-x-0 top-[env(safe-area-inset-top)] flex flex-col overflow-hidden bg-ground ${kb ? "bottom-0" : "bottom-[var(--tabs-h)]"} ${full ? "z-[55]" : kb ? "z-[45]" : "z-20"}`} onPointerDown={down} onPointerUp={up}>
       <header className="flex h-12 flex-none items-center gap-2 px-2.5">
         <button type="button" className="m-btn sm !rounded-full !pl-2.5" onClick={back}><Icon name="back" />Back</button>
         <div className="min-w-0 flex-1 text-center">
@@ -196,6 +197,7 @@ function Screen({ live }: { live: LiveState }) {
         <div className="m-mon flex flex-none items-center gap-2 px-2.5 pb-1.5">
           <div className="m-scroll min-w-0 flex-1"><MonitorPicker dev={dev} value={monitor} onPick={(i) => setMonitor(dev, i)} /></div>
           {ctlBtn}
+          {lensBtn}
           {kbBtn}
           <button type="button" className="m-btn sm !px-2.5" onClick={() => setFull(true)} aria-label="Full screen"><Icon name="expand" /></button>
         </div>
@@ -212,6 +214,7 @@ function Screen({ live }: { live: LiveState }) {
               <div className={fill ? "absolute inset-0" : "relative"} style={{ transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.s})`, transformOrigin: "0 0" }}>
                 {!streaming && (shot ? <img src={shot.src} alt="" className={fill ? "size-full object-contain" : "block w-full"} /> : <div className="aspect-[16/10]" />)}
                 <canvas ref={canvas} className={`${fill ? "size-full object-contain" : "block h-auto w-full"} ${streaming ? "" : "hidden"}`} aria-label={`Screen of ${L(dev)}`} />
+                <LensLayer lens={lens} canvas={canvas} mon={mon} scale={view.s} />
                 {field && streaming && (
                   <div className="m-field" aria-hidden style={{ left: field.x - 2, top: field.y - 2, width: Math.max(4, field.w + 4), height: Math.max(8, field.h + 4), borderWidth: 2 / view.s }} />
                 )}
@@ -224,14 +227,20 @@ function Screen({ live }: { live: LiveState }) {
                   <b className="min-w-0 truncate text-sm font-semibold">{L(dev)}</b>
                   <div className="m-scroll ml-auto min-w-0"><MonitorPicker dev={dev} value={monitor} onPick={(i) => setMonitor(dev, i)} /></div>
                   {ctlBtn}
+                  {lensBtn}
                   {kbBtn}
                 </div>
+              )}
+              {full && lens.editEl && (
+                <LensEditor mobile el={lens.editEl} onType={lens.type} onClose={() => lens.setEditing(null)}
+                  className="absolute inset-x-2 top-[calc(max(6px,env(safe-area-inset-top))+52px)] z-10" />
               )}
               {view.s > 1.01 && (
                 <button type="button" className={`mono absolute right-2 rounded-full border border-line bg-chrome/90 px-2.5 py-1 text-[11px] ${full ? "top-[calc(max(6px,env(safe-area-inset-top))+52px)]" : "top-2"}`}
                   onClick={() => setView(NONE)} aria-label="Zoom out to the whole screen">{view.s.toFixed(1)}x ✕</button>
               )}
               {full && pend[0] && !kb && <div className="absolute inset-x-3 bottom-[max(12px,env(safe-area-inset-bottom))] mx-auto max-w-md"><ApproveCard a={pend[0]} device={dev} /></div>}
+              {helping && !kb && <button type="button" className="m-btn primary sm absolute right-2 bottom-2" onClick={() => resume(helping.driver, helping.id)}>Resume</button>}
               {info.here && info.run && !kb && <span className="mono absolute bottom-2 left-2 max-w-[calc(100%-16px)] truncate rounded-[3px] border border-line bg-chrome/90 px-1.5 py-0.5 text-[10.5px] text-primary">{info.run.last}</span>}
             </>
           )}
@@ -244,6 +253,7 @@ function Screen({ live }: { live: LiveState }) {
         ) : (
         <div className="m-scroll m-rise flex min-h-0 flex-1 flex-col gap-2 px-3.5 pt-3 pb-[calc(var(--sheet-h)+16px)]">
           {pend.map((a) => <ApproveCard key={a.request} a={a} device={dev} />)}
+          {lens.on && <LensPanel lens={lens} streaming={streaming} />}
           <div className="rounded-xl border border-line bg-surface px-3 py-2.5">
             <small className="block text-[10.5px] tracking-[.05em] text-text-2 uppercase">Now</small>
             <div className="mono text-xs">{info.ticker}</div>

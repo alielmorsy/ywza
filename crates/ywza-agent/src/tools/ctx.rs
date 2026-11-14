@@ -6,15 +6,25 @@ use std::{
 
 use serde_json::Value;
 use ywza_desktop::{Snapshot, WindowId};
-use ywza_proto::{OcrEngine, ToolInfo};
+use ywza_proto::{OcrEngine, SessionId, ToolInfo};
 use ywza_term::TermManager;
 
 use super::{act::Report, registry, Entry, ToolOutput};
 
+/// One caller's element ids: a session, and for a remote caller its own session on the peer.
+/// Each space keeps its own snapshots, so callers never overwrite each other's ids.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Space {
+    pub session: SessionId,
+    pub sub: Option<SessionId>,
+}
+
+type Snaps = HashMap<Space, HashMap<WindowId, (Instant, Snapshot)>>;
+
 /// State shared by every call: element lists, terminals and the tool registry.
 struct Shared {
-    /// Last snapshot per window; element actions resolve ids against it.
-    snaps: Mutex<HashMap<WindowId, Snapshot>>,
+    /// Last snapshot per window and space; element actions resolve ids against it.
+    snaps: Mutex<Snaps>,
     terms: Arc<TermManager>,
     entries: Vec<Entry>,
 }
@@ -23,6 +33,7 @@ struct Shared {
 #[derive(Clone)]
 pub struct Ctx {
     shared: Arc<Shared>,
+    space: Space,
     /// The configured engine (get_elements and OCR validation).
     pub ocr: OcrEngine,
     /// Inside a `batch`: element actions skip the settle wait and the diff.
@@ -31,19 +42,23 @@ pub struct Ctx {
 
 impl Ctx {
     pub fn snap(&self, w: WindowId) -> Option<Snapshot> {
-        self.shared.snaps.lock().unwrap().get(&w).cloned()
+        let snaps = self.shared.snaps.lock().unwrap();
+        Some(snaps.get(&self.space)?.get(&w)?.1.clone())
     }
 
     pub fn has_snap(&self, w: WindowId) -> bool {
-        self.shared.snaps.lock().unwrap().contains_key(&w)
+        let snaps = self.shared.snaps.lock().unwrap();
+        snaps.get(&self.space).is_some_and(|m| m.contains_key(&w))
     }
 
     pub fn store(&self, w: WindowId, snap: Snapshot) {
-        self.shared.snaps.lock().unwrap().insert(w, snap);
+        self.shared.store(self.space, w, snap);
     }
 
     pub fn forget(&self, w: WindowId) {
-        self.shared.snaps.lock().unwrap().remove(&w);
+        if let Some(m) = self.shared.snaps.lock().unwrap().get_mut(&self.space) {
+            m.remove(&w);
+        }
     }
 
     pub fn terms(&self) -> Arc<TermManager> {
@@ -81,6 +96,16 @@ impl Ctx {
             "tool call"
         );
         out
+    }
+}
+
+impl Shared {
+    fn store(&self, space: Space, w: WindowId, snap: Snapshot) {
+        let mut snaps = self.snaps.lock().unwrap();
+        snaps
+            .entry(space)
+            .or_default()
+            .insert(w, (Instant::now(), snap));
     }
 }
 
@@ -144,26 +169,72 @@ impl Tools {
             .collect()
     }
 
-    /// The window's latest element list (the one `get_elements` ids refer to), kept as the
-    /// latest. A stored one whose window rect is not `rect` is stale: re-taken with its ids carried over.
+    /// The window's element list stored in `prefer`, else the most recent across all spaces. A
+    /// stale one (window rect not `rect`) is re-taken with its ids carried over and stored back in
+    /// its space; with none stored, a fresh one is taken and not stored.
     pub async fn latest_snapshot(
         &self,
+        prefer: Option<Space>,
         w: WindowId,
         rect: ywza_desktop::Rect,
     ) -> ywza_desktop::Result<Snapshot> {
-        let cached = self.shared.snaps.lock().unwrap().get(&w).cloned();
+        let latest = {
+            let snaps = self.shared.snaps.lock().unwrap();
+            let own = prefer.and_then(|sp| snaps.get(&sp)?.get(&w).map(|(_, s)| (sp, s.clone())));
+            own.or_else(|| {
+                snaps
+                    .iter()
+                    .filter_map(|(sp, m)| m.get(&w).map(|(t, s)| (*sp, *t, s)))
+                    .max_by_key(|(_, t, _)| *t)
+                    .map(|(sp, _, s)| (sp, s.clone()))
+            })
+        };
+        let cached = latest.as_ref().map(|l| l.1.clone());
         if let Some(s) = cached.as_ref().filter(|s| s.window.rect == rect) {
             return Ok(s.clone());
         }
         let s = super::util::blocking(move || ywza_desktop::snapshot(w, cached.as_ref())).await?;
-        self.shared.snaps.lock().unwrap().insert(w, s.clone());
+        if let Some((space, _)) = latest {
+            self.shared.store(space, w, s.clone());
+        }
         Ok(s)
     }
 
-    /// Runs a tool. `ocr` is the configured engine.
-    pub async fn call(&self, name: &str, args: &Value, ocr: OcrEngine) -> ToolOutput {
+    /// The window's stored snapshot in `space`, if any.
+    pub fn snap(&self, space: Space, w: WindowId) -> Option<Snapshot> {
+        let snaps = self.shared.snaps.lock().unwrap();
+        Some(snaps.get(&space)?.get(&w)?.1.clone())
+    }
+
+    /// Stores `snap` as the window's latest in `space`; element ids resolve against it.
+    pub fn store(&self, space: Space, w: WindowId, snap: Snapshot) {
+        self.shared.store(space, w, snap);
+    }
+
+    pub fn terms(&self) -> Arc<TermManager> {
+        self.shared.terms.clone()
+    }
+
+    /// Forgets every element space of the session, remote sub-spaces included.
+    pub fn drop_session(&self, session: SessionId) {
+        self.shared
+            .snaps
+            .lock()
+            .unwrap()
+            .retain(|sp, _| sp.session != session);
+    }
+
+    /// Runs a tool in an element space. `ocr` is the configured engine.
+    pub async fn call(
+        &self,
+        space: Space,
+        name: &str,
+        args: &Value,
+        ocr: OcrEngine,
+    ) -> ToolOutput {
         let cx = Ctx {
             shared: self.shared.clone(),
+            space,
             ocr,
             quiet: false,
         };

@@ -27,6 +27,7 @@ export function ApproveCard({ a, device, run }: { a: Approval; device?: string; 
         {device && <DevChip name={device} />}
         {run && <span className="min-w-0 flex-1 truncate text-right text-xs text-text-2">{run}</span>}
       </div>
+      {a.image && <img src={`data:image/png;base64,${a.image}`} alt="The element this action targets, boxed" className="max-h-48 max-w-full self-start rounded-md border border-line object-contain" />}
       <div className="break-words select-text"><code className="mono text-warn">{a.tool}</code> <span className="text-text">{a.summary}</span></div>
       {a.detail && (
         <details>

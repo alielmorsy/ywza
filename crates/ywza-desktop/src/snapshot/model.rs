@@ -1,3 +1,4 @@
+use super::anchor::Anchor;
 use crate::platform::Handle;
 use crate::{Rect, WindowInfo};
 
@@ -40,6 +41,9 @@ pub(crate) struct Raw {
     /// Set for nodes of a popup window (menu, dropdown) that belongs to the snapshot
     /// window: the popup's own bounds, which may stick out of the window.
     pub bounds: Option<Rect>,
+    /// Index of the parent in the walker's output (always earlier); `None` for direct
+    /// children of the window or popup root.
+    pub parent: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -59,11 +63,16 @@ pub struct Element {
     pub group: String,
     /// `name` is borrowed from the named node it wraps or sits next to (see `build`).
     pub labeled: bool,
+    /// `name` was given by the model and stored by anchor (see `learned`).
+    pub learned: bool,
     pub rect: Rect,
     pub patterns: Patterns,
     pub key: Vec<i32>,
     /// Lives in a separate popup window (menu, dropdown) rather than the window itself.
     pub popup: bool,
+    /// Id of the nearest ancestor that is itself listed.
+    pub parent: Option<u32>,
+    pub anchor: Anchor,
     pub(crate) handle: Option<Handle>,
 }
 

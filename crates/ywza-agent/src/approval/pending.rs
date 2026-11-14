@@ -31,6 +31,7 @@ impl Pending {
         tool: String,
         summary: String,
         detail: String,
+        image: Option<String>,
     ) -> (u64, AgentMsg, oneshot::Receiver<bool>) {
         let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
         let (tx, rx) = oneshot::channel();
@@ -40,6 +41,7 @@ impl Pending {
             tool: tool.clone(),
             summary,
             detail,
+            image,
         };
         let waiting = Waiting {
             session,
@@ -76,8 +78,8 @@ mod tests {
     fn answers_are_delivered_once() {
         let p = Pending::default();
         let (s1, s2) = (SessionId::new(), SessionId::new());
-        let (a, _, rx) = p.open(s1, "run_command".into(), "ls".into(), "{}".into());
-        let (b, _, rx_b) = p.open(s2, "term_keys".into(), "x".into(), "{}".into());
+        let (a, _, rx) = p.open(s1, "run_command".into(), "ls".into(), "{}".into(), None);
+        let (b, _, rx_b) = p.open(s2, "term_keys".into(), "x".into(), "{}".into(), None);
         assert_eq!((a, b), (1, 2));
         assert_eq!(p.requests(None).len(), 2);
         assert_eq!(p.requests(Some(s2)).len(), 1);

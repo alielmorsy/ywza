@@ -16,7 +16,7 @@ export function tileInfo(name: string, d: Device | undefined, runs: Run[]): Tile
   const active = runs.filter(isActive);
   const acting = active.find((r) => r.current === name);
   const run = acting ?? active.find((r) => r.driver === name);
-  if (acting?.state === "needs") return { state: "need", ticker: `Waiting for you: ${pendingOf(acting)[0]?.tool ?? ""}`, here: true, run: acting };
+  if (acting?.state === "needs") return { state: "need", ticker: `Waiting for you: ${pendingOf(acting)[0]?.tool ?? acting.help?.reason ?? ""}`, here: true, run: acting };
   if (run) return { state: "working", ticker: acting ? acting.last || "Working" : `Driving: ${run.title}`, here: !!acting, run };
   const failed = runs.find((r) => r.state === "failed" && (r.current === name || r.driver === name) && Date.now() - r.updated < FAILED_FOR);
   if (failed) return { state: "error", ticker: failed.last || "Run failed", here: false, run: failed };

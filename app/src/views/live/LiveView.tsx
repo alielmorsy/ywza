@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { reportError } from "../../api";
 import { setUi, uiOf, useNav } from "../../nav";
 import { Icon } from "../../Icon";
 import { ChatPane } from "../chat/ChatPane";
@@ -6,6 +7,8 @@ import { useAccess } from "./access";
 import { drawFull } from "./draw";
 import { DockPanel } from "./DockPanel";
 import { FULL } from "./input";
+import { useLens } from "./lens";
+import { LensEditor, LensLayer } from "./LensChips";
 import { MonitorPicker } from "./MonitorPicker";
 import { unavailable } from "./Notice";
 import { QualityMenu } from "./QualityMenu";
@@ -32,6 +35,7 @@ export function LiveView({ dev, active }: { dev: string; active: boolean }) {
   const controlling = canControl && control;
   const input = useRemoteInput(dev, canvas, whole, active && ok && controlling);
 
+  const lens = useLens(dev, { live, monitor, canAct: canControl, fail: (m) => reportError(dev, m) });
   const monitors = d?.monitors;
   useEffect(() => { // the stream may remember a monitor this device does not have
     if (active && monitors?.length && !monitors.some((m) => m.index === monitor))
@@ -60,6 +64,10 @@ export function LiveView({ dev, active }: { dev: string; active: boolean }) {
                 <Icon name={controlling ? "pointer" : "eye"} />{controlling ? "Control" : "View only"}
               </button>
             : <span className="tag" title="This device does not allow control">View only</span>}
+          <button className={`${tool(lens.on)} justify-center`} aria-pressed={lens.on} onClick={() => lens.setOn(!lens.on)}
+            title={lens.on ? "Smart lens on: click a box to act on it. Turn off to click the screen directly." : "Smart lens: clickable boxes over the focused window"}>
+            <Icon name="spark" />Lens
+          </button>
           {controlling && focused && <span className="px-1 text-xs whitespace-nowrap text-text-2">Ctrl+Alt+Home returns the keyboard</span>}
           {canSet && <QualityMenu dev={dev} />}
           <button className={tool(dock)} aria-pressed={dock} title={dock ? "Hide chat" : "Show chat"} aria-label="Chat panel"
@@ -77,6 +85,12 @@ export function LiveView({ dev, active }: { dev: string; active: boolean }) {
           className="absolute inset-0 size-full object-contain outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
           style={controlling ? { cursor: d?.cursor ?? "none" } : undefined} {...input}
           onFocus={() => setFocused(true)} onBlur={(e) => { setFocused(false); input.onBlur?.(e); }} />
+
+        <LensLayer lens={lens} canvas={canvas} mon={monitors?.find((m) => m.index === monitor)} />
+        {lens.editEl && (
+          <LensEditor el={lens.editEl} onType={lens.type} onClose={() => lens.setEditing(null)} className="absolute top-3 left-1/2 z-10 w-[360px] max-w-[calc(100%-24px)] -translate-x-1/2" />
+        )}
+        {lens.active && !lens.canAct && <p className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-md border border-line bg-chrome/90 px-2.5 py-1 text-xs whitespace-nowrap text-text-2" role="status">View only: this device does not allow control</p>}
 
         {active && !live && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center text-center" role="status">

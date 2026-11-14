@@ -1,9 +1,11 @@
 //! Live view: one H.264 stream per client, each frame on its own unidirectional QUIC
 //! stream (`FrameHeader` frame + Annex-B bytes), plus human input on that monitor.
 
+mod chips;
 mod cursor;
 mod focus;
 mod input;
+mod lens;
 mod rate;
 mod send;
 
@@ -14,11 +16,15 @@ use tokio::{sync::mpsc, task::JoinHandle};
 use ywza_proto::{AgentMsg, InputEvent};
 use ywza_stream::Ctl;
 
+pub use chips::editable;
 pub use input::to_pixels;
+pub use lens::{act as lens_act, Lens};
 
 /// A client's running live view; dropping it stops capture and sending.
 pub struct Live {
     pub monitor: u32,
+    /// The monitor's rect in virtual-screen pixels.
+    pub rect: ywza_desktop::Rect,
     /// Human input, injected in order on its own thread (pasting text blocks for a while).
     input: std::sync::mpsc::Sender<InputEvent>,
     ctl: Arc<Ctl>,
@@ -86,6 +92,7 @@ impl Live {
         );
         Ok(Self {
             monitor,
+            rect,
             input,
             ctl,
             sender,

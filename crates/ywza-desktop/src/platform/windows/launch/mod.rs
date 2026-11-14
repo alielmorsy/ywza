@@ -10,4 +10,4 @@ mod start;
 mod target;
 mod wait;
 
-pub use start::launch;
+pub use start::{find_program, launch};

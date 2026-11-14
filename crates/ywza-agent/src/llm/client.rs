@@ -1,15 +1,15 @@
 use serde_json::{json, Value};
 use ywza_proto::{Llm, ToolInfo};
 
-use super::Msg;
+use super::{usage::StepUsage, Msg};
 
-/// One OpenAI-compatible `/chat/completions` request; returns the assistant message.
+/// One OpenAI-compatible `/chat/completions` request; returns the assistant message and the reported usage.
 pub async fn complete(
     http: &reqwest::Client,
     llm: &Llm,
     tools: &[ToolInfo],
     history: &[Msg],
-) -> Result<Value, String> {
+) -> Result<(Value, StepUsage), String> {
     let tools: Vec<Value> = tools
         .iter()
         .filter(|t| llm.vision || t.name != "screenshot")
@@ -50,6 +50,6 @@ pub async fn complete(
             "LLM response has no message: {}",
             text.chars().take(500).collect::<String>()
         )),
-        m => Ok(m.clone()),
+        m => Ok((m.clone(), StepUsage::parse(&v))),
     }
 }

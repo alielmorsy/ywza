@@ -188,10 +188,207 @@ fn ids_carry_over_and_diff() {
     assert_eq!(new.seq, 2);
     assert_eq!(new.get(3).unwrap().name, "Name"); // ID kept
     assert_eq!(
-        diff(&old, &new),
+        render_diff(&diff(&old, &new)),
         "-[2]\n~[1] button \"Save\" disabled\n~[3] = \"new.txt\"\n+[5] dialog \"Save as\"\n"
     );
-    assert_eq!(diff(&new, &new), "(no changes)\n");
+    assert_eq!(render_diff(&diff(&new, &new)), "(no changes)\n");
+}
+
+fn el(id: u32, kind: &'static str, name: &str, key: &[i32]) -> Element {
+    Element {
+        id,
+        kind,
+        name: name.into(),
+        automation_id: String::new(),
+        value: None,
+        enabled: true,
+        selected: false,
+        busy: false,
+        group: String::new(),
+        labeled: false,
+        learned: false,
+        rect: Rect::default(),
+        patterns: Patterns::default(),
+        key: key.to_vec(),
+        popup: false,
+        parent: None,
+        anchor: Anchor::default(),
+        handle: None,
+    }
+}
+
+fn snap_of(elements: Vec<Element>) -> Snapshot {
+    Snapshot {
+        window: window(),
+        seq: 1,
+        elements,
+    }
+}
+
+/// The original string-based diff, kept as the reference for `render_diff(diff(..))`.
+fn old_diff(old: &Snapshot, new: &Snapshot) -> String {
+    use std::fmt::Write;
+    const COLLAPSE: usize = 20;
+    const SAMPLE_REMOVED: usize = 8;
+    const SAMPLE_ADDED: usize = 12;
+    let ocr = |a: &Element, b: &Element| a.kind == "ocr" && b.kind == "ocr";
+    let same = |a: &Element, b: &Element| {
+        if ocr(a, b) {
+            a.id == b.id
+        } else if a.key.is_empty() || b.key.is_empty() {
+            a.key.is_empty() && b.key.is_empty() && a.kind == b.kind && a.name == b.name
+        } else {
+            a.key == b.key
+        }
+    };
+    let same_name = |a: &Element, b: &Element| {
+        a.name == b.name || (ocr(a, b) && super::ocr::ocr_similar(&a.name, &b.name))
+    };
+    let removed: Vec<String> = old
+        .elements
+        .iter()
+        .filter(|o| !new.elements.iter().any(|n| same(o, n)))
+        .map(|o| format!("-[{}]", o.id))
+        .collect();
+    // In document order; true = added.
+    let mut rest: Vec<(bool, String)> = Vec::new();
+    for n in &new.elements {
+        match old.elements.iter().find(|o| same(o, n)) {
+            None => rest.push((true, format!("+{}", n.line()))),
+            Some(o)
+                if o.kind == n.kind
+                    && same_name(o, n)
+                    && o.enabled == n.enabled
+                    && o.selected == n.selected
+                    && o.busy == n.busy =>
+            {
+                if o.value != n.value {
+                    rest.push((false, format!("~[{}]{}", n.id, n.value_text())));
+                }
+            }
+            Some(_) => rest.push((false, format!("~{}", n.line()))),
+        }
+    }
+    let r = removed.len();
+    let a = rest.iter().filter(|(added, _)| *added).count();
+    let mut out = String::new();
+    if r > COLLAPSE || a > COLLAPSE {
+        let _ = writeln!(
+            out,
+            "{r} removed, {a} added (sample; get_elements lists all)"
+        );
+    }
+    if r > COLLAPSE {
+        let _ = writeln!(out, "{} …", removed[..SAMPLE_REMOVED].join(" "));
+    } else {
+        for l in &removed {
+            let _ = writeln!(out, "{l}");
+        }
+    }
+    let mut shown = 0;
+    for (added, l) in &rest {
+        if *added && a > COLLAPSE {
+            shown += 1;
+            if shown > SAMPLE_ADDED {
+                continue;
+            }
+        }
+        let _ = writeln!(out, "{l}");
+    }
+    if a > COLLAPSE {
+        let _ = writeln!(out, "+… {} more added", a - SAMPLE_ADDED);
+    }
+    if out.is_empty() {
+        out.push_str("(no changes)\n");
+    }
+    out
+}
+
+#[test]
+fn render_diff_matches_reference() {
+    let base = || {
+        let mut check = el(4, "checkbox", "Auto", &[1, 4]);
+        check.patterns.toggle = true;
+        check.value = Some("off".into());
+        let mut edit = el(3, "edit", "Name", &[1, 3]);
+        edit.value = Some("a.txt".into());
+        vec![el(1, "button", "Save", &[1, 1]), edit, check]
+    };
+    let ocr = |names: &[&str]| {
+        snap_of(
+            names
+                .iter()
+                .enumerate()
+                .map(|(i, n)| el(i as u32 + 1, "ocr", n, &[]))
+                .collect(),
+        )
+    };
+    let mut cases: Vec<(Snapshot, Snapshot)> = Vec::new();
+    let old = snap(sample(), None);
+    let mut raws = sample();
+    raws.remove(1);
+    raws[1].value = Some("new.txt".into());
+    raws[0].enabled = false;
+    cases.push((old.clone(), snap(raws, Some(&old))));
+    cases.push((snap_of(vec![]), snap_of(vec![])));
+    cases.push((snap_of(vec![]), snap_of(base())));
+    cases.push((snap_of(base()), snap_of(vec![])));
+    cases.push((ocr(&["A", "A", "B"]), ocr(&["A", "C", "B", "B"])));
+    cases.push((ocr(&["A", "B"]), ocr(&["B", "A", "A"])));
+    let mut toggled = base();
+    toggled[2].value = Some("on".into());
+    cases.push((snap_of(base()), snap_of(toggled)));
+    let mut valued = base();
+    valued[1].value = Some("b.txt".into());
+    cases.push((snap_of(base()), snap_of(valued)));
+    let mut renamed = base();
+    renamed[0].name = "Store".into();
+    cases.push((snap_of(base()), snap_of(renamed)));
+    let mut disabled = base();
+    disabled[0].enabled = false;
+    disabled[1].value = None;
+    cases.push((snap_of(base()), snap_of(disabled)));
+    let mut dup_old = base();
+    dup_old.push(el(9, "button", "Save copy", &[1, 1]));
+    cases.push((snap_of(dup_old.clone()), snap_of(base())));
+    cases.push((snap_of(base()), snap_of(dup_old)));
+    let mut picked = base();
+    picked[0].selected = true;
+    picked[1].busy = true;
+    picked[1].value = Some("b.txt".into());
+    cases.push((snap_of(base()), snap_of(picked)));
+    // OCR lines match on id; a noisy or cut-off re-read is no change, other text is.
+    let (jitter, cut, other) = (
+        ocr(&["File eView", "Use the current in", "Go"]),
+        ocr(&["File View", "Use the current implied", "Go"]),
+        ocr(&["Save", "Delete", "Stop"]),
+    );
+    cases.push((cut.clone(), jitter.clone()));
+    cases.push((jitter.clone(), cut));
+    cases.push((jitter, other));
+    let mut shifted = ocr(&["A", "B"]);
+    shifted.elements[0].id = 7;
+    cases.push((ocr(&["A", "B"]), shifted));
+    let mut valued_ocr = ocr(&["A"]);
+    valued_ocr.elements[0].value = Some("v".into());
+    cases.push((ocr(&["A"]), valued_ocr));
+    // Page changes collapse, on either side or both.
+    let many = |n: u32, key: i32| {
+        snap_of(
+            (0..n)
+                .map(|i| el(i + 1, "button", "B", &[key, i as i32]))
+                .collect(),
+        )
+    };
+    cases.push((many(30, 1), many(25, 2)));
+    cases.push((many(30, 1), many(3, 2)));
+    cases.push((many(3, 1), many(25, 2)));
+    cases.push((many(21, 1), many(20, 2)));
+    cases.push((many(20, 1), many(21, 2)));
+    cases.push((many(30, 1), many(30, 1)));
+    for (a, b) in &cases {
+        assert_eq!(render_diff(&diff(a, b)), old_diff(a, b));
+    }
 }
 
 #[test]
@@ -204,7 +401,7 @@ fn big_diff_collapses() {
     };
     let old = snap(many(100, 30).collect(), None);
     let new = snap(many(200, 25).collect(), Some(&old));
-    let d = diff(&old, &new);
+    let d = render_diff(&diff(&old, &new));
     let lines: Vec<&str> = d.lines().collect();
     assert_eq!(
         lines[0],
@@ -216,7 +413,7 @@ fn big_diff_collapses() {
     assert_eq!(lines[14], "+… 13 more added");
     // Small changes stay listed in full.
     let few = snap(many(100, 28).collect(), Some(&old));
-    assert_eq!(diff(&old, &few), "-[29]\n-[30]\n");
+    assert_eq!(render_diff(&diff(&old, &few)), "-[29]\n-[30]\n");
 }
 
 #[test]
@@ -278,7 +475,7 @@ fn state_flags_and_groups() {
     raws[3].selected = true;
     let old = snap(sample(), None);
     assert_eq!(
-        diff(&old, &snap(raws, Some(&old))),
+        render_diff(&diff(&old, &snap(raws, Some(&old)))),
         "~[4] checkbox \"Auto-update\" = off selected\n"
     );
 }
@@ -424,7 +621,165 @@ fn ocr_jitter_is_no_change() {
     );
     let mut new = old.clone();
     new.elements[0].name = "Use the current in".into();
-    assert_eq!(diff(&old, &new), "(no changes)\n");
+    assert_eq!(render_diff(&diff(&old, &new)), "(no changes)\n");
     new.elements[0].name = "Delete".into();
-    assert_eq!(diff(&old, &new), format!("~{}\n", new.elements[0].line()));
+    assert_eq!(
+        render_diff(&diff(&old, &new)),
+        format!("~{}\n", new.elements[0].line())
+    );
+}
+
+fn node(role: &'static str, name: &str, aid: &str, parent: Option<usize>, y: i32, key: i32) -> Raw {
+    Raw {
+        role,
+        name: name.into(),
+        automation_id: aid.into(),
+        rect: Rect::new(10, y, 100, 20),
+        enabled: true,
+        focusable: true,
+        key: vec![key],
+        parent,
+        ..Raw::default()
+    }
+}
+
+fn snap_in(process: &str, raws: Vec<Raw>) -> Snapshot {
+    let w = WindowInfo {
+        process: process.into(),
+        ..window()
+    };
+    Snapshot::build(w, raws.into_iter().map(|r| (r, None)).collect(), None)
+}
+
+fn named<'a>(s: &'a Snapshot, name: &str) -> &'a Element {
+    s.elements.iter().find(|e| e.name == name).unwrap()
+}
+
+fn top(r: &Resolve) -> u32 {
+    match r {
+        Resolve::Found(c) => c[0].id,
+        other => panic!("not resolved: {other:?}"),
+    }
+}
+
+#[test]
+fn parent_skips_unlisted_ancestors() {
+    let dialog = raw("dialog", "Save as", 1);
+    let mut pane = raw("pane", "", 2);
+    pane.parent = Some(0);
+    let mut ok = raw("button", "OK", 3);
+    ok.parent = Some(1);
+    let outer = raw("button", "Top", 4);
+    let s = snap(vec![dialog, pane, ok, outer], None);
+    assert_eq!(s.elements.len(), 3);
+    assert_eq!(named(&s, "Save as").parent, None);
+    assert_eq!(named(&s, "OK").parent, Some(named(&s, "Save as").id));
+    assert_eq!(named(&s, "Top").parent, None);
+}
+
+#[test]
+fn anchor_path_and_name() {
+    let group = node("group", "  Main   Toolbar ", "tb", None, 10, 1);
+    let mut button = node("button", "  Save  As ", "", Some(0), 50, 2);
+    button.bounds = Some(Rect::new(0, 0, 500, 500));
+    let s = snap(vec![group, button], None);
+    let a = &named(&s, "Save  As").anchor;
+    assert_eq!(a.process, "notepad.exe");
+    assert_eq!(a.role, "button");
+    assert_eq!(a.name, "save as");
+    assert_eq!(a.rel, Rect::new(10, 50, 100, 20));
+    assert_eq!(
+        a.path,
+        [Step {
+            role: "group",
+            automation_id: "tb".into(),
+            name: "main toolbar".into()
+        }]
+    );
+}
+
+fn form(first_y: i32, key0: i32, extra: bool) -> Vec<Raw> {
+    let mut raws = Vec::new();
+    if extra {
+        raws.push(node("button", "New", "btnNew", None, 5, key0));
+    }
+    let g = raws.len();
+    raws.push(node("group", "Form", "form", None, 40, key0 + 1));
+    raws.push(node("button", "Save", "btnSave", Some(g), first_y, key0 + 2));
+    raws.push(node("button", "Cancel", "btnCancel", Some(g), first_y + 40, key0 + 3));
+    raws
+}
+
+#[test]
+fn resolves_after_restart() {
+    let before = snap(form(100, 10, false), None);
+    let save = named(&before, "Save");
+    let after = snap(form(100, 500, true), None);
+    let want = named(&after, "Save").id;
+    assert_ne!(save.id, want);
+    let r = resolve(&save.anchor, &after);
+    assert_eq!(top(&r), want);
+    let Resolve::Found(c) = r else { unreachable!() };
+    assert!(c[0].score > 0.99 && c.iter().all(|c| (0.0..=1.0).contains(&c.score)));
+    // A small move stays within the position tolerance.
+    let moved = snap(form(104, 900, true), None);
+    assert_eq!(top(&resolve(&save.anchor, &moved)), named(&moved, "Save").id);
+}
+
+fn closes(aids: [&str; 2], groups: [&str; 2], y: i32) -> Vec<Raw> {
+    vec![
+        node("group", groups[0], "", None, 10, 1),
+        node("button", "Close", aids[0], Some(0), y, 2),
+        node("group", groups[1], "", None, 200, 3),
+        node("button", "Close", aids[1], Some(2), y + 40, 4),
+    ]
+}
+
+#[test]
+fn identical_buttons_are_ambiguous_until_distinguished() {
+    let anchor_of = |aids, groups| named(&snap(closes(aids, groups, 100), None), "Close").anchor.clone();
+    // The layout moved, so position cannot help either.
+    let b = snap(closes(["", ""], ["Tabs", "Tabs"], 300), None);
+    let anchor = anchor_of(["", ""], ["Tabs", "Tabs"]);
+    let Resolve::Ambiguous(c) = resolve(&anchor, &b) else {
+        panic!("expected ambiguous");
+    };
+    assert_eq!(c.len(), 2);
+
+    let b = snap(closes(["x1", "x2"], ["Tabs", "Tabs"], 300), None);
+    let anchor = anchor_of(["x1", "x2"], ["Tabs", "Tabs"]);
+    assert_eq!(top(&resolve(&anchor, &b)), named(&b, "Close").id);
+
+    let b = snap(closes(["", ""], ["Left", "Right"], 300), None);
+    let anchor = anchor_of(["", ""], ["Left", "Right"]);
+    assert_eq!(top(&resolve(&anchor, &b)), named(&b, "Close").id);
+}
+
+#[test]
+fn other_process_or_role_is_not_found() {
+    let a = snap(form(100, 10, false), None);
+    let anchor = named(&a, "Save").anchor.clone();
+    let other = snap_in("calc.exe", form(100, 10, false));
+    assert_eq!(resolve(&anchor, &other), Resolve::NotFound);
+    let mut edit = anchor;
+    edit.role = "edit";
+    assert_eq!(resolve(&edit, &a), Resolve::NotFound);
+}
+
+#[test]
+fn learned_label_names_unnamed_only() {
+    let proc = "learned-test.exe";
+    let raws = || {
+        vec![
+            node("button", "", "", None, 40, 1),
+            node("button", "Save", "", None, 200, 2),
+        ]
+    };
+    let anchor = snap_in(proc, raws()).elements[0].anchor.clone();
+    set_learned(vec![(anchor, "Send".into())]);
+    let s = snap_in(proc, raws());
+    set_learned(vec![]);
+    assert_eq!(s.elements[0].line(), "[1] button \"Send\" (learned)");
+    assert_eq!(s.elements[1].line(), "[2] button \"Save\"");
+    assert!(snap_in(proc, raws()).elements[0].name.is_empty());
 }

@@ -307,6 +307,7 @@ async fn local_tcp_port_lists_and_calls_tools() {
         call,
         name: name.into(),
         args,
+        space: None,
     };
     write_frame(&mut s, &call(9, "wait", json!({"ms":5})))
         .await
@@ -358,6 +359,7 @@ async fn direct_tool_calls_run_without_asking() {
         call: 1,
         name: "run_command".into(),
         args: json!({"command":"echo hi"}),
+        space: None,
     };
     write_frame(&mut s, &msg).await.unwrap();
     assert!(matches!(

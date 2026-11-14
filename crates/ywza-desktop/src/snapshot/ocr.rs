@@ -1,3 +1,4 @@
+use super::anchor::{norm, rel, Anchor};
 use super::classify::INFORMATIVE;
 use super::model::{Element, Patterns, Snapshot};
 use crate::Rect;
@@ -39,10 +40,19 @@ pub fn merge_ocr(snapshot: &mut Snapshot, lines: Vec<(String, Rect)>) {
             busy: false,
             group: String::new(),
             labeled: false,
+            learned: false,
             rect,
             patterns: Patterns::default(),
             key: Vec::new(),
             popup: false,
+            parent: None,
+            anchor: Anchor {
+                process: snapshot.window.process.clone(),
+                role: "ocr",
+                name: norm(&text),
+                rel: rel(&rect, &snapshot.window.rect),
+                ..Anchor::default()
+            },
             handle: None,
         });
     }

@@ -136,6 +136,11 @@ pub(crate) fn set_focus(el: &Uia) {
     let _ = unsafe { el.SetFocus() };
 }
 
+/// The element with keyboard focus, desktop-wide.
+pub(crate) fn focused() -> Option<Uia> {
+    unsafe { automation().ok()?.GetFocusedElement().ok() }
+}
+
 pub(crate) fn has_focus(el: &Uia) -> bool {
     unsafe { el.CurrentHasKeyboardFocus() }.is_ok_and(|b| b.as_bool())
 }

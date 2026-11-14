@@ -11,6 +11,12 @@ pub struct Llm {
     /// Sent as `reasoning_effort` when set (low, medium, high, xhigh, max).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effort: Option<String>,
+    /// USD per million input tokens; with `price_out`, the run receipt shows a cost.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price_in: Option<f64>,
+    /// USD per million output tokens.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price_out: Option<f64>,
 }
 
 impl Llm {
@@ -28,6 +34,8 @@ impl Default for Llm {
             max_steps: 60,
             vision: true,
             effort: None,
+            price_in: None,
+            price_out: None,
         }
     }
 }

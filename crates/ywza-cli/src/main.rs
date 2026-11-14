@@ -47,6 +47,12 @@ enum Cmd {
         #[arg(long, value_parser = parse_sid)]
         session: Option<SessionId>,
     },
+    /// Hand a session that asked for help back to its AI, with an optional note.
+    Resume {
+        #[arg(value_parser = parse_sid)]
+        session: SessionId,
+        note: Option<String>,
+    },
     /// List sessions.
     Sessions,
     /// Print a session's history.
@@ -77,8 +83,27 @@ enum Cmd {
         #[arg(required = true, num_args = 2..)]
         paths: Vec<String>,
     },
+    /// Print a device's clipboard text, or copy it between devices: `ywza clip vm`, `ywza clip pc vm`.
+    /// `local` is this machine.
+    Clip {
+        #[arg(value_parser = parse_target)]
+        from: String,
+        #[arg(value_parser = parse_target)]
+        to: Option<String>,
+    },
+    /// Run one tool on several devices at once: `ywza fan vm,pc list_windows`,
+    /// `ywza fan all run_command '{"command":"hostname"}'`. `all` is every paired device.
+    Fan {
+        devices: String,
+        tool: String,
+        /// Tool arguments as a JSON object.
+        args: Option<String>,
+    },
     #[command(subcommand)]
     Config(ConfigCmd),
+    /// Manage watchers (persistent triggers) on this machine or, with --device, a paired one.
+    #[command(subcommand)]
+    Watch(cmd::watch::WatchCmd),
     /// After the handshake, pipe raw protocol frames between stdin/stdout and the agent
     /// (used by the Python MCP server for paired devices).
     Bridge,
@@ -91,10 +116,16 @@ fn parse_device(s: &str) -> Result<String, String> {
         .ok_or_else(|| "use letters, digits, - and _ (\"local\" means this machine)".into())
 }
 
+/// A device name, or `local` for this machine.
+fn parse_target(s: &str) -> Result<String, String> {
+    if s == "local" {
+        return Ok(s.into());
+    }
+    parse_device(s)
+}
+
 fn parse_code(s: &str) -> Result<String, String> {
-    let ok = s.len() == 6 && s.bytes().all(|b| b.is_ascii_digit());
-    ok.then(|| s.to_string())
-        .ok_or_else(|| "the pairing code is 6 digits".into())
+    cmd::pair::parse_code(s)
 }
 
 fn parse_sid(s: &str) -> Result<SessionId, String> {
@@ -115,6 +146,12 @@ async fn main() -> Result<()> {
         Cmd::Devices => return cmd::devices::run(),
         Cmd::Pair { code, name } => return cmd::pair::run(code, name).await,
         Cmd::Cp { recursive, paths } => return cmd::cp::run(paths, *recursive).await,
+        Cmd::Clip { from, to } => return cmd::clip::run(from, to.as_deref()).await,
+        Cmd::Fan {
+            devices,
+            tool,
+            args,
+        } => return cmd::fan::run(devices, tool, args.as_deref()).await,
         _ => {}
     }
 
@@ -126,6 +163,7 @@ async fn main() -> Result<()> {
     let r = match cli.cmd {
         Cmd::Bridge => cmd::bridge::run(&mut c).await,
         Cmd::Prompt { text, session } => cmd::prompt::run(&mut c, text, session, cli.verbose).await,
+        Cmd::Resume { session, note } => cmd::resume::run(&mut c, session, note).await,
         Cmd::Sessions => cmd::sessions::run(&mut c).await,
         Cmd::Show { session } => cmd::show::run(&mut c, session, cli.verbose).await,
         Cmd::Screenshot {
@@ -135,7 +173,10 @@ async fn main() -> Result<()> {
         } => cmd::screenshot::run(&mut c, monitor, window, output).await,
         Cmd::Live { monitor } => cmd::live::run(&mut c, cli.device.as_deref(), monitor).await,
         Cmd::Config(sub) => cmd::config::run(&mut c, sub).await,
-        Cmd::Pair { .. } | Cmd::Devices | Cmd::Cp { .. } => unreachable!(),
+        Cmd::Watch(sub) => cmd::watch::run(&mut c, sub).await,
+        Cmd::Pair { .. } | Cmd::Devices | Cmd::Cp { .. } | Cmd::Clip { .. } | Cmd::Fan { .. } => {
+            unreachable!()
+        }
     };
     client::close(ep, &c).await;
     // Exit right here: tokio's stdin reader thread would block runtime shutdown until the

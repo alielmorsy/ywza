@@ -55,6 +55,9 @@ pub struct Click {
     /// Open the element's dropdown or menu instead of its main action (elements marked +menu, e.g. split buttons in toolbars).
     #[serde(default)]
     expand: bool,
+    /// Use the real mouse and keyboard instead of acting in the background (for apps that ignore background actions).
+    #[serde(default)]
+    real: bool,
 }
 
 impl Tool for Click {
@@ -64,11 +67,11 @@ impl Tool for Click {
         flat(async {
             let w = self.window.0;
             let button: Button = self.button.into();
-            let (count, expand) = (self.count.clamp(1, 3), self.expand);
+            let (count, expand, real) = (self.count.clamp(1, 3), self.expand, self.real);
             let id = match (self.element, self.text, self.x.zip(self.y)) {
                 (Some(e), None, None) => e.0,
                 (None, Some(t), None) => {
-                    return find::click_text(cx, w, &t, self.nth, button, count).await
+                    return find::click_text(cx, w, &t, self.nth, button, count, real).await
                 }
                 (None, None, Some((x, y))) => {
                     return find::click_point(cx, w, x, y, button, count).await
@@ -80,11 +83,12 @@ impl Tool for Click {
                 }
             };
             act(cx, w, Some(id), cx.report(Report::Diff), move |s| {
-                if expand {
+                let tier = if expand {
                     desk::expand(s, id)
                 } else {
-                    desk::click(s, id, button, count)
-                }
+                    desk::click(s, id, button, count, real)
+                };
+                tier.map(Some)
             })
             .await
         })
@@ -111,7 +115,7 @@ impl Tool for LongPress {
             let (w, id) = (self.window.0, self.element.0);
             let ms = self.ms.min(10_000);
             act(cx, w, Some(id), cx.report(Report::Diff), move |s| {
-                desk::long_press(s, id, ms)
+                desk::long_press(s, id, ms).map(Some)
             })
             .await
         })
@@ -133,6 +137,9 @@ pub struct TypeText {
     /// Press Enter after the text is in (sends the message in chat apps; in a file dialog's name box, opens the file). The changes are returned; an error if Enter changed nothing.
     #[serde(default)]
     submit: bool,
+    /// Use the real mouse and keyboard instead of acting in the background (for apps that ignore background actions).
+    #[serde(default)]
+    real: bool,
 }
 
 impl Tool for TypeText {
@@ -146,6 +153,7 @@ impl Tool for TypeText {
                 text,
                 append,
                 submit,
+                real,
                 ..
             } = self;
             // OCR boxes have no object to focus or read back: click it, then type.
@@ -161,7 +169,7 @@ impl Tool for TypeText {
             });
             let typed = act(cx, w, id, mode, move |s| match id {
                 Some(id) if ocr_box => {
-                    desk::click(s, id, Button::Left, 1)?;
+                    desk::click(s, id, Button::Left, 1, real)?;
                     std::thread::sleep(std::time::Duration::from_millis(150));
                     let keys = match (append, text.is_empty()) {
                         (true, _) => "end",
@@ -169,9 +177,9 @@ impl Tool for TypeText {
                         (false, false) => "ctrl+a",
                     };
                     desk::press_keys(Some(w), keys)?;
-                    desk::type_text(s, None, &text, true)
+                    desk::type_text(s, None, &text, true, real).map(Some)
                 }
-                _ => desk::type_text(s, id, &text, append),
+                _ => desk::type_text(s, id, &text, append, real).map(Some),
             })
             .await?;
             if !submit {
@@ -181,7 +189,7 @@ impl Tool for TypeText {
             // may take the first Enter, which the error below then reports.
             act(cx, w, None, cx.report(Report::Changed(
                 "the text is in, but Enter changed nothing (not sent?). Check with a screenshot; press_keys enter or click the Send button.",
-            )), move |_| desk::press_keys(Some(w), "enter"))
+            )), move |_| desk::press_keys(Some(w), "enter").map(|_| None))
             .await
         })
         .await
@@ -205,7 +213,7 @@ impl Tool for PressKeys {
             match window.map(|w| w.0) {
                 Some(w) if cx.has_snap(w) => {
                     act(cx, w, None, cx.report(Report::Diff), move |_| {
-                        desk::press_keys(Some(w), &keys)
+                        desk::press_keys(Some(w), &keys).map(|_| None)
                     })
                     .await
                 }
@@ -251,6 +259,9 @@ pub struct Scroll {
     dx: i32,
     #[serde(default)]
     dy: i32,
+    /// Use the real mouse and keyboard instead of acting in the background (for apps that ignore background actions).
+    #[serde(default)]
+    real: bool,
 }
 
 impl Tool for Scroll {
@@ -260,9 +271,9 @@ impl Tool for Scroll {
         flat(async {
             let w = self.window.0;
             let id = self.element.map(|e| e.0);
-            let (dx, dy) = (self.dx, self.dy);
+            let (dx, dy, real) = (self.dx, self.dy, self.real);
             act(cx, w, id, cx.report(Report::Diff), move |s| {
-                desk::scroll(s, id, dx, dy)
+                desk::scroll(s, id, dx, dy, real).map(Some)
             })
             .await
         })

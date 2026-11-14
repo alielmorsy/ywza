@@ -89,3 +89,25 @@ fn kill_and_scrollback() {
     }
     assert!(!t.is_running());
 }
+
+#[cfg(windows)]
+const INTEGRATED: (&str, &str) = ("powershell", "cmd /c exit 3");
+#[cfg(not(windows))]
+const INTEGRATED: (&str, &str) = ("bash", "(exit 3)");
+
+#[test]
+fn run_reports_output_exit_code_and_cwd() {
+    let m = TermManager::new();
+    let id = m.start(INTEGRATED.0, None).unwrap();
+    let t = m.owned(id).unwrap();
+    assert!(t.wait_integration(), "no marks: {:?}", m.read(id, 50));
+    let limit = Duration::from_secs(30);
+    let ok = t.run("echo ywza-run-marker", limit).unwrap();
+    assert!(ok.finished, "got {ok:?}");
+    assert_eq!((ok.output.as_str(), ok.exit), ("ywza-run-marker", Some(0)));
+    let bad = t.run(INTEGRATED.1, limit).unwrap();
+    assert!(bad.finished && bad.exit == Some(3), "got {bad:?}");
+    assert!(bad.cwd.is_some());
+    assert_eq!(t.shell_info().unwrap().exit, Some(3));
+    m.kill(id).unwrap();
+}

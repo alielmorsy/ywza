@@ -24,8 +24,10 @@ export function Sheet() {
   const [h, setH] = useState(PEEK);
   const [dragging, setDragging] = useState(false);
   const g = useRef<{ y0: number; h0: number; ly: number; lt: number; v: number; moved: boolean }>(undefined);
-  const dets = [PEEK, Math.round(vh * 0.5), vh - 150];
-  const mode = h < 260 ? "peek" : h < vh * 0.7 ? "half" : "full";
+  const top = Math.max(PEEK, vh - 150);
+  const dets = [PEEK, Math.min(Math.round(vh * 0.5), top), top];
+  const sh = Math.min(h, top); // the keyboard or a rotation may shrink the room under a tall sheet
+  const mode = sh < 260 ? "peek" : sh < vh * 0.7 ? "half" : "full";
 
   const detail = tab === "runs" ? runs.find((r) => r.id === runId) : undefined;
   const docked = !!detail && !live;
@@ -37,18 +39,19 @@ export function Sheet() {
   const focused = focus === null ? undefined : runs.find((r) => r.id === focus) ?? runs[0];
   const shown: Run | undefined = live ? liveRun : detail ?? focused;
   const pend = runs.flatMap((r) => pendingOf(r).map((a) => ({ a, r })))[0];
+  const helping = runs.find((r) => r.help);
 
   useEffect(() => { const f = () => setVh(innerHeight); addEventListener("resize", f); return () => removeEventListener("resize", f); }, []);
   useEffect(() => {
-    document.documentElement.style.setProperty("--sheet-h", visible ? `${docked ? DOCKED : h}px` : "0px");
+    document.documentElement.style.setProperty("--sheet-h", visible ? `${docked ? DOCKED : sh}px` : "0px");
     return () => { document.documentElement.style.setProperty("--sheet-h", "0px"); };
-  }, [visible, docked, h]);
+  }, [visible, docked, sh]);
 
   const snap = (to: number) => { setDragging(false); setH(to); };
-  const cycle = () => snap(dets[(dets.indexOf(h) + 1) % 3] ?? PEEK);
+  const cycle = () => snap(dets[(dets.indexOf(sh) + 1) % 3] ?? PEEK);
   const down = (e: PointerEvent) => {
     e.currentTarget.setPointerCapture(e.pointerId);
-    g.current = { y0: e.clientY, h0: h, ly: e.clientY, lt: performance.now(), v: 0, moved: false };
+    g.current = { y0: e.clientY, h0: sh, ly: e.clientY, lt: performance.now(), v: 0, moved: false };
   };
   const move = (e: PointerEvent) => {
     const d = g.current;
@@ -65,7 +68,7 @@ export function Sheet() {
     g.current = undefined;
     if (!d) return;
     if (!d.moved) return cycle();
-    const p = h + d.v * 200;
+    const p = sh + d.v * 200;
     snap(dets.reduce((a, b) => (Math.abs(b - p) < Math.abs(a - p) ? b : a)));
   };
   const key = (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); cycle(); } };
@@ -81,7 +84,7 @@ export function Sheet() {
 
   return (
     <div className="absolute inset-x-0 bottom-[var(--tabs-h)] z-30 flex flex-col rounded-t-2xl border-t border-line bg-chrome shadow-[0_-8px_24px_rgba(0,0,0,.35)]"
-      style={{ height: h, transition: dragging ? "none" : "height .3s var(--ease)" }} data-mode={mode}>
+      style={{ height: sh, transition: dragging ? "none" : "height .3s var(--ease)" }} data-mode={mode}>
       <button className="grid h-6 w-full flex-none place-items-center" style={{ touchAction: "none" }} aria-label="Resize chat sheet"
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onKeyDown={key}>
         <i className="h-1 w-9 rounded-full bg-line" />
@@ -89,11 +92,16 @@ export function Sheet() {
       <Scope />
       {hint && <p className="flex-none px-3.5 pb-1.5 text-xs text-warn" role="status">{hint}</p>}
       {mode === "peek" ? (
-        <div className={`flex min-h-8 flex-none items-center justify-between gap-2 px-3.5 pb-1 text-xs ${pend ? "text-warn" : "text-text-2"}`}>
+        <div className={`flex min-h-8 flex-none items-center justify-between gap-2 px-3.5 pb-1 text-xs ${pend || helping ? "text-warn" : "text-text-2"}`}>
           {pend ? (
             <>
               <span className="min-w-0 truncate">{L(pend.r.current)} needs approval: {pend.a.tool}</span>
               <button className="m-btn primary sm" onClick={() => approve(pend.a.request, true, false, pend.a.device)}>Allow</button>
+            </>
+          ) : helping ? (
+            <>
+              <span className="min-w-0 truncate text-warn">{L(helping.current)} needs you: {helping.help!.reason}</span>
+              <button className="m-btn primary sm" onClick={() => openRun(helping.id)}>Open</button>
             </>
           ) : shown ? (
             <button className="min-w-0 truncate text-left" onClick={() => openRun(shown.id)}>
@@ -103,7 +111,7 @@ export function Sheet() {
         </div>
       ) : <Feed run={shown} />}
       <Composer run={live ? liveRun : focused} scope={live ? [live.dev] : sel} onNew={() => setFocus(null)}
-        onSent={() => { if (h < dets[1] && !live) snap(dets[1]); }} />
+        onSent={() => { if (sh < dets[1] && !live) snap(dets[1]); }} />
     </div>
   );
 }

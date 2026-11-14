@@ -110,6 +110,7 @@ pub(super) async fn raw_of(acc: &AccessibleProxy<'_>) -> Result<(Raw, bool)> {
         group: String::new(),
         key,
         bounds: None,
+        parent: None,
     };
     Ok((raw, showing))
 }

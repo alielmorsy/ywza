@@ -10,9 +10,11 @@ ocr-paddle-dynamic = ["ywza-ocr/ocr-paddle-dynamic"]
 
 [dependencies]
 anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 data-encoding = "2"
 getrandom = "0.4"
 iroh = "1.4.1"
+qrcode = { version = "0.14", default-features = false }
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "json", "http2"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 schemars = "1"

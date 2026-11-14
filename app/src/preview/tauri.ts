@@ -55,6 +55,7 @@ const events: Record<string, any[]> = {
     { type: "tool_result", id: "d1", ok: true, text: "[t2] pwsh (Windows Terminal tab) D:\\work", has_image: false },
     { type: "tool_call", id: "d2", name: "term_read", args: { term: "t2", lines: 30 } },
     { type: "tool_result", id: "d2", ok: true, text: "Allow command `npm test`? (y/n)", has_image: false },
+    { type: "usage", input: 6100, output: 420, cached: 0, requests: 3, tool_calls: 2, screenshot_estimate: 15000, cost: 0.0184, screenshot_cost: 0.0452 },
     { type: "done", summary: "Codex is asking whether it may run `npm test` in D:\\work. It's waiting for y/n." },
   ],
   [S3]: [
@@ -97,6 +98,19 @@ const elements = [
   { id: 6, role: "status_bar", name: "Status", rect: rect(220, 870, 1180, 30) },
   { id: 7, role: "button", name: "Close", rect: rect(1340, 142, 60, 28) },
   { id: 8, role: "button", name: "Minimize", rect: rect(1220, 142, 60, 28) },
+];
+
+const lensElements = [
+  { id: 1, role: "edit", name: "Search", rect: rect(300, 160, 900, 36), editable: true },
+  { id: 2, role: "button", name: "Go", rect: rect(1210, 160, 70, 36) },
+  { id: 3, role: "tabitem", name: "Inbox", rect: rect(240, 220, 120, 32) },
+  { id: 4, role: "tabitem", name: "Sent", rect: rect(370, 220, 120, 32) },
+  { id: 5, role: "listitem", name: "Weekly report", rect: rect(240, 270, 1040, 44) },
+  { id: 6, role: "checkbox", name: "Remember me", rect: rect(240, 700, 160, 28) },
+];
+const watchers: any[] = [
+  { id: "k3x9a", name: "Build finished", enabled: true, when: { type: "term_exit", term: 4, code: null }, then: { type: "notify", text: null }, min_gap_s: 60, max_per_hour: 12, fired: 3, last_fired_ms: now - 600_000 },
+  { id: "p2m7q", name: "Standup reminder", enabled: false, when: { type: "schedule", every_min: null, at: "09:55" }, then: { type: "prompt", text: "Open the standup notes and read them to me", device: null }, min_gap_s: 60, max_per_hour: 12, fired: 0, last_fired_ms: null },
 ];
 
 const timers = new Map<string, number[]>();
@@ -185,6 +199,19 @@ function agent(device: string, msg: any) {
     case "list_devices": return out({ type: "devices", list: devices.map((name) => ({ name, node_id: `node-${name}` })) });
     case "approve": return pending.get(msg.request)?.decide(msg.allow);
     case "cancel": return cancel(out, msg.session);
+    case "resume": return;
+    case "lens_start":
+      return out({ type: "lens", window: "w3", title: "Settings - Notepad", monitor: 0, rect: rect(220, 140, 1180, 760), full: true, elements: lensElements });
+    case "lens_act":
+      return out({ type: "tool_result", call: msg.call, ok: msg.element !== 6, text: msg.element === 6 ? "element not found" : "done" });
+    case "call_tool": {
+      const w = watchers.find((x) => x.id === msg.args?.id);
+      if (msg.name === "watcher_list") return out({ type: "tool_result", call: msg.call, ok: true, text: JSON.stringify(watchers) });
+      if (msg.name === "watcher_set" && w) w.enabled = msg.args.enabled;
+      else if (msg.name === "watcher_delete" && w) watchers.splice(watchers.indexOf(w), 1);
+      else return out({ type: "tool_result", call: msg.call, ok: false, text: `no tool ${msg.name} in preview` });
+      return out({ type: "tool_result", call: msg.call, ok: true, text: "ok" });
+    }
     case "live_start": return out({ type: "error", message: "Live view needs the real app (preview mode)." });
   }
 }
@@ -202,6 +229,7 @@ const mcp = new Set<string>();
 const connect = (name: string) => {
   if (online.has(name)) {
     emit("connection", { device: name, connected: true, detail: "" });
+    if (name === "berkeley") setTimeout(() => emit("agent-msg", { device: name, msg: { type: "watch_fired", watcher: "k3x9a", name: "Build finished", text: "Terminal t4 exited with code 1" } }), 4000);
     emit("agent-msg", { device: name, msg: { type: "welcome", agent_version: "0.4.2", node_id: `node-${name}`, os: OS, session_list: [], llm: name === "berkeley", permissions: { view: true, chat: true, control: true, tools: true, settings: false, drive: true } } });
   } else emit("connection", { device: name, connected: false, detail: "no route to device (offline)" });
 };

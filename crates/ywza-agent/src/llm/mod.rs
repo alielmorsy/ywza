@@ -6,6 +6,7 @@ mod history;
 mod multi;
 mod prompt;
 mod run;
+mod usage;
 
 pub use exec::{Executor, Local};
 pub use history::{push_tool_result, Msg, SUPERSEDED};

@@ -2,8 +2,10 @@ use std::{sync::atomic::Ordering, time::Duration};
 
 use tokio::sync::mpsc;
 use ywza_desktop::Rect;
-use ywza_proto::{AgentMsg, ScreenRect};
+use ywza_proto::AgentMsg;
 use ywza_stream::Ctl;
+
+use crate::inspect::rel_rect;
 
 /// Focus checks go through UIA, which can take a while in a busy app; a few per second
 /// keeps the caret followable without loading the desktop.
@@ -18,7 +20,7 @@ pub fn watch(ctl: &Ctl, monitor: Rect, to_client: &mpsc::UnboundedSender<AgentMs
     };
     let mut last = None;
     while !ctl.stop.load(Ordering::Relaxed) {
-        let rect = w.now().ok().flatten().map(|r| relative(monitor, r));
+        let rect = w.now().ok().flatten().map(|r| rel_rect((monitor.x, monitor.y), r));
         if last != Some(rect) {
             last = Some(rect);
             if to_client.send(AgentMsg::Focus { rect }).is_err() {
@@ -29,23 +31,13 @@ pub fn watch(ctl: &Ctl, monitor: Rect, to_client: &mpsc::UnboundedSender<AgentMs
     }
 }
 
-fn relative(monitor: Rect, r: Rect) -> ScreenRect {
-    ScreenRect {
-        x: r.x - monitor.x,
-        y: r.y - monitor.y,
-        width: r.w.max(0) as u32,
-        height: r.h.max(0) as u32,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn rect_is_relative_to_the_monitor() {
-        let m = Rect::new(-1920, 100, 1920, 1080);
-        let r = relative(m, Rect::new(-1900, 150, 2, 18));
+        let r = rel_rect((-1920, 100), Rect::new(-1900, 150, 2, 18));
         assert_eq!((r.x, r.y, r.width, r.height), (20, 50, 2, 18));
     }
 }

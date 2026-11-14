@@ -1,7 +1,9 @@
 use std::path::Path;
+use std::time::Duration;
 
 use schemars::JsonSchema;
 use serde::Deserialize;
+use ywza_term::ShellInfo;
 
 use super::{
     args::yes,
@@ -12,6 +14,25 @@ use super::{
 
 fn lines_default() -> u32 {
     80
+}
+
+fn run_timeout_default() -> u64 {
+    120_000
+}
+
+const RUN_TIMEOUT_MAX_MS: u64 = 600_000;
+
+fn shell_line(i: &ShellInfo) -> Option<String> {
+    let mut parts = Vec::new();
+    if let Some(c) = &i.cwd {
+        parts.push(format!("cwd {c}"));
+    }
+    if i.busy {
+        parts.push("command running".to_string());
+    } else if let Some(e) = i.exit {
+        parts.push(format!("last exit code {e}"));
+    }
+    (!parts.is_empty()).then(|| format!("[{}]", parts.join(", ")))
 }
 
 /// List terminals: ones you started (owned) and existing consoles/Windows Terminal tabs you can attach to: [t2] name (kind) cwd "title".
@@ -32,7 +53,7 @@ impl Tool for TermList {
     }
 }
 
-/// Start a command in a new interactive terminal you own (e.g. "pwsh", "claude"). Returns its terminal id.
+/// Start a command in a new interactive terminal you own (e.g. "pwsh", "claude"). Returns its terminal id. A bare pwsh, powershell, bash or zsh gets shell integration (cwd and exit codes shown, term_run works).
 #[derive(Deserialize, JsonSchema)]
 pub struct TermStart {
     command: String,
@@ -73,10 +94,18 @@ impl Tool for TermRead {
         flat(async {
             let terms = cx.terms();
             let (id, lines) = (self.term.0, self.lines.clamp(1, 2000) as usize);
-            let text = blocking(move || terms.read(id, lines))
-                .await
-                .map_err(term_err)?;
-            Ok(ToolOutput::ok(truncate(text)))
+            let (text, info) = blocking(move || {
+                let text = terms.read(id, lines)?;
+                let info = terms.owned(id).ok().and_then(|t| t.shell_info());
+                Ok::<_, ywza_term::Error>((text, info))
+            })
+            .await
+            .map_err(term_err)?;
+            let text = truncate(text);
+            Ok(ToolOutput::ok(match info.as_ref().and_then(shell_line) {
+                Some(head) => format!("{head}\n{text}"),
+                None => text,
+            }))
         })
         .await
     }
@@ -131,6 +160,74 @@ impl Tool for TermKeys {
                 .await
                 .map_err(term_err)?;
             Ok(ToolOutput::ok(format!("sent to {id}")))
+        })
+        .await
+    }
+}
+
+/// Run one command in a terminal you own that has shell integration (a pwsh, powershell, bash or zsh started with term_start) and wait for it to finish. Returns its output, exit code and cwd. Use it instead of term_write + term_read for commands that end; on timeout it returns the output so far and the command keeps running.
+#[derive(Deserialize, JsonSchema)]
+pub struct TermRun {
+    /// Terminal id from term_list/term_start, e.g. "t2".
+    term: TermArg,
+    command: String,
+    #[serde(default = "run_timeout_default")]
+    timeout_ms: u64,
+}
+
+impl Tool for TermRun {
+    const NAME: &'static str = "term_run";
+    const RISKY: bool = true;
+
+    async fn run(self, cx: &Ctx) -> ToolOutput {
+        flat(async {
+            let terms = cx.terms();
+            let Self {
+                term,
+                command,
+                timeout_ms,
+            } = self;
+            let id = term.0;
+            let limit = Duration::from_millis(timeout_ms.clamp(1_000, RUN_TIMEOUT_MAX_MS));
+            let r = blocking(move || {
+                let t = terms.owned(id)?;
+                if !t.wait_integration() {
+                    return Ok(None);
+                }
+                t.run(&command, limit).map(Some)
+            })
+            .await
+            .map_err(term_err)?;
+            let Some(r) = r else {
+                return Err(ToolOutput::err(format!(
+                    "no shell integration in {id}; use term_write and term_read"
+                )));
+            };
+            let mut text = truncate(r.output);
+            if !text.is_empty() {
+                text.push('\n');
+            }
+            if r.finished {
+                match r.exit {
+                    Some(c) => text.push_str(&format!("exit code {c}")),
+                    None => text.push_str("exit code unknown"),
+                }
+            } else if r.closed {
+                text.push_str("terminal closed before the command finished");
+            } else {
+                text.push_str(&format!(
+                    "still running after {} s; term_read to follow it, term_keys ctrl+c to stop it",
+                    limit.as_secs()
+                ));
+            }
+            if let Some(c) = r.cwd {
+                text.push_str(&format!("\ncwd {c}"));
+            }
+            Ok(ToolOutput {
+                ok: r.finished && r.exit == Some(0),
+                text,
+                ..Default::default()
+            })
         })
         .await
     }

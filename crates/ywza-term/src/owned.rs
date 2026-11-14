@@ -1,10 +1,13 @@
 use crate::keys::parse_keys;
-use crate::{err, Result};
+use crate::marks::Scanner;
+use crate::track::{slice, Phase, RunOutcome, ShellInfo, ShellState};
+use crate::{err, render, shell, Result};
 use portable_pty::{native_pty_system, Child, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
 pub const RING_CAP: usize = 4 * 1024 * 1024;
 const SCROLLBACK: usize = 10_000;
@@ -26,6 +29,8 @@ struct Shared {
     parser: vt100::Parser<Callbacks>,
     ring: VecDeque<u8>,
     eof: bool,
+    scanner: Scanner,
+    sh: ShellState,
 }
 
 type Writer = Arc<Mutex<Box<dyn Write + Send>>>;
@@ -43,19 +48,36 @@ pub struct OwnedTerm {
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     _master: Mutex<Box<dyn MasterPty + Send>>,
     exit: Mutex<Option<u32>>,
+    /// Shell integration was injected at start, so marks are expected soon.
+    integrated: bool,
 }
 
 impl OwnedTerm {
-    /// Run `command` through the platform shell (`cmd /d /s /c` or `sh -c`).
+    /// Run `command` through the platform shell (`cmd /d /s /c` or `sh -c`). A bare pwsh,
+    /// powershell, bash or zsh is started directly with shell integration injected.
     pub fn start(command: &str, cwd: Option<&Path>) -> Result<OwnedTerm> {
-        let mut cmd;
-        if cfg!(windows) {
-            cmd = CommandBuilder::new("cmd.exe");
-            cmd.args(["/d", "/s", "/c", command]);
-        } else {
-            cmd = CommandBuilder::new("sh");
-            cmd.args(["-c", command]);
-        }
+        let launch = shell::plan(command);
+        let integrated = launch.is_some();
+        let mut cmd = match launch {
+            Some(l) => {
+                let mut c = CommandBuilder::new(&l.program);
+                c.args(&l.args);
+                for (k, v) in &l.env {
+                    c.env(k, v);
+                }
+                c
+            }
+            None if cfg!(windows) => {
+                let mut c = CommandBuilder::new("cmd.exe");
+                c.args(["/d", "/s", "/c", command]);
+                c
+            }
+            None => {
+                let mut c = CommandBuilder::new("sh");
+                c.args(["-c", command]);
+                c
+            }
+        };
         if let Some(c) = cwd {
             cmd.cwd(c);
         }
@@ -75,6 +97,8 @@ impl OwnedTerm {
             parser: vt100::Parser::new_with_callbacks(ROWS, COLS, SCROLLBACK, Callbacks::default()),
             ring: VecDeque::new(),
             eof: false,
+            scanner: Scanner::default(),
+            sh: ShellState::default(),
         }));
         {
             let (shared, writer) = (shared.clone(), writer.clone());
@@ -90,6 +114,9 @@ impl OwnedTerm {
                     s.ring.extend(chunk);
                     let over = s.ring.len().saturating_sub(RING_CAP);
                     s.ring.drain(..over);
+                    for f in s.scanner.feed(chunk) {
+                        s.sh.apply(&f);
+                    }
                     // ConPTY asks for the cursor position at startup and waits for the answer.
                     if chunk.windows(4).any(|w| w == b"\x1b[6n") {
                         let (r, c) = s.parser.screen().cursor_position();
@@ -110,6 +137,7 @@ impl OwnedTerm {
             child: Mutex::new(child),
             _master: Mutex::new(pair.master),
             exit: Mutex::new(None),
+            integrated,
         })
     }
 
@@ -119,29 +147,91 @@ impl OwnedTerm {
 
     /// Rendered text (scrollback + screen, no escapes), last `lines` lines, trailing blanks trimmed.
     pub fn read(&self, lines: usize) -> String {
-        let mut s = lock(&self.shared);
-        let screen = s.parser.screen_mut();
-        let (rows, cols) = screen.size();
-        screen.set_scrollback(usize::MAX);
-        let mut off = screen.scrollback();
-        let mut all: Vec<String> = Vec::new();
-        while off > 0 {
-            screen.set_scrollback(off);
-            let take = off.min(rows as usize);
-            all.extend(screen.rows(0, cols).take(take));
-            off -= take;
+        render::lines(lock(&self.shared).parser.screen_mut(), lines)
+    }
+
+    /// Cwd, last exit code and busy flag; `None` until the shell has emitted prompt marks.
+    pub fn shell_info(&self) -> Option<ShellInfo> {
+        let s = lock(&self.shared);
+        s.sh.seen.then(|| ShellInfo {
+            cwd: s.sh.cwd.clone(),
+            exit: s.sh.exit,
+            busy: s.sh.phase == Phase::Running,
+        })
+    }
+
+    /// Cwd reported by the shell (OSC 7), if any.
+    pub fn shell_cwd(&self) -> Option<String> {
+        lock(&self.shared).sh.cwd.clone()
+    }
+
+    /// True once the shell has shown integration marks. An injected shell gets a few seconds
+    /// to print its first prompt.
+    pub fn wait_integration(&self) -> bool {
+        let end = Instant::now() + Duration::from_secs(10);
+        loop {
+            {
+                let s = lock(&self.shared);
+                if s.sh.seen {
+                    return true;
+                }
+                if !self.integrated || s.eof {
+                    return false;
+                }
+            }
+            if Instant::now() >= end {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(25));
         }
-        screen.set_scrollback(0);
-        all.extend(screen.rows(0, cols));
-        while all.last().is_some_and(|l| l.trim().is_empty()) {
-            all.pop();
+    }
+
+    /// Type `command` plus Enter and wait for its prompt mark. On timeout returns what has been
+    /// printed so far (`finished` false). Needs [`Self::wait_integration`] to be true.
+    pub fn run(&self, command: &str, timeout: Duration) -> Result<RunOutcome> {
+        let runs = {
+            let s = lock(&self.shared);
+            if !s.sh.seen {
+                return Err(err("no shell integration"));
+            }
+            if s.sh.phase == Phase::Running {
+                return Err(err(
+                    "a command is still running in this terminal; read it or send keys",
+                ));
+            }
+            s.sh.runs
+        };
+        self.write(command, true)?;
+        let end = Instant::now() + timeout;
+        loop {
+            let (finished, closed) = {
+                let s = lock(&self.shared);
+                (s.sh.runs > runs && s.sh.out_end.is_some(), s.eof)
+            };
+            if finished || closed || Instant::now() >= end {
+                return Ok(self.outcome(runs, finished, closed));
+            }
+            std::thread::sleep(Duration::from_millis(20));
         }
-        let start = all.len().saturating_sub(lines);
-        all[start..]
-            .iter()
-            .map(|l| l.trim_end())
-            .collect::<Vec<_>>()
-            .join("\n")
+    }
+
+    fn outcome(&self, runs_before: u64, finished: bool, closed: bool) -> RunOutcome {
+        let s = lock(&self.shared);
+        let total = s.scanner.pos();
+        let raw = if s.sh.runs > runs_before {
+            slice(&s.ring, total, s.sh.out_start, s.sh.out_end.unwrap_or(total))
+        } else {
+            Vec::new()
+        };
+        let (exit, cwd) = (s.sh.exit.filter(|_| finished), s.sh.cwd.clone());
+        drop(s);
+        RunOutcome {
+            output: render::plain(&raw),
+            exit,
+            cwd,
+            finished,
+            closed,
+        }
     }
 
     /// Last `max` bytes of the raw output ring buffer (4 MB cap).

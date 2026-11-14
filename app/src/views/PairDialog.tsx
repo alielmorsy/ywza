@@ -4,6 +4,7 @@ import { LOCAL, getState, pairDevice, send, useStore } from "../api";
 import { flash, select } from "../nav";
 import { Icon } from "../Icon";
 import { Dialog } from "./Dialog";
+import { pairUri } from "./pairCode";
 
 const group = (c: string) => c.replace(/(\d{3})(?=\d)/, "$1 ");
 const clock = (secs: number) => `${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(secs % 60).padStart(2, "0")}`;
@@ -85,7 +86,7 @@ export function LetIn() {
           </div>
           {fresh && !expired && (
             <div className="flex items-center gap-3">
-              <Qr text={fresh.code} />
+              <Qr text={pairUri(fresh.code)} />
               <p className="max-w-[120px] text-xs text-text-2">Scan it with the phone app.</p>
             </div>
           )}

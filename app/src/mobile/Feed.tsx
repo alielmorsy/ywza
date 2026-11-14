@@ -3,6 +3,7 @@ import { loadSession } from "../api";
 import { Markdown } from "../views/chat/Markdown";
 import { ShownImage } from "../views/chat/ShownImage";
 import { ApproveCard } from "./ApproveCard";
+import { HelpCard } from "./HelpCard";
 import { pendingOf, type Run } from "./runs";
 import { StepLine } from "./ui";
 
@@ -10,7 +11,7 @@ import { StepLine } from "./ui";
 export function Feed({ run }: { run?: Run }) {
   const box = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
-  const size = run ? run.steps.length + run.approvals.length + run.turns.length : 0;
+  const size = run ? run.steps.length + run.approvals.length + run.turns.length + (run.help ? 1 : 0) : 0;
   useEffect(() => { if (run) loadSession(run.id, run.driver); }, [run?.id, run?.driver]); // eslint-disable-line react-hooks/exhaustive-deps
   useLayoutEffect(() => { if (stick.current) box.current?.scrollTo(0, box.current.scrollHeight); }, [size, run?.id, run?.state]);
 
@@ -28,7 +29,8 @@ export function Feed({ run }: { run?: Run }) {
         </div>
       ))}
       {run?.approvals.map((a) => <ApproveCard key={a.request} a={a} device={run.current} />)}
-      {run && pendingOf(run).length === 0 && run.state === "working" && <p className="animate-pulse px-1 text-text-3" role="status">Working</p>}
+      {run?.help && <HelpCard run={run} />}
+      {run && pendingOf(run).length === 0 && !run.help && run.state === "working" && <p className="animate-pulse px-1 text-text-3" role="status">Working</p>}
     </div>
   );
 }

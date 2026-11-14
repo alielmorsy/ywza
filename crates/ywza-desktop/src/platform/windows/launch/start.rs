@@ -5,6 +5,15 @@ use crate::platform::windows::wm;
 use crate::{Error, Launched, Result};
 use std::path::Path;
 
+/// The executable `launch` would start for `program`, without starting it. None for
+/// documents, URIs and folders (the shell picks their handler) and unknown names.
+pub fn find_program(program: &str) -> Option<String> {
+    match resolve(program, None)? {
+        Target::Exe(p) => Some(p.to_string_lossy().into_owned()),
+        Target::Shell(_) => None,
+    }
+}
+
 /// Starts a program, document or URI. Executables are resolved through PATH and
 /// App Paths (skipping our own folder) and spawned directly; anything else goes
 /// through ShellExecuteEx. For shell targets `Launched::pid` is the started process

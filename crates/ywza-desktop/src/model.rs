@@ -78,3 +78,24 @@ pub enum Button {
     Right,
     Middle,
 }
+
+/// How an element action reached the app, from least to most intrusive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tier {
+    /// UI Automation pattern or AT-SPI interface: no cursor or focus change.
+    Pattern,
+    /// A message to the control's own window (classic Win32 controls): same.
+    Message,
+    /// Real mouse and keyboard input, with a brief foreground takeover.
+    Takeover,
+}
+
+impl fmt::Display for Tier {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            Tier::Pattern => "pattern",
+            Tier::Message => "window message",
+            Tier::Takeover => "takeover",
+        })
+    }
+}

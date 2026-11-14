@@ -1,11 +1,11 @@
 use super::bus::{block, connect, proxy_of, step};
 use super::frame::find_frame;
-use super::node::{key_of, raw_of};
+use super::node::{key_of, raw_of, Handle};
 use super::walk::walk;
 use crate::platform::linux::roles;
 use crate::platform::linux::x;
-use crate::snapshot::Raw;
-use crate::{Result, Snapshot, WindowId};
+use crate::snapshot::{merge_popup, Raw};
+use crate::{Result, Snapshot, WindowId, WindowInfo};
 
 /// Snapshots a window's elements. With `prev` (the last snapshot of the same
 /// window), unchanged elements keep their IDs and `seq` increments. A window the
@@ -13,9 +13,17 @@ use crate::{Result, Snapshot, WindowId};
 /// so the caller falls back to OCR.
 pub fn snapshot(window: WindowId, prev: Option<&Snapshot>) -> Result<Snapshot> {
     let info = x::window_info(window)?;
-    let raws = block(async {
+    let mut raws = walk_window(&info)?;
+    if super::chromium::needs_wake(&raws, &info) && super::chromium::wake(info.pid) {
+        raws = walk_window(&info)?;
+    }
+    Ok(Snapshot::build(info, raws, prev))
+}
+
+fn walk_window(info: &WindowInfo) -> Result<Vec<(Raw, Option<Handle>)>> {
+    block(async {
         let conn = &connect().await?;
-        let Some(found) = find_frame(conn, &info).await? else {
+        let Some(found) = find_frame(conn, info).await? else {
             return Ok(Vec::new());
         };
         let mut raws = Vec::new();
@@ -43,16 +51,8 @@ pub fn snapshot(window: WindowId, prev: Option<&Snapshot>) -> Result<Snapshot> {
             }
             let mut sub = Vec::new();
             walk(conn, &popup, Some(raw.rect), &mut sub).await;
-            for (r, h) in sub {
-                if raws
-                    .iter()
-                    .all(|(o, _): &(Raw, _)| o.key.is_empty() || o.key != r.key)
-                {
-                    raws.push((r, h));
-                }
-            }
+            merge_popup(&mut raws, sub);
         }
         Ok(raws)
-    })?;
-    Ok(Snapshot::build(info, raws, prev))
+    })
 }

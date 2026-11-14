@@ -1,5 +1,7 @@
 @import "tailwindcss";
 @import "./theme.css";
+/* Here, not in MobileApp: the build drops CSS of the conditionally imported phone UI. Its rules are all .m-* scoped. */
+@import "./mobile/mobile.css";
 
 /* Shared controls ported 1:1 from mockup-ui/index.html. View-specific styling lives in
    Tailwind classes inside each component. */

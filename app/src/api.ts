@@ -19,7 +19,14 @@ export type SEvent =
   /** `image`: PNG (base64) shown to the user only (`show_screenshot`); the model never sees it. */
   | { type: "tool_result"; id: string; ok: boolean; text: string; has_image: boolean; image?: string | null }
   | { type: "done"; summary: string }
-  | { type: "failed"; error: string };
+  | { type: "failed"; error: string }
+  /** Token receipt at the end of a run; `screenshot_estimate`: tokens a screenshot-based agent would have used. Costs only when prices are set. */
+  | { type: "usage"; input: number; output: number; cached: number; requests: number; tool_calls: number; screenshot_estimate: number; cost?: number | null; screenshot_cost?: number | null }
+  /** The agent hit a blocker and paused until the human takes over and sends `resume`. `window`/`monitor`/`rect`: where it happened (`rect` relative to that monitor). */
+  | { type: "help"; kind: HelpKind; reason: string; window?: string; title?: string; monitor?: number; rect?: Rect }
+  | { type: "resumed"; digest: string };
+export type HelpKind = "otp" | "uac" | "credentials" | "captcha" | "login" | "stuck";
+export type Help = Extract<SEvent, { type: "help" }>;
 export interface Permissions { view: boolean; chat: boolean; control: boolean; tools: boolean; settings: boolean; drive: boolean }
 export type PermKey = keyof Permissions;
 /** Config `[[peers]]`: permissions are flattened next to id and name. */
@@ -31,7 +38,7 @@ export type ApprovalMode = "rules" | "auto" | "always";
 export interface Config {
   peers: Peer[];
   relay_url?: string | null;
-  llm: { base_url: string; api_key: string; model: string; max_steps: number; vision: boolean; effort?: Effort | null };
+  llm: { base_url: string; api_key: string; model: string; max_steps: number; vision: boolean; effort?: Effort | null; price_in?: number | null; price_out?: number | null };
   approval: { rules: ApprovalRule[] };
   ocr: { engine: "auto" | "windows" | "paddle" };
   desktop: { agent_virtual_desktop: boolean; idle_before_input_ms: number };
@@ -48,6 +55,12 @@ export interface Rect { x: number; y: number; width: number; height: number }
 /** One UI element of a window; `rect` is relative to the window's monitor, physical pixels. */
 export interface Element { id: number; role: string; name: string; rect: Rect }
 export interface WindowInfo { window: string; title: string; monitor: number; rect: Rect; elements?: Element[] | null }
+/** Smart lens element: `id` is only valid in `lens_act` on the connection that received it. */
+export interface LensElement extends Element { editable?: boolean }
+/** The followed window with its tappable elements by id (rects relative to the monitor origin). */
+export interface Lens { window: string; title: string; monitor: number; rect: Rect; elements: Record<number, LensElement> }
+/** A watcher that fired: banner/inbox item until dismissed. `watcher` is its id (the kill switch). */
+export interface Fired { watcher: string; name: string; text: string; at: number }
 
 export type AgentMsg =
   | { type: "welcome"; agent_version: string; node_id: string; os?: string; session_list: Summary[]; permissions?: Permissions | null; llm?: boolean }
@@ -64,11 +77,13 @@ export type AgentMsg =
   /** Live view: the caret or focused text field, relative to the streamed monitor; null when nothing takes text. */
   | { type: "focus"; rect: Rect | null }
   | { type: "tool_result"; call: number; ok: boolean; text: string; png_base64?: string | null }
-  | { type: "approval_request"; request: number; session: Sid; tool: string; summary: string; detail: string }
+  | { type: "approval_request"; request: number; session: Sid; tool: string; summary: string; detail: string; image?: string }
   | { type: "approval_resolved"; request: number; allowed: boolean }
   | { type: "devices"; list: { name: string; node_id: string }[] }
   | { type: "image"; png_base64: string; width: number; height: number }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "lens"; window: string; title: string; monitor: number; rect: Rect; full: boolean; elements: LensElement[]; removed?: number[] }
+  | { type: "watch_fired"; watcher: string; name: string; text: string };
 /** What a screenshot points at. */
 export type Target = { type: "monitor"; id: number } | { type: "window"; id: number };
 export type ClientMsg =
@@ -91,7 +106,16 @@ export type ClientMsg =
   | { type: "live_start"; monitor: number }
   | { type: "live_stop" }
   | { type: "input"; event: InputEvent }
-  | { type: "create_pairing" };
+  | { type: "create_pairing" }
+  /** To the agent that runs `session`, after the human fixed the blocker of a `help` event. */
+  | { type: "resume"; session: Sid; note?: string }
+  /** Runs one tool without an approval step; answered with `tool_result` carrying `call`. Needs `tools`. */
+  | { type: "call_tool"; call: number; name: string; args?: unknown }
+  /** Follows the focused window on the live view's monitor, or `window`. Send after `live_start`. Needs `view`. */
+  | { type: "lens_start"; window?: string }
+  | { type: "lens_stop" }
+  /** Clicks a lens element; `text` types into it (replacing its content), `submit` then presses Enter. Needs `control`. */
+  | { type: "lens_act"; call: number; window: string; element: number; text?: string; submit?: boolean };
 /** Live view input; coordinates are 0..1 over the monitor. Key names as in `press_keys`. */
 export type InputEvent =
   | { type: "mouse_move"; x: number; y: number }
@@ -130,9 +154,13 @@ export interface Device {
   cursor?: string;
   /** Live view: where typed text would land (monitor pixels), null when nothing takes text; unset until reported. */
   focus?: Rect | null;
+  /** Smart lens: set while a lens runs on this connection. */
+  lens?: Lens;
+  /** Watchers that fired, newest first, one per watcher. */
+  fired?: Fired[];
 }
 /** A tool call waiting for the user's decision (or already decided). */
-export interface Approval { request: number; session: Sid; tool: string; summary: string; detail: string; resolved?: boolean; allowed?: boolean; /** Set for approvals of paired devices' agents. */ device?: string }
+export interface Approval { request: number; session: Sid; tool: string; summary: string; detail: string; /** Base64 PNG of the window region around the targeted element, boxed. */ image?: string; resolved?: boolean; allowed?: boolean; /** Set for approvals of paired devices' agents. */ device?: string }
 /** Latest screenshot of a device (`image`), as a data URL. */
 export interface Shot { src: string; w: number; h: number; at: number }
 export interface State {
@@ -197,6 +225,7 @@ const liveRecently = (device: string) => Date.now() - (liveSent.get(device) ?? 0
 
 export const send = (device: string, msg: ClientMsg) => {
   if (msg.type === "live_start") patch(device, () => ({ cursor: undefined, focus: undefined, liveError: undefined })); // the new stream sends its own
+  if (msg.type === "lens_start" || msg.type === "lens_stop") patch(device, () => ({ lens: undefined })); // element ids die with the lens
   const live = msg.type === "live_start" || msg.type === "live_stop" || msg.type === "input" || msg.type === "screenshot";
   if (live) liveSent.set(device, Date.now());
   return invoke("send", { device, msg }).catch((e) => reportError(device, String(e), live));
@@ -212,6 +241,18 @@ export const pairDevice = async (name: string, code: string) => {
   patch(name, () => ({}));
   connectDevice(name).catch((e) => patch(name, () => ({ detail: String(e) })));
 };
+/** Tool calls and lens actions waiting for their `tool_result`, keyed `device:call`. */
+const pending = new Map<string, (r: { ok: boolean; text: string }) => void>();
+let callSeq = 0;
+const CALL_TIMEOUT_MS = 15000;
+function ask(device: string, msg: (call: number) => ClientMsg): Promise<{ ok: boolean; text: string }> {
+  const call = ++callSeq, key = `${device}:${call}`;
+  return new Promise((resolve) => {
+    const t = setTimeout(() => { pending.delete(key); resolve({ ok: false, text: "no answer from the device" }); }, CALL_TIMEOUT_MS);
+    pending.set(key, (r) => { clearTimeout(t); pending.delete(key); resolve(r); });
+    send(device, msg(call));
+  });
+}
 /** Called with the name after a device is removed (nav drops its UI state). */
 export const onRemoved = new Set<(name: string) => void>();
 export const removeDevice = async (name: string) => {
@@ -242,6 +283,15 @@ export function prompt(device: string, text: string, session: Sid | null, opts: 
 }
 export const approve = (request: number, allow: boolean, remember = false, device = LOCAL) => send(device, { type: "approve", request, allow, remember });
 export const cancel = (session: Sid, device = LOCAL) => send(device, { type: "cancel", session });
+export const resume = (device: string, session: Sid, note?: string) => send(device, { type: "resume", session, note: note?.trim() || undefined });
+/** The help request a session waits on: its last `help` event with no later resumed/done/failed. */
+export function helpOf(events: SEvent[] | undefined): Help | undefined {
+  for (let i = (events?.length ?? 0) - 1; i >= 0; i--) {
+    const e = events![i];
+    if (e.type === "help") return e;
+    if (e.type === "resumed" || e.type === "done" || e.type === "failed") return;
+  }
+}
 export const loadSession = (session: Sid, device = LOCAL) => {
   if (fresh.has(session) || (device === LOCAL ? state.events[session] : asked.has(session))) return;
   if (device !== LOCAL) asked.add(session);
@@ -265,8 +315,9 @@ function onMsg(device: string, m: AgentMsg) {
         set((s) => ({ ...s, remoteApprovals: Object.fromEntries(Object.entries(s.remoteApprovals).filter(([, a]) => a.resolved || a.device !== device)) }));
         for (const x of m.session_list) if (state.events[x.id]) send(device, { type: "get_session", session: x.id });
       }
-      return patch(device, () => ({ connected: true, version: m.agent_version, nodeId: m.node_id, os: m.os, permissions: m.permissions ?? null, llm: m.llm }));
+      return patch(device, () => ({ connected: true, version: m.agent_version, nodeId: m.node_id, os: m.os, permissions: m.permissions ?? null, llm: m.llm, lens: undefined }));
     case "event":
+      // shortcut: in-app only, add tauri-plugin-notification for OS push
       return set((s) => {
         const local = device === LOCAL;
         const cur = (local ? s.sessions : s.remote)[m.session];
@@ -301,7 +352,7 @@ function onMsg(device: string, m: AgentMsg) {
     }));
     case "focus": return patch(device, () => ({ focus: m.rect }));
     case "approval_request": {
-      const a: Approval = { request: m.request, session: m.session, tool: m.tool, summary: m.summary, detail: m.detail };
+      const a: Approval = { request: m.request, session: m.session, tool: m.tool, summary: m.summary, detail: m.detail, image: m.image };
       if (device === LOCAL) return set((s) => ({ ...s, approvals: { ...s.approvals, [m.request]: a } }));
       const driver = state.remote[m.session]?.driver;
       if (driver && driver !== device) return; // same agent under another name, see "event"
@@ -316,6 +367,20 @@ function onMsg(device: string, m: AgentMsg) {
     }
     case "devices": return patch(device, () => ({ known: m.list }));
     case "image": return set((s) => ({ ...s, shots: { ...s.shots, [device]: { src: `data:image/png;base64,${m.png_base64}`, w: m.width, h: m.height, at: Date.now() } } }));
+    case "tool_result": {
+      const done = pending.get(`${device}:${m.call}`);
+      if (done) done({ ok: m.ok, text: m.text });
+      return;
+    }
+    case "lens":
+      return patch(device, (d) => {
+        const keep = m.full || d.lens?.window !== m.window ? {} : d.lens!.elements;
+        const elements: Record<number, LensElement> = { ...keep, ...Object.fromEntries(m.elements.map((e) => [e.id, e])) };
+        for (const id of m.removed ?? []) delete elements[id];
+        return { lens: { window: m.window, title: m.title, monitor: m.monitor, rect: m.rect, elements } };
+      });
+    case "watch_fired":
+      return patch(device, (d) => ({ fired: [{ watcher: m.watcher, name: m.name, text: m.text, at: Date.now() }, ...(d.fired ?? []).filter((f) => f.watcher !== m.watcher)].slice(0, 20) }));
     case "error": {
       const unknown = /unknown variant `(\w+)`/.exec(m.message)?.[1];
       // No device list coming back: drive alone instead of waiting forever.
@@ -346,3 +411,12 @@ export async function boot() {
   const names = await invoke<string[]>("list_devices");
   names.forEach((n) => { patch(n, () => ({})); connectDevice(n).catch((e) => patch(n, () => ({ detail: String(e) }))); });
 }
+
+/** Runs an agent tool directly (needs the `tools` permission). Never rejects: failures come back as `ok: false`. */
+export const callTool = (device: string, name: string, args: unknown = {}) => ask(device, (call) => ({ type: "call_tool", call, name, args }));
+/** Clicks a lens element, or types `text` into it (and presses Enter with `submit`). Needs `control`. */
+export const lensAct = (device: string, window: string, element: number, o: { text?: string; submit?: boolean } = {}) =>
+  ask(device, (call) => ({ type: "lens_act", call, window, element, ...o }));
+/** Hides a fired-watcher notice. */
+export const dismissFired = (device: string, watcher: string) =>
+  patch(device, (d) => ({ fired: (d.fired ?? []).filter((f) => f.watcher !== watcher) }));

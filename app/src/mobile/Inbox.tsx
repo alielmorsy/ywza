@@ -1,33 +1,40 @@
 import { useMemo } from "react";
-import { useStore } from "../api";
+import { helpOf, useStore } from "../api";
 import { Icon } from "../Icon";
 import { ApproveCard } from "./ApproveCard";
+import { HelpCard } from "./HelpCard";
+import { FiredCard, useFired } from "./Fired";
 import { useRuns } from "./runs";
 import { openRun, useLabel } from "./store";
 import { Empty, Header } from "./ui";
 
-/** Unresolved approvals of every driver, for the tab badge. */
-export const usePendingCount = () => useStore((s) => Object.values(s.remoteApprovals).filter((a) => !a.resolved).length);
+/** Unresolved approvals, runs waiting for help and fired watchers, for the tab badge. */
+export const usePendingCount = () => useStore((s) =>
+  Object.values(s.remoteApprovals).filter((a) => !a.resolved).length + Object.values(s.remote).filter((x) => helpOf(s.events[x.id])).length + Object.values(s.devices).reduce((n, d) => n + (d.fired?.length ?? 0), 0));
 
 export function Inbox() {
   const L = useLabel();
   const runs = useRuns();
   const apps = useStore((s) => s.remoteApprovals);
+  const fired = useFired();
   const { waiting, done } = useMemo(() => {
     const all = Object.values(apps);
     return { waiting: all.filter((a) => !a.resolved).reverse(), done: all.filter((a) => a.resolved).slice(-6).reverse() };
   }, [apps]);
   const run = (id: string, driver?: string) => runs.find((r) => r.id === id && r.driver === driver);
+  const helping = runs.filter((r) => r.help);
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Inbox">
-      <Header title="Inbox" sub={`${waiting.length} waiting`} />
+      <Header title="Inbox" sub={`${waiting.length + helping.length + fired.length} waiting`} />
       <div className="m-scroll flex flex-1 flex-col gap-2 px-3.5 pt-1 pb-4">
+        {helping.map((r) => <HelpCard key={`${r.driver}:${r.id}`} run={r} title={r.title} />)}
+        {fired.map((f) => <FiredCard key={`${f.device}:${f.watcher}`} f={f} />)}
         {waiting.map((a) => {
           const r = run(a.session, a.device);
           return <ApproveCard key={`${a.device}:${a.request}`} a={a} device={r?.current ?? a.device} run={r?.title} />;
         })}
-        {!waiting.length && (
+        {!waiting.length && !helping.length && !fired.length && (
           <Empty title="All clear">
             <Icon name="check" className="!size-6" />
             <p>Nothing needs you right now.</p>

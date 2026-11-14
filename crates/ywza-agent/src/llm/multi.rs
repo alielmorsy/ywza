@@ -1,13 +1,19 @@
+mod meta;
+
 use std::sync::Arc;
 
 use serde_json::{json, Value};
-use ywza_proto::ToolInfo;
+use ywza_proto::{SessionId, ToolInfo};
 
 use super::{
     prompt::{devices_section, system_prompt},
     Executor,
 };
-use crate::{remote::Remote, tools::ToolOutput, Agent};
+use crate::{
+    remote::Remote,
+    tools::{Space, ToolOutput},
+    Agent,
+};
 
 /// This machine plus paired devices: every tool gets a `device` argument that picks where it runs.
 pub struct Multi<'a> {
@@ -35,6 +41,7 @@ impl Executor for Multi<'_> {
         for t in &mut tools {
             add_device_arg(&mut t.parameters, &names);
         }
+        tools.extend(meta::infos(&names));
         tools
     }
 
@@ -55,15 +62,42 @@ impl Executor for Multi<'_> {
         take_device(args)
     }
 
-    async fn call(&self, device: Option<&str>, name: &str, args: &Value) -> ToolOutput {
+    async fn call(
+        &self,
+        sid: SessionId,
+        device: Option<&str>,
+        name: &str,
+        args: &Value,
+    ) -> ToolOutput {
+        match name {
+            meta::COPY => self.copy(args).await,
+            meta::FANOUT => self.fanout(sid, args).await,
+            _ => self.run_on(sid, device, name, args).await,
+        }
+    }
+}
+
+impl Multi<'_> {
+    /// One ordinary tool call, on this computer (`None`) or a paired device.
+    async fn run_on(
+        &self,
+        sid: SessionId,
+        device: Option<&str>,
+        name: &str,
+        args: &Value,
+    ) -> ToolOutput {
         let Some(device) = device else {
-            return self.agent.run_tool(name, args).await;
+            let space = Space {
+                session: sid,
+                sub: None,
+            };
+            return self.agent.run_tool(space, name, args).await;
         };
         let Some(remote) = self.devices.iter().find(|d| d.name() == device) else {
             let known: Vec<_> = self.devices.iter().map(|d| d.name()).collect();
             return ToolOutput::err(format!("unknown device `{device}`; use one of {known:?}"));
         };
-        let mut out = remote.call(Some(device), name, args).await;
+        let mut out = remote.call(sid, Some(device), name, args).await;
         // Window ids repeat across devices.
         out.supersedes_key = out.supersedes_key.map(|k| format!("{device}:{k}"));
         out

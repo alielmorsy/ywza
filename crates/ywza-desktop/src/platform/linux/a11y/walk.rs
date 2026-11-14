@@ -11,23 +11,24 @@ const MAX_NODES: usize = 4000;
 const MAX_DEPTH: usize = 48;
 
 /// Depth-first walk below `root` (document order), not listing `root` itself.
-/// Hidden nodes are listed but not descended into.
+/// Hidden nodes are listed but not descended into. `Raw::parent` indexes `out`.
 pub(super) async fn walk(
     conn: &zbus::Connection,
     root: &AccessibleProxy<'_>,
     bounds: Option<Rect>,
     out: &mut Vec<(Raw, Option<Handle>)>,
 ) {
-    // Each node with its depth and the name of its nearest named group (radio questions).
-    let mut stack: Vec<(ObjectRefOwned, usize, String)> = step(root.get_children())
+    // Each node with its depth, the name of its nearest named group (radio questions) and
+    // its parent's index.
+    let mut stack: Vec<(ObjectRefOwned, usize, String, Option<usize>)> = step(root.get_children())
         .await
         .unwrap_or_default()
         .into_iter()
         .rev()
-        .map(|c| (c, 1, String::new()))
+        .map(|c| (c, 1, String::new(), None))
         .collect();
     let mut visited = 0;
-    while let Some((node, depth, group)) = stack.pop() {
+    while let Some((node, depth, group, parent)) = stack.pop() {
         visited += 1;
         if visited > MAX_NODES {
             break;
@@ -39,6 +40,8 @@ pub(super) async fn walk(
             continue;
         };
         raw.bounds = bounds;
+        raw.parent = parent;
+        let at = out.len();
         if showing && depth < MAX_DEPTH {
             let inner = if raw.role == "group" && !raw.name.trim().is_empty() {
                 raw.name.clone()
@@ -49,7 +52,7 @@ pub(super) async fn walk(
             stack.extend(
                 kids.into_iter()
                     .rev()
-                    .map(|c| (c, depth + 1, inner.clone())),
+                    .map(|c| (c, depth + 1, inner.clone(), Some(at))),
             );
         }
         raw.group = group;

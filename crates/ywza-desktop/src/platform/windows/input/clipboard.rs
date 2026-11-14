@@ -24,11 +24,12 @@ pub(super) struct Held(Vec<(u32, Vec<u8>)>);
 
 impl Held {
     pub(super) fn put(text: &str) -> Result<Held> {
-        let saved = open(|| Ok(save()))?;
-        let units: Vec<u16> = text.encode_utf16().chain([0]).collect();
-        let bytes =
-            unsafe { std::slice::from_raw_parts(units.as_ptr().cast::<u8>(), units.len() * 2) };
-        open(|| write(&[(CF_UNICODETEXT.0 as u32, bytes.to_vec())]))?;
+        let nothing_typed = |e: Error| match e {
+            Error::Os(m) => Error::Os(format!("{m}; nothing typed")),
+            e => e,
+        };
+        let saved = open(|| Ok(save())).map_err(nothing_typed)?;
+        open(|| write(&[(CF_UNICODETEXT.0 as u32, utf16(text))], true)).map_err(nothing_typed)?;
         Ok(Held(saved))
     }
 }
@@ -37,8 +38,31 @@ impl Drop for Held {
     fn drop(&mut self) {
         // The app reads the clipboard when it handles Ctrl+V, which may be after we return.
         sleep(Duration::from_millis(200));
-        let _ = open(|| write(&self.0));
+        let _ = open(|| write(&self.0, true));
     }
+}
+
+/// The clipboard's text, None when it holds none.
+pub fn text() -> Result<Option<String>> {
+    open(|| {
+        Ok(unsafe { bytes(CF_UNICODETEXT.0 as u32) }.map(|b| {
+            let units: Vec<u16> = b
+                .chunks_exact(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .take_while(|&u| u != 0)
+                .collect();
+            String::from_utf16_lossy(&units)
+        }))
+    })
+}
+
+/// Replaces the clipboard with `text`; unlike paste-typing it stays in clipboard history.
+pub fn set_text(text: &str) -> Result<()> {
+    open(|| write(&[(CF_UNICODETEXT.0 as u32, utf16(text))], false))
+}
+
+fn utf16(text: &str) -> Vec<u8> {
+    text.encode_utf16().chain([0]).flat_map(u16::to_le_bytes).collect()
 }
 
 fn open<T>(f: impl FnOnce() -> Result<T>) -> Result<T> {
@@ -51,7 +75,7 @@ fn open<T>(f: impl FnOnce() -> Result<T>) -> Result<T> {
         }
         sleep(Duration::from_millis(25));
     }
-    Err(Error::Os("the clipboard is busy; nothing typed".into()))
+    Err(Error::Os("the clipboard is busy".into()))
 }
 
 fn save() -> Vec<(u32, Vec<u8>)> {
@@ -84,16 +108,19 @@ unsafe fn bytes(format: u32) -> Option<Vec<u8>> {
     }
 }
 
-/// Replaces the clipboard, kept out of clipboard history and cloud sync (typed text
-/// may be a password; restored content is already in the history).
-fn write(items: &[(u32, Vec<u8>)]) -> Result<()> {
+/// Replaces the clipboard; `private` keeps it out of clipboard history and cloud sync
+/// (typed text may be a password; restored content is already in the history).
+fn write(items: &[(u32, Vec<u8>)], private: bool) -> Result<()> {
     unsafe {
         EmptyClipboard()?;
         for (f, b) in items {
             set(*f, b)?;
         }
-        let private = RegisterClipboardFormatW(w!("ExcludeClipboardContentFromMonitorProcessing"));
-        set(private, &[0; 4])
+        if private {
+            let hide = RegisterClipboardFormatW(w!("ExcludeClipboardContentFromMonitorProcessing"));
+            set(hide, &[0; 4])?;
+        }
+        Ok(())
     }
 }
 

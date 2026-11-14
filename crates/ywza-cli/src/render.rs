@@ -40,6 +40,60 @@ pub fn format_event(ev: &SessionEvent, verbose: bool, color: bool) -> String {
         }
         SessionEvent::Done { summary } => format!("done: {summary}"),
         SessionEvent::Failed { error } => format!("failed: {error}"),
+        SessionEvent::Help {
+            kind,
+            reason,
+            window,
+            title,
+            ..
+        } => {
+            let mut out = format!("needs you ({kind}): {reason}");
+            if let Some(w) = window {
+                out.push_str(&format!(" in {w}"));
+                if !title.is_empty() {
+                    out.push_str(&format!(" {title:?}"));
+                }
+            }
+            out
+        }
+        SessionEvent::Resumed { digest } => {
+            format!("resumed: {}", digest.lines().next().unwrap_or_default())
+        }
+        SessionEvent::Usage {
+            input,
+            output,
+            requests,
+            screenshot_estimate,
+            cost,
+            screenshot_cost,
+            ..
+        } => {
+            if *requests == 0 {
+                return String::new();
+            }
+            let money = |c: &Option<f64>, pre: &str| match c {
+                Some(c) if *c < 0.01 => format!(", {pre}${c:.3}"),
+                Some(c) => format!(", {pre}${c:.2}"),
+                None => String::new(),
+            };
+            dim(format!(
+                "tokens {} in / {} out{} (a screenshot agent: ~{}{})",
+                tokens(*input),
+                tokens(*output),
+                money(cost, ""),
+                tokens(*screenshot_estimate),
+                money(screenshot_cost, "~")
+            ))
+        }
+    }
+}
+
+fn tokens(n: u64) -> String {
+    match n {
+        0..=999 => n.to_string(),
+        1000..=99_999 => format!("{:.1}k", n as f64 / 1e3),
+        100_000..=999_999 => format!("{}k", n / 1000),
+        _ => format!("{:.1}M", n as f64 / 1e6),
     }
 }
 
@@ -85,5 +139,41 @@ mod tests {
         assert_eq!(format_event(&done, false, true), "done: ok");
         let failed = SessionEvent::Failed { error: "x".into() };
         assert_eq!(format_event(&failed, false, true), "failed: x");
+
+        let help = SessionEvent::Help {
+            kind: "otp".into(),
+            reason: "a code is needed".into(),
+            window: Some("w123".into()),
+            title: "Sign in".into(),
+            monitor: None,
+            rect: None,
+        };
+        assert_eq!(
+            format_event(&help, false, true),
+            "needs you (otp): a code is needed in w123 \"Sign in\""
+        );
+        let resumed = SessionEvent::Resumed {
+            digest: "first\nsecond".into(),
+        };
+        assert_eq!(format_event(&resumed, false, true), "resumed: first");
+
+        let usage = |cost, screenshot_cost| SessionEvent::Usage {
+            input: 18_200,
+            output: 1_100,
+            cached: 0,
+            requests: 5,
+            tool_calls: 4,
+            screenshot_estimate: 142_000,
+            cost,
+            screenshot_cost,
+        };
+        assert_eq!(
+            format_event(&usage(Some(0.04), Some(0.35)), false, false),
+            "tokens 18.2k in / 1.1k out, $0.04 (a screenshot agent: ~142k, ~$0.35)"
+        );
+        assert_eq!(
+            format_event(&usage(None, None), false, false),
+            "tokens 18.2k in / 1.1k out (a screenshot agent: ~142k)"
+        );
     }
 }

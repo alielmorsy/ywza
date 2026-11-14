@@ -5,13 +5,13 @@ use std::{io::ErrorKind, path::Path, sync::Arc};
 use anyhow::{anyhow, bail, Result};
 use iroh::endpoint::RecvStream;
 use tokio::task::JoinSet;
-use ywza_proto::{
+
+use super::{peer::Peer, Stats};
+use crate::{
     read_frame, write_frame,
     xfer::{self, Sink},
     AgentMsg, ClientMsg, FileHeader,
 };
-
-use super::{peer::Peer, Stats};
 
 /// A reset stream was already reported by its sender.
 fn reported_elsewhere(e: &anyhow::Error) -> bool {

@@ -97,4 +97,8 @@ async fn refuses_escaping_headers() {
     };
     assert!(sink.write(&h, &mut &b""[..]).await.is_err());
     assert!(Sink::new(dst.path(), "..").is_err());
+    let folder = format!("{}/made/", dst.path().display());
+    let sink = Sink::new(Path::new(&folder), "a.txt").unwrap();
+    assert!(dst.path().join("made").is_dir());
+    assert!(sink.root().ends_with("made/a.txt"));
 }

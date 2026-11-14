@@ -3,6 +3,8 @@ use serde::Deserialize;
 use ywza_desktop::{self as desk, Image, Snapshot, WindowId};
 use ywza_proto::{MonitorInfo, Target};
 
+use crate::vault;
+
 use super::{
     output::{desk_err, downscale, flat, MODEL_IMAGE_MAX},
     util::blocking,
@@ -90,8 +92,18 @@ impl Tool for Screenshot {
             };
             let mut img = capture(&target).await.map_err(desk_err)?;
             let mut marked = 0;
+            let secrets = vault::secrets();
+            // Blur needs a snapshot too; fetching one is worth it only when there is a vault.
+            let fetch = self.marks || !secrets.is_empty();
+            let snaps = marks_snapshots(cx, &target, fetch).await;
+            let snaps = if self.marks { snaps? } else { snaps.unwrap_or_default() };
+            for s in &snaps {
+                for r in blur_rects(s, &secrets, img.origin) {
+                    desk::pixelate(&mut img, r);
+                }
+            }
             if self.marks {
-                for s in &marks_snapshots(cx, &target).await? {
+                for s in &snaps {
                     desk::draw_marks(&mut img, s);
                     marked += s.elements.len();
                 }
@@ -120,6 +132,7 @@ impl Tool for Screenshot {
                 ok: true,
                 image_png: Some(png),
                 supersedes_key: None,
+                changed: None,
             })
         })
         .await
@@ -149,6 +162,7 @@ impl Tool for ShowScreenshot {
                 ok: true,
                 image_png: Some(png),
                 supersedes_key: None,
+                changed: None,
             })
         })
         .await
@@ -157,12 +171,35 @@ impl Tool for ShowScreenshot {
 
 pub const SHOW_SCREENSHOT: &str = "show_screenshot";
 
-/// The element lists to draw on a capture of `target`.
-async fn marks_snapshots(cx: &Ctx, target: &Target) -> Result<Vec<Snapshot>, ToolOutput> {
+/// Rects (in image pixels) the model must not see: password-like fields (a value pattern
+/// whose value cannot be read) and anything showing a vault value.
+fn blur_rects(s: &Snapshot, secrets: &[String], origin: (i32, i32)) -> Vec<desk::Rect> {
+    let leaks = |t: &str| secrets.iter().any(|v| t.contains(v.as_str()));
+    s.elements
+        .iter()
+        .filter(|e| {
+            let password = e.kind == "edit" && e.patterns.value && e.value.is_none();
+            password || leaks(&e.name) || e.value.as_deref().is_some_and(leaks)
+        })
+        .map(|e| desk::Rect {
+            x: e.rect.x - origin.0,
+            y: e.rect.y - origin.1,
+            ..e.rect
+        })
+        .collect()
+}
+
+/// The element lists of `target` to draw or blur on its capture; without `fetch`, only stored ones.
+async fn marks_snapshots(
+    cx: &Ctx,
+    target: &Target,
+    fetch: bool,
+) -> Result<Vec<Snapshot>, ToolOutput> {
     match *target {
         Target::Window { id } => {
             let snap = match cx.snap(id) {
                 Some(s) => s,
+                None if !fetch => return Ok(Vec::new()),
                 None => {
                     let s = blocking(move || desk::snapshot(id, None))
                         .await

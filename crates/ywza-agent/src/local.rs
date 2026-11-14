@@ -93,11 +93,16 @@ async fn serve(agent: Arc<Agent>, stream: TcpStream, token: &str) -> anyhow::Res
             );
         }
         let reply = match frame {
-            Ok(ClientMsg::CallTool { call, name, args }) => {
+            Ok(ClientMsg::CallTool {
+                call,
+                name,
+                args,
+                space,
+            }) => {
                 let sid = *session.get_or_insert_with(|| mcp::session(&agent, &client_name));
                 let (agent, direct) = (agent.clone(), direct.clone());
                 tokio::spawn(async move {
-                    let _ = direct.send(mcp::call_tool(&agent, sid, call, name, args).await);
+                    let _ = direct.send(mcp::call_tool(&agent, sid, space, call, name, args).await);
                 });
                 None
             }
@@ -126,11 +131,14 @@ async fn serve(agent: Arc<Agent>, stream: TcpStream, token: &str) -> anyhow::Res
                 });
                 None
             }
-            // Need the iroh connection (live view, file copy).
+            // Need the iroh connection (live view, lens, file copy).
             Ok(
                 ClientMsg::LiveStart { .. }
                 | ClientMsg::LiveStop
                 | ClientMsg::Input { .. }
+                | ClientMsg::LensStart { .. }
+                | ClientMsg::LensStop
+                | ClientMsg::LensAct { .. }
                 | ClientMsg::Pull { .. }
                 | ClientMsg::Push { .. }
                 | ClientMsg::PushEnd { .. },
