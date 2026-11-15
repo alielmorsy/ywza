@@ -3,6 +3,7 @@ import { Icon } from "../Icon";
 import { LOCAL, cancel, loadSession, useStore, type SEvent } from "../api";
 import { Messages } from "../views/chat/Messages";
 import { Tab, type TabKind } from "./Tab";
+import { ApprovalSelect } from "./approval";
 import { ask } from "./prompt";
 
 const NONE: SEvent[] = [];
@@ -38,6 +39,7 @@ export function Expanded({ session, onClose }: { session: string; onClose: () =>
           placeholder={running ? "Stop the run to send a follow-up" : "Follow up"} className="field flex-1"
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }} />
+        <ApprovalSelect />
         <button type="button" className="btn primary size-[30px] flex-none justify-center p-0 aria-disabled:opacity-40" title="Send (Enter)" aria-label="Send"
           aria-disabled={running || sent || !text.trim()} onClick={send}><Icon name="send" /></button>
       </div>

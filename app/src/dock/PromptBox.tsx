@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../Icon";
 import { LOCAL, useStore } from "../api";
+import { ApprovalSelect } from "./approval";
 
 export function PromptBox({ onSubmit }: { onSubmit: (text: string) => void }) {
   const [text, setText] = useState("");
@@ -24,6 +25,7 @@ export function PromptBox({ onSubmit }: { onSubmit: (text: string) => void }) {
         className="min-w-0 flex-1 border-0 bg-transparent text-[15px] outline-none placeholder:text-text-3"
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); } }} />
+      <ApprovalSelect />
       <button type="button" className="btn primary size-[34px] flex-none justify-center rounded-md p-0 aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
         title="Send (Enter)" aria-label="Send" aria-disabled={!up || !text.trim()} onClick={submit}><Icon name="send" /></button>
     </div>
