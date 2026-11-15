@@ -49,7 +49,10 @@ ywza works perfectly on Windows. Linux works on X11.
       <video src="https://github.com/user-attachments/assets/6fe66bb5-ee3c-4f7d-85ff-e31ea51a5b00" controls muted></video>
       <br>Typing Hello World into an empty terminal, then starting Claude in it
     </td>
-    <td width="50%"></td>
+    <td width="50%" align="center">
+      <video src="https://github.com/user-attachments/assets/ca89393d-ddd9-4007-8553-37831870d286" controls muted></video>
+      <br>Alt + ` opens the command box, then asking it to open the repo on GitHub in Brave
+    </td>
   </tr>
 </table>
 
