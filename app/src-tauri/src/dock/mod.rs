@@ -58,19 +58,36 @@ pub fn dock_place(app: AppHandle, x: i32, y: i32, w: u32, h: u32) -> Result<(), 
 #[tauri::command]
 pub fn dock_show(app: AppHandle, focus: bool) -> Result<(), String> {
     let d = dock(&app)?;
-    if focus {
-        d.show().map_err(|e| e.to_string())?;
-        return d.set_focus().map_err(|e| e.to_string());
-    }
     #[cfg(windows)]
     {
-        use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_SHOWNOACTIVATE};
+        use windows::Win32::UI::WindowsAndMessaging::{
+            GetWindowLongW, SetWindowLongW, ShowWindow, GWL_EXSTYLE, SW_SHOWNOACTIVATE,
+            WS_EX_NOACTIVATE,
+        };
         let h = d.hwnd().map_err(|e| e.to_string())?;
-        let _ = unsafe { ShowWindow(h, SW_SHOWNOACTIVATE) };
+        // Without it, clicking the dock would pull the foreground away from the app being driven.
+        unsafe {
+            let ex = GetWindowLongW(h, GWL_EXSTYLE) as u32;
+            let ex = if focus {
+                ex & !WS_EX_NOACTIVATE.0
+            } else {
+                ex | WS_EX_NOACTIVATE.0
+            };
+            SetWindowLongW(h, GWL_EXSTYLE, ex as i32);
+        }
+        if !focus {
+            let _ = unsafe { ShowWindow(h, SW_SHOWNOACTIVATE) };
+            return Ok(());
+        }
     }
     #[cfg(not(windows))]
+    {
+        if !focus {
+            return d.show().map_err(|e| e.to_string());
+        }
+    }
     d.show().map_err(|e| e.to_string())?;
-    Ok(())
+    d.set_focus().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
