@@ -54,6 +54,7 @@ pub async fn run(
     result
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn steps(
     agent: &Agent,
     sid: SessionId,
@@ -170,7 +171,7 @@ async fn steps(
         let note = match blocker {
             None => None,
             Some(Blocker::Hint(hint)) => Some(hint),
-            Some(Blocker::Pause(p)) => Some(agent.ask_for_help(sid, p, cancel).await?),
+            Some(Blocker::Pause(p)) => Some(agent.ask_for_help(sid, *p, cancel).await?),
         };
         if let Some(note) = note {
             history.push(Msg::new(json!({"role":"user","content":note})));

@@ -99,7 +99,7 @@ impl Agent {
                 config: self.config.get().masked(),
             }),
             // The saver gets the stored config through the broadcast, like every other client.
-            ClientMsg::SetConfig { config } => match self.config.set(config) {
+            ClientMsg::SetConfig { config } => match self.config.set(*config) {
                 Ok(()) => {
                     tracing::debug!("settings changed by a client");
                     self.broadcast(AgentMsg::Config {

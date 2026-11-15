@@ -308,7 +308,7 @@ mod tests {
             let a = Approval {
                 rules: vec![rule("click", Some(pattern), Action::Ask)],
             };
-            let v = verdict(&a, ApprovalMode::Rules, "click", &click, &[line.clone()], risky);
+            let v = verdict(&a, ApprovalMode::Rules, "click", &click, std::slice::from_ref(&line), risky);
             assert_eq!(v, Verdict::Ask { tool: "click".into(), summary: SEND.into() }, "{pattern}");
             assert_eq!(
                 verdict(&a, ApprovalMode::Rules, "click", &click, &[], risky),

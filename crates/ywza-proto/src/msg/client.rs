@@ -59,7 +59,7 @@ pub enum ClientMsg {
     },
     GetConfig,
     SetConfig {
-        config: Config,
+        config: Box<Config>,
     },
     ListSessions,
     GetSession {
@@ -279,7 +279,7 @@ mod tests {
         check(GetConfig, json!({"type":"get_config"}));
         check(
             SetConfig {
-                config: Config::default(),
+                config: Box::default(),
             },
             json!({"type":"set_config","config":serde_json::to_value(Config::default()).unwrap()}),
         );

@@ -8,10 +8,10 @@ use super::{bind, guard, Plan, PlanStep, WindowRef};
 use crate::tools::{blocking, Ctx, ToolOutput};
 
 /// Why a step stopped, and the window's live elements when known.
-type Stop = (String, Option<Snapshot>);
+type Stop = Box<(String, Option<Snapshot>)>;
 
 fn lost(e: desk::Error) -> Stop {
-    (e.to_string(), None)
+    Box::new((e.to_string(), None))
 }
 
 /// Runs the plan from step `from` (1-based). A step that cannot run stops the plan with the
@@ -29,7 +29,10 @@ pub async fn run(cx: &Ctx, plan: &Plan, params: &Map<String, Value>, from: usize
     for i in from - 1..total {
         match step(cx, &steps, i).await {
             Ok(text) => last = text,
-            Err((reason, live)) => return stopped(plan, i, &reason, live),
+            Err(stop) => {
+                let (reason, live) = *stop;
+                return stopped(plan, i, &reason, live);
+            }
         }
     }
     let ran = if from == 1 {
@@ -60,7 +63,7 @@ async fn step(cx: &Ctx, steps: &[PlanStep], i: usize) -> Result<String, Stop> {
         let Some(info) = find(&wins, r) else {
             let open: Vec<String> = wins.iter().map(ToString::to_string).collect();
             let reason = format!("no window of {} {:?}; open windows:\n{}", r.process, r.title, open.join("\n"));
-            return Err((reason, None));
+            return Err(Box::new((reason, None)));
         };
         let w = info.id;
         window = Some(w);
@@ -79,9 +82,9 @@ async fn step(cx: &Ctx, steps: &[PlanStep], i: usize) -> Result<String, Stop> {
             args.insert("element".into(), json!(id));
         }
         Ok(None) => {}
-        Err(e) => return Err((e, live)),
+        Err(e) => return Err(Box::new((e, live))),
     }
-    let args = crate::vault::substitute(&s.tool, &Value::Object(args)).map_err(|e| (e, live.clone()))?;
+    let args = crate::vault::substitute(&s.tool, &Value::Object(args)).map_err(|e| Box::new((e, live.clone())))?;
     let mut out = cx.call(&s.tool, args).await;
     crate::vault::scrub(&mut out.text);
     let after = || {
@@ -90,10 +93,10 @@ async fn step(cx: &Ctx, steps: &[PlanStep], i: usize) -> Result<String, Stop> {
             .filter(|_| !out.text.contains("Fresh element list"))
     };
     if !out.ok {
-        return Err((format!("tool failed: {}", out.text), after()));
+        return Err(Box::new((format!("tool failed: {}", out.text), after())));
     }
     if let Some(want) = s.changes.as_deref().filter(|w| !guard::contains(&out.text, w)) {
-        return Err((format!("expected changes containing {want:?}, got: {}", out.text), after()));
+        return Err(Box::new((format!("expected changes containing {want:?}, got: {}", out.text), after())));
     }
     Ok(out.text)
 }

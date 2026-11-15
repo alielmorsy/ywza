@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 pub enum Delta {
     Added(Element),
     Removed(Element),
-    Changed { old: Element, new: Element },
+    Changed { old: Element, new: Box<Element> },
 }
 
 /// Identity of an element: its key; OCR lines their id (carried over by position);
@@ -64,7 +64,7 @@ pub fn diff(old: &Snapshot, new: &Snapshot) -> Vec<Delta> {
             Some(o) if same_shape(o, n) && o.value == n.value => {}
             Some(&o) => out.push(Delta::Changed {
                 old: o.clone(),
-                new: n.clone(),
+                new: Box::new(n.clone()),
             }),
         }
     }

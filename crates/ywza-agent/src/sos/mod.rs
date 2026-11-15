@@ -39,7 +39,7 @@ struct Paused {
 pub(crate) enum Blocker {
     /// A saved fix exists: tell the model instead of pausing.
     Hint(String),
-    Pause(Pause),
+    Pause(Box<Pause>),
 }
 
 pub(crate) struct Pause {

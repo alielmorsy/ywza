@@ -14,7 +14,7 @@ pub enum WatchCmd {
     },
     /// Create a watcher from a JSON object of `watcher_create` arguments, or from flags:
     /// `ywza watch add --on window_appears --title Build --message "build window opened"`.
-    Add(AddArgs),
+    Add(Box<AddArgs>),
     /// Turn a watcher on.
     On { id: String },
     /// Turn a watcher off.

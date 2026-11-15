@@ -95,7 +95,7 @@ impl Permissions {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Config, InputEvent, SessionId, Target};
+    use crate::{InputEvent, SessionId, Target};
 
     #[test]
     fn permissions_gate_each_message() {
@@ -184,7 +184,7 @@ mod tests {
             (GetConfig, Some("settings")),
             (
                 SetConfig {
-                    config: Config::default(),
+                    config: Box::default(),
                 },
                 Some("settings"),
             ),

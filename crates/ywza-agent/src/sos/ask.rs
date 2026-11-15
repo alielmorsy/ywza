@@ -61,12 +61,12 @@ impl Agent {
             (1, true) => Some(Blocker::Hint(format!(
                 "blocker {kind} detected; a saved fix exists: run_plan {{\"name\":\"{fix}\"}}"
             ))),
-            (1, false) | (2, true) => Some(Blocker::Pause(Pause {
+            (1, false) | (2, true) => Some(Blocker::Pause(Box::new(Pause {
                 kind,
                 reason,
                 window,
                 before: snap,
-            })),
+            }))),
             _ => None,
         }
     }
