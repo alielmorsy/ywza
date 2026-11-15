@@ -21,14 +21,16 @@ use ::windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use ::windows::Win32::UI::WindowsAndMessaging::*;
 use paint::Look;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
-use std::sync::OnceLock;
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, SyncSender};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use window::{Font, Surface};
 
 const WAKE: u32 = WM_APP + 1;
 const RIPPLE_MS: u64 = 350;
 const HIDE_WAIT: Duration = Duration::from_millis(200);
+const START_WAIT: Duration = Duration::from_secs(2);
+const START_RETRY: Duration = Duration::from_secs(30);
 
 struct Spec {
     id: u64,
@@ -63,11 +65,55 @@ impl Overlay {
     }
 }
 
-static OVERLAY: OnceLock<Option<Overlay>> = OnceLock::new();
+static OVERLAY: OnceLock<Overlay> = OnceLock::new();
+static STARTING: Mutex<Starting> = Mutex::new(Starting {
+    last: None,
+    pending: None,
+});
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
+struct Starting {
+    last: Option<Instant>,
+    /// A thread that was started but has not reported in yet.
+    pending: Option<(Sender<Cmd>, Receiver<Option<u32>>)>,
+}
+
 fn running() -> Option<&'static Overlay> {
-    OVERLAY.get()?.as_ref()
+    OVERLAY.get()
+}
+
+/// Starts the overlay thread on first use. A failed start is retried at most every 30 s,
+/// and never while an earlier thread may still come up.
+fn overlay() -> Option<&'static Overlay> {
+    if let Some(o) = OVERLAY.get() {
+        return Some(o);
+    }
+    let mut st = STARTING.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(o) = OVERLAY.get() {
+        return Some(o);
+    }
+    let (tx, ready, wait) = match st.pending.take() {
+        Some((tx, ready)) => (tx, ready, Duration::ZERO),
+        None => {
+            if st.last.is_some_and(|t| t.elapsed() < START_RETRY) {
+                return None;
+            }
+            st.last = Some(Instant::now());
+            let (tx, ready) = start()?;
+            (tx, ready, START_WAIT)
+        }
+    };
+    match ready.recv_timeout(wait) {
+        Ok(Some(thread)) => {
+            let _ = OVERLAY.set(Overlay { tx, thread });
+            OVERLAY.get()
+        }
+        Err(RecvTimeoutError::Timeout) => {
+            st.pending = Some((tx, ready));
+            None
+        }
+        _ => None,
+    }
 }
 
 pub fn overlay_mark(window: WindowId, rect: Rect, caption: &str, kind: MarkKind) -> Option<MarkId> {
@@ -100,7 +146,7 @@ pub fn overlay_mark(window: WindowId, rect: Rect, caption: &str, kind: MarkKind)
         }
     };
     let top_room = top.is_none_or(|t| target.y - t >= px(36.0, scale));
-    let overlay = OVERLAY.get_or_init(start).as_ref()?;
+    let overlay = overlay()?;
     let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
     let spec = Spec {
         id,
@@ -180,7 +226,8 @@ fn interactive_desktop() -> bool {
     }
 }
 
-fn start() -> Option<Overlay> {
+/// Spawns the overlay thread; it reports its thread id (or None) on the returned receiver.
+fn start() -> Option<(Sender<Cmd>, Receiver<Option<u32>>)> {
     // The process window station handle is not owned; it must not be closed.
     let station = unsafe { GetProcessWindowStation() }.ok()?;
     if !object_name(HANDLE(station.0))?.eq_ignore_ascii_case("WinSta0") {
@@ -192,8 +239,7 @@ fn start() -> Option<Overlay> {
         .name("ywza-lens".into())
         .spawn(move || run(rx, ready_tx))
         .ok()?;
-    let thread = ready_rx.recv_timeout(Duration::from_secs(2)).ok()??;
-    Some(Overlay { tx, thread })
+    Some((tx, ready_rx))
 }
 
 fn run(rx: Receiver<Cmd>, ready: SyncSender<Option<u32>>) {

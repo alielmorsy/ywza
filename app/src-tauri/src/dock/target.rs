@@ -4,7 +4,7 @@
 pub use win::{current, ignore, remember, restore};
 
 #[cfg(not(windows))]
-pub fn current() -> Option<(String, String)> {
+pub fn current() -> Option<(String, String, String)> {
     None
 }
 
@@ -17,9 +17,14 @@ pub fn restore() -> Result<(), String> {
 mod win {
     use std::ffi::c_void;
     use std::sync::Mutex;
-    use windows::Win32::Foundation::HWND;
+    use windows::core::PWSTR;
+    use windows::Win32::Foundation::{CloseHandle, HWND};
+    use windows::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
+        PROCESS_QUERY_LIMITED_INFORMATION,
+    };
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, GetWindowTextW, SetForegroundWindow,
+        GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId, SetForegroundWindow,
     };
 
     static TARGET: Mutex<Option<isize>> = Mutex::new(None);
@@ -34,17 +39,51 @@ mod win {
         *OWN.lock().unwrap() = handles;
     }
 
+    /// With one of our own windows in front, the previous target stays.
     pub fn remember() {
         let h = unsafe { GetForegroundWindow() }.0 as isize;
-        let own = OWN.lock().unwrap().contains(&h);
-        *TARGET.lock().unwrap() = (h != 0 && !own).then_some(h);
+        if OWN.lock().unwrap().contains(&h) {
+            return;
+        }
+        *TARGET.lock().unwrap() = (h != 0).then_some(h);
     }
 
-    pub fn current() -> Option<(String, String)> {
+    /// `(w<id>, title, exe file name)` of the remembered window.
+    pub fn current() -> Option<(String, String, String)> {
         let h = (*TARGET.lock().unwrap())?;
         let mut buf = [0u16; 512];
         let n = unsafe { GetWindowTextW(hwnd(h), &mut buf) }.max(0) as usize;
-        Some((format!("w{h}"), String::from_utf16_lossy(&buf[..n])))
+        Some((
+            format!("w{h}"),
+            String::from_utf16_lossy(&buf[..n]),
+            process(hwnd(h)),
+        ))
+    }
+
+    fn process(h: HWND) -> String {
+        unsafe {
+            let mut pid = 0u32;
+            GetWindowThreadProcessId(h, Some(&mut pid as *mut u32));
+            // Fails for elevated processes when we are not elevated.
+            let Ok(p) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
+                return "?".into();
+            };
+            let mut buf = [0u16; 1024];
+            let mut len = buf.len() as u32;
+            let ok = QueryFullProcessImageNameW(
+                p,
+                PROCESS_NAME_WIN32,
+                PWSTR(buf.as_mut_ptr()),
+                &mut len,
+            )
+            .is_ok();
+            let _ = CloseHandle(p);
+            if !ok {
+                return "?".into();
+            }
+            let path = String::from_utf16_lossy(&buf[..len as usize]);
+            path.rsplit('\\').next().unwrap_or(&path).to_string()
+        }
     }
 
     pub fn restore() -> Result<(), String> {

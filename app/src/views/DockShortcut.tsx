@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { dockShortcut, type DockKey } from "../api";
 import { SHORTCUTS, saveShortcut, savedShortcut } from "../dock/shortcut";
 import { Row } from "./Form";
@@ -8,10 +8,13 @@ export function DockShortcut() {
   const [key, setKey] = useState(savedShortcut);
   const [err, setErr] = useState<string | null>(null);
 
+  // Surfaces a shortcut that failed to register at startup.
+  useEffect(() => { dockShortcut(savedShortcut()).then(() => setErr(null), (e) => setErr(String(e))); }, []);
+
   const pick = (k: DockKey) => {
     dockShortcut(k).then(
       () => { saveShortcut(k); setKey(k); setErr(null); },
-      (e) => setErr(`${SHORTCUTS.find(([x]) => x === k)?.[1]} is taken: ${e}`),
+      (e) => setErr(String(e)),
     );
   };
 

@@ -437,7 +437,7 @@ export const dockHide = () => invoke("dock_hide");
 /** Work area of the monitor the mouse is on. */
 export const dockMonitor = () => invoke<DockMonitor>("dock_monitor");
 /** The window that had focus before the dock opened. */
-export const dockTarget = () => invoke<{ window: string; title: string } | null>("dock_target");
+export const dockTarget = () => invoke<{ window: string; title: string; process: string } | null>("dock_target");
 export const dockRestoreFocus = () => invoke("dock_restore_focus");
 /** Rejects with a message when another program holds the key. */
 export const dockShortcut = (key: DockKey) => invoke("dock_shortcut", { key });

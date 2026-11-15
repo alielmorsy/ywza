@@ -4,6 +4,7 @@
 //! the foreground (see `foreground::with_foreground`).
 
 mod clipboard;
+mod dock;
 mod foreground;
 mod ghost;
 mod keyboard;

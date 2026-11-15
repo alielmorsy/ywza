@@ -1,3 +1,4 @@
+use super::dock;
 use super::ghost::takeover;
 use super::lock::InputLock;
 use super::message;
@@ -87,6 +88,7 @@ pub fn scroll(snap: &Snapshot, id: Option<u32>, dx: i32, dy: i32, real: bool) ->
         Some(id) => uia::live(snap, id)?.0.rect.center(),
         None => wm::visible_rect(hwnd(window)).center(),
     };
+    let _dock = dock::aside(at);
     takeover(real, window, || {
         warp(at)?;
         let mut inputs = Vec::new();
@@ -114,6 +116,7 @@ fn real_click(
         Button::Right => (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP),
         Button::Middle => (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP),
     };
+    let _dock = dock::aside(at);
     takeover(real, window, || {
         warp(at)?;
         send(&[mouse(MOUSEEVENTF_MOVE, at, 0)])?;

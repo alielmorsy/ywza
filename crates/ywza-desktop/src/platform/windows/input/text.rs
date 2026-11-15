@@ -169,6 +169,7 @@ fn takeover_type(
         })?;
         uia::set_focus(&el);
         if !uia::has_focus(&el) {
+            let _dock = super::dock::aside(at);
             warp(at)?;
             send(&[
                 mouse(MOUSEEVENTF_LEFTDOWN, at, 0),

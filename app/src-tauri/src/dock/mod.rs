@@ -15,6 +15,7 @@ const LABEL: &str = "dock";
 
 pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     let dock = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html?dock".into()))
+        .title("ywza dock")
         .decorations(false)
         .transparent(true)
         .always_on_top(true)
@@ -61,38 +62,52 @@ pub fn dock_show(app: AppHandle, focus: bool) -> Result<(), String> {
     #[cfg(windows)]
     {
         use windows::Win32::UI::WindowsAndMessaging::{
-            GetWindowLongW, SetWindowLongW, ShowWindow, GWL_EXSTYLE, SW_SHOWNOACTIVATE,
-            WS_EX_NOACTIVATE,
+            ShowWindow, SW_SHOWNOACTIVATE, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
         };
         let h = d.hwnd().map_err(|e| e.to_string())?;
         // Without it, clicking the dock would pull the foreground away from the app being driven.
-        unsafe {
-            let ex = GetWindowLongW(h, GWL_EXSTYLE) as u32;
-            let ex = if focus {
-                ex & !WS_EX_NOACTIVATE.0
-            } else {
-                ex | WS_EX_NOACTIVATE.0
-            };
-            SetWindowLongW(h, GWL_EXSTYLE, ex as i32);
-        }
-        if !focus {
+        set_ex_style(h, WS_EX_NOACTIVATE.0, !focus);
+        if focus {
+            d.show().map_err(|e| e.to_string())?;
+            d.set_focus().map_err(|e| e.to_string())?;
+        } else {
             let _ = unsafe { ShowWindow(h, SW_SHOWNOACTIVATE) };
-            return Ok(());
         }
+        // Keeps the dock out of the agent's window list; tao rewrites the ex style on show/hide.
+        set_ex_style(h, WS_EX_TOOLWINDOW.0, true);
+        Ok(())
     }
     #[cfg(not(windows))]
     {
-        if !focus {
-            return d.show().map_err(|e| e.to_string());
+        d.show().map_err(|e| e.to_string())?;
+        if focus {
+            d.set_focus().map_err(|e| e.to_string())?;
         }
+        Ok(())
     }
-    d.show().map_err(|e| e.to_string())?;
-    d.set_focus().map_err(|e| e.to_string())
+}
+
+#[cfg(windows)]
+fn set_ex_style(h: windows::Win32::Foundation::HWND, bits: u32, on: bool) {
+    use windows::Win32::UI::WindowsAndMessaging::{GetWindowLongW, SetWindowLongW, GWL_EXSTYLE};
+    unsafe {
+        let ex = GetWindowLongW(h, GWL_EXSTYLE) as u32;
+        let ex = if on { ex | bits } else { ex & !bits };
+        SetWindowLongW(h, GWL_EXSTYLE, ex as i32);
+    }
 }
 
 #[tauri::command]
 pub fn dock_hide(app: AppHandle, hotkey: State<Hotkey>) -> Result<(), String> {
-    dock(&app)?.hide().map_err(|e| e.to_string())?;
+    let d = dock(&app)?;
+    d.hide().map_err(|e| e.to_string())?;
+    // A no-activate show bypasses tao, which then thinks the window is already hidden.
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_HIDE};
+        let h = d.hwnd().map_err(|e| e.to_string())?;
+        let _ = unsafe { ShowWindow(h, SW_HIDE) };
+    }
     hotkey.refresh();
     Ok(())
 }
@@ -133,11 +148,16 @@ pub fn dock_monitor(app: AppHandle) -> Result<MonitorInfo, String> {
 pub struct Target {
     window: String,
     title: String,
+    process: String,
 }
 
 #[tauri::command]
 pub fn dock_target() -> Option<Target> {
-    target::current().map(|(window, title)| Target { window, title })
+    target::current().map(|(window, title, process)| Target {
+        window,
+        title,
+        process,
+    })
 }
 
 #[tauri::command]

@@ -78,9 +78,15 @@ export default function Dock() {
 
   const prev = useRef<Mode>("hidden");
   useEffect(() => {
-    if (prev.current === "prompt" && s.mode === "hidden") dockRestoreFocus().catch(() => {});
+    if ((prev.current === "prompt" || prev.current === "expanded") && s.mode === "hidden") dockRestoreFocus().catch(() => {});
     prev.current = s.mode;
   }, [s.mode]);
+
+  // Take focus only when there is something to type into: the prompt, or the follow-up box once the run stops.
+  const focusable = s.mode === "prompt" || (s.mode === "expanded" && status !== "running");
+  useEffect(() => {
+    if (s.mode === "expanded" && placed.current) dockShow(focusable).catch(() => {});
+  }, [focusable]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasApproval = s.approval !== undefined;
   useEffect(() => {
@@ -117,7 +123,7 @@ export default function Dock() {
       if (before) await frames();
       if (!live()) return;
       if (before) setView({ ...view0, animating: true });
-      await dockShow(s.mode === "prompt" || s.mode === "expanded");
+      await dockShow(focusable);
       await wait(MS);
       if (!live() || sameRect(win, nb)) return;
       await dockPlace(nb);
@@ -132,7 +138,8 @@ export default function Dock() {
     submitting.current = true;
     try {
       const target = await dockTarget().catch(() => null);
-      const id = ask(target ? `[The user was in window ${target.window} "${target.title}" when asking.]\n${text}` : text, null);
+      const title = target?.title.replaceAll('"', "'").replace(/\s*[\r\n]+\s*/g, " ");
+      const id = ask(target ? `[The user was in window ${target.window} "${title}" (${target.process}) when asking.]\n${text}` : text, null);
       dockRestoreFocus().catch(() => {});
       dispatch({ t: "submit", session: id });
     } finally { submitting.current = false; }
