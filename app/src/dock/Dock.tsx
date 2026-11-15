@@ -15,6 +15,7 @@ import { DEFAULT_SHORTCUT, savedShortcut } from "./shortcut";
 import "./dock.css";
 
 const MS = 240;
+const DONE_IDLE_MS = 5 * 60_000;
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const frames = () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
 
@@ -90,11 +91,13 @@ export default function Dock() {
     else if (status === "failed") dispatch({ t: "failed" });
   }, [status, s.mode]);
 
+  // The finished tab stays until it has gone untouched this long, so a result is never missed.
+  const [touched, setTouched] = useState(0);
   useEffect(() => {
     if (s.mode !== "done") return;
-    const t = setTimeout(() => dispatch({ t: "timeout" }), 4000);
+    const t = setTimeout(() => dispatch({ t: "timeout" }), DONE_IDLE_MS);
     return () => clearTimeout(t);
-  }, [s.mode]);
+  }, [s.mode, touched]);
 
   const prev = useRef<Mode>("hidden");
   useEffect(() => {
@@ -188,7 +191,7 @@ export default function Dock() {
   return (
     <>
       <Sprite />
-      <div className="dock-root">
+      <div className="dock-root" onPointerEnter={() => setTouched((n) => n + 1)} onPointerDown={() => setTouched((n) => n + 1)}>
         <div className="dock-shell" data-shape={kind} {...flags}
           style={{ ...at(base), width: base.w / k, height: base.h / k }}>
           <div key={view.mode} className="dock-fade">{body}</div>
