@@ -147,6 +147,7 @@ export default function Dock() {
 
   if (!view || !view.shape.base) return <><Sprite /><div className="dock-root" /></>;
   const { origin: o, scale: k, shape: sh } = view;
+  const base = view.shape.base;
   const at = (r: Rect) => ({ transform: `translate(${(r.x - o.x) / k}px, ${(r.y - o.y) / k}px)` });
   const flags = { "data-anim": view.animating || undefined, "data-leaving": view.leaving || undefined };
 
@@ -170,7 +171,7 @@ export default function Dock() {
       <Sprite />
       <div className="dock-root">
         <div className="dock-shell" data-shape={kind} {...flags}
-          style={{ ...at(sh.base), width: sh.base.w / k, height: sh.base.h / k }}>
+          style={{ ...at(base), width: base.w / k, height: base.h / k }}>
           <div key={view.mode} className="dock-fade">{body}</div>
         </div>
         {sh.card && approval && (
