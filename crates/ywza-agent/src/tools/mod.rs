@@ -15,6 +15,7 @@ mod elements;
 mod find;
 mod input;
 mod label;
+mod mark;
 mod ocr;
 mod output;
 mod plan;

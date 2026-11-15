@@ -1,12 +1,13 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, OnceLock},
     time::Instant,
 };
 
 use serde_json::Value;
+use tokio::sync::broadcast;
 use ywza_desktop::{Snapshot, WindowId};
-use ywza_proto::{OcrEngine, SessionId, ToolInfo};
+use ywza_proto::{AgentMsg, OcrEngine, SessionId, ToolInfo};
 use ywza_term::TermManager;
 
 use super::{act::Report, registry, Entry, ToolOutput};
@@ -27,6 +28,8 @@ struct Shared {
     snaps: Mutex<Snaps>,
     terms: Arc<TermManager>,
     entries: Vec<Entry>,
+    /// Where actions announce what they are about to do; set once the agent's channel exists.
+    activity: OnceLock<broadcast::Sender<AgentMsg>>,
 }
 
 /// What a tool run sees: the shared state plus this call's OCR engine and batch mode.
@@ -63,6 +66,20 @@ impl Ctx {
 
     pub fn terms(&self) -> Arc<TermManager> {
         self.shared.terms.clone()
+    }
+
+    pub fn session(&self) -> SessionId {
+        self.space.session
+    }
+
+    /// Tells every client what this call is doing now. Not stored in the session.
+    pub fn activity(&self, text: String) {
+        if let Some(tx) = self.shared.activity.get() {
+            let _ = tx.send(AgentMsg::Activity {
+                session: self.session(),
+                text,
+            }); // Err only means no client is connected.
+        }
     }
 
     pub fn report(&self, mode: Report) -> Report {
@@ -128,12 +145,17 @@ impl Default for Tools {
                 snaps: Mutex::default(),
                 terms: Arc::new(TermManager::new()),
                 entries: registry(),
+                activity: OnceLock::new(),
             }),
         }
     }
 }
 
 impl Tools {
+    pub fn set_activity(&self, tx: broadcast::Sender<AgentMsg>) {
+        let _ = self.shared.activity.set(tx);
+    }
+
     pub fn specs(&self) -> Vec<ToolSpec> {
         self.shared
             .entries

@@ -1,8 +1,9 @@
 //! Element actions: validate against the stored snapshot, act, re-snapshot, report.
 
-use ywza_desktop::{self as desk, Delta, Snapshot, Tier, WindowId};
+use ywza_desktop::{self as desk, Delta, MarkKind, Rect, Snapshot, Tier, WindowId};
 
 use super::{
+    mark::{self, Verb},
     ocr::{check_ocr, keep_ocr, snapshot_with_ocr},
     output::{desk_err, stale, R},
     util::blocking,
@@ -26,11 +27,13 @@ pub enum Report {
 /// Validates + runs an element action on the stored snapshot, re-snapshots (ids carried
 /// over from the stored one, so they stay stable) and reports per `mode`. `f` returns the
 /// tier it acted through (None for actions without one), named in the success text.
-/// Stale: nothing done, the fresh snapshot is returned instead.
+/// Stale: nothing done, the fresh snapshot is returned instead. `verb` names the action on the
+/// lens mark and in the activity caption; the target is the element, else the window.
 pub async fn act(
     cx: &Ctx,
     w: WindowId,
     element: Option<u32>,
+    verb: Verb,
     mode: Report,
     f: impl FnOnce(&Snapshot) -> desk::Result<Option<Tier>> + Send + 'static,
 ) -> R {
@@ -49,8 +52,14 @@ pub async fn act(
         }
     }
     let had_ocr = snap.elements.iter().any(|e| e.kind == "ocr");
+    let spot = mark_spot(&snap, element, &verb);
+    let mcx = cx.clone();
     let (res, old, fresh) = blocking(move || {
+        let mark = spot.and_then(|(rect, verb, target)| {
+            mark::begin(&mcx, w, rect, &verb, target.as_deref(), MarkKind::Element)
+        });
         let res = f(&snap);
+        mark::finish(mark, res.is_ok());
         if res.is_ok() && matches!(mode, Report::Diff | Report::Changed(_)) {
             // Waits until the UI stops changing; its snapshots do not carry ids over from
             // `snap`, so the one we keep is re-taken with `snap` as `prev`.
@@ -113,6 +122,28 @@ pub async fn act(
     };
     cx.store(w, fresh);
     out
+}
+
+/// Where the lens marks an action and what it calls it: the element's rect and name (else its
+/// role), or with no element the window's rect and title. None: the id is not in the snapshot.
+fn mark_spot(
+    snap: &Snapshot,
+    element: Option<u32>,
+    verb: &Verb,
+) -> Option<(Rect, String, Option<String>)> {
+    let (rect, target) = match element {
+        Some(id) => {
+            let e = snap.get(id)?;
+            let name = e.name.trim();
+            let target = if name.is_empty() { e.kind } else { name };
+            (e.rect, target.to_string())
+        }
+        None => (snap.window.rect, snap.window.title.clone()),
+    };
+    Some(match verb {
+        Verb::On(v) => (rect, v.to_string(), Some(target)),
+        Verb::Keys(keys) => (rect, mark::keys_caption(keys), None),
+    })
 }
 
 /// ` (via takeover)`: how the action reached the app, placed after the answer's first word.

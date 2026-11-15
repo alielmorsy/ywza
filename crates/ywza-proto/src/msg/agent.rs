@@ -195,6 +195,12 @@ pub enum AgentMsg {
         name: String,
         text: String,
     },
+    /// What an action of `session` is about to do, e.g. `Click "Save"`. Never stored in the
+    /// session; typed text is never in it.
+    Activity {
+        session: SessionId,
+        text: String,
+    },
     /// Lens (`LensStart`): the tappable elements of the followed window, for chips over the
     /// live view. `window` is `w<id>`; `monitor`, `rect` and the element rects are relative to
     /// that monitor's origin, as in `WindowInfo`. `full` true: `elements` is the whole list and
@@ -449,6 +455,13 @@ mod tests {
             },
             json!({"type":"lens","window":"w3","title":"t","monitor":1,"rect":rect_json,"full":false,
                    "elements":[],"removed":[8,9]}),
+        );
+        check(
+            Activity {
+                session: sid(),
+                text: "Click \"Save\"".into(),
+            },
+            json!({"type":"activity","session":SID,"text":"Click \"Save\""}),
         );
         check(
             ToolResult {
