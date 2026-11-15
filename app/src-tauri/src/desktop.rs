@@ -6,7 +6,7 @@ use tauri::{
     AppHandle, Manager, Window, WindowEvent,
 };
 
-use crate::conn;
+use crate::{conn, dock};
 
 fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
@@ -46,6 +46,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
 
 pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     tray(app)?;
+    dock::setup(app)?;
     conn::start(app, conn::LOCAL);
     Ok(())
 }

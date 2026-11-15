@@ -5,6 +5,8 @@ mod commands;
 mod conn;
 #[cfg(desktop)]
 mod desktop;
+#[cfg(desktop)]
+mod dock;
 mod live;
 #[cfg_attr(mobile, path = "mcp_mobile.rs")]
 mod mcp;
@@ -28,6 +30,20 @@ pub fn run() {
             commands::remove_device,
             commands::send,
             commands::live_channel,
+            #[cfg(desktop)]
+            dock::dock_place,
+            #[cfg(desktop)]
+            dock::dock_show,
+            #[cfg(desktop)]
+            dock::dock_hide,
+            #[cfg(desktop)]
+            dock::dock_monitor,
+            #[cfg(desktop)]
+            dock::dock_target,
+            #[cfg(desktop)]
+            dock::dock_restore_focus,
+            #[cfg(desktop)]
+            dock::dock_shortcut,
             xfer::push_file,
             xfer::push_bytes,
             mcp::mcp_status,
