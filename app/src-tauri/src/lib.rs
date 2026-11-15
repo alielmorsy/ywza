@@ -1,6 +1,8 @@
 //! ywza app backend: keeps control connections to paired devices (and this PC's agent on
 //! desktop) and bridges them to the webview.
 
+#[cfg(desktop)]
+mod activate;
 mod commands;
 mod conn;
 #[cfg(desktop)]
@@ -12,13 +14,19 @@ mod live;
 mod mcp;
 #[cfg(mobile)]
 mod mobile;
+#[cfg(desktop)]
+mod shell;
 mod xfer;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // reqwest is built without a TLS provider; the phone has no local agent to install one.
     let _ = rustls::crypto::ring::default_provider().install_default();
-    let builder = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Must be the first plugin, so a second launch exits before anything else starts.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(activate::forwarded));
+    let builder = builder
         .plugin(tauri_plugin_opener::init())
         .manage(conn::Hub::default())
         .manage(live::Live::default())
@@ -44,6 +52,10 @@ pub fn run() {
             dock::dock_restore_focus,
             #[cfg(desktop)]
             dock::dock_shortcut,
+            #[cfg(desktop)]
+            shell::explorer_menu_status,
+            #[cfg(desktop)]
+            shell::explorer_menu_set,
             xfer::push_file,
             xfer::push_bytes,
             mcp::mcp_status,
@@ -52,6 +64,8 @@ pub fn run() {
         .setup(|app| {
             #[cfg(desktop)]
             desktop::setup(app.handle())?;
+            #[cfg(desktop)]
+            activate::launched(app.handle());
             #[cfg(mobile)]
             mobile::setup(app.handle())?;
             Ok(())

@@ -4,6 +4,7 @@ import { Icon } from "../Icon";
 import { ApprovalRules } from "./ApprovalRules";
 import { Num, Row, Section, Tog } from "./Form";
 import { DockShortcut } from "./DockShortcut";
+import { ExplorerMenu } from "./ExplorerMenu";
 import { McpClients } from "./McpClients";
 import { cleanConfig, saveConfig, trimRules } from "./localConfig";
 
@@ -137,6 +138,7 @@ export default function Settings() {
               <Num value={draft.desktop.lens_dwell_ms} max={2000} unit="ms" onChange={(v) => up((c) => (c.desktop.lens_dwell_ms = v))} />
             </Row>
             <DockShortcut />
+            <ExplorerMenu />
             <Row t="Text recognition" w="w-[150px]">
               <select className="field" value={draft.ocr.engine} onChange={(e) => up((c) => (c.ocr.engine = e.target.value as Config["ocr"]["engine"]))}>
                 <option value="auto">Automatic</option>
