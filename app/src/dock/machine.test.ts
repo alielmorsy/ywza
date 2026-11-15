@@ -39,6 +39,19 @@ test("expanding", () => {
   assert.equal(step({ mode: "working", session: "a" }, { t: "hotkey" }).mode, "expanded");
 });
 
+test("closing the panel goes back to the tab while running", () => {
+  const open = { mode: "expanded" as const, session: "a" };
+  assert.equal(step(open, { t: "esc", running: true }).mode, "working");
+  assert.equal(step(open, { t: "esc", running: false }).mode, "hidden");
+  assert.equal(step(open, { t: "blur", running: true }).mode, "working");
+  assert.equal(step(open, { t: "blur", running: false }).mode, "hidden");
+});
+
+test("clicking outside closes the prompt but not the tab", () => {
+  assert.equal(step({ mode: "prompt" }, { t: "blur", running: false }).mode, "hidden");
+  assert.equal(step({ mode: "working", session: "a" }, { t: "blur", running: true }).mode, "working");
+});
+
 test("geometry scales with the monitor", () => {
   const work = { x: 100, y: 50, w: 2000, h: 1000, scale: 2 };
   assert.deepEqual(shape("prompt", false, work).base, { x: 100 + (2000 - 1280) / 2, y: 50 + 220, w: 1280, h: 128 });

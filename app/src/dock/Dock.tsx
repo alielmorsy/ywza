@@ -54,11 +54,25 @@ export default function Dock() {
     return () => { un.then((f) => f()); };
   }, []);
 
+  const running = useRef(false);
+  running.current = status === "running";
+  const mode = useRef<Mode>("hidden");
+  mode.current = s.mode;
+  // Closed by clicking elsewhere: the user already chose where focus goes, so do not pull it back.
+  const blurred = useRef(false);
+  const close = () => dispatch({ t: "esc", running: running.current });
+
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented) dispatch({ t: "esc" }); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented) close(); };
+    const onBlur = () => {
+      if (mode.current !== "prompt" && mode.current !== "expanded") return;
+      blurred.current = true;
+      dispatch({ t: "blur", running: running.current });
+    };
     addEventListener("keydown", onKey);
-    return () => removeEventListener("keydown", onKey);
-  }, []);
+    addEventListener("blur", onBlur);
+    return () => { removeEventListener("keydown", onKey); removeEventListener("blur", onBlur); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (oldest) { if (s.approval !== oldest.request) dispatch({ t: "approval", request: oldest.request }); }
@@ -78,15 +92,14 @@ export default function Dock() {
 
   const prev = useRef<Mode>("hidden");
   useEffect(() => {
-    if ((prev.current === "prompt" || prev.current === "expanded") && s.mode === "hidden") dockRestoreFocus().catch(() => {});
+    const left = prev.current === "prompt" || prev.current === "expanded";
+    if (left && s.mode !== "prompt" && s.mode !== "expanded" && !blurred.current) dockRestoreFocus().catch(() => {});
+    blurred.current = false;
     prev.current = s.mode;
   }, [s.mode]);
 
-  // Take focus only when there is something to type into: the prompt, or the follow-up box once the run stops.
-  const focusable = s.mode === "prompt" || (s.mode === "expanded" && status !== "running");
-  useEffect(() => {
-    if (s.mode === "expanded" && placed.current) dockShow(focusable).catch(() => {});
-  }, [focusable]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The prompt and the open panel take focus so Esc and clicking elsewhere close them.
+  const focusable = s.mode === "prompt" || s.mode === "expanded";
 
   const hasApproval = s.approval !== undefined;
   useEffect(() => {
@@ -162,7 +175,7 @@ export default function Dock() {
     working: tab("working", activity ?? ""),
     done: tab("done", firstLine(events)),
     failed: tab("failed", failure?.error ?? ""),
-    expanded: s.session ? <Expanded session={s.session} onClose={() => dispatch({ t: "esc" })} /> : null,
+    expanded: s.session ? <Expanded session={s.session} onClose={close} /> : null,
   }[view.mode];
   const kind = view.mode === "prompt" ? "prompt" : view.mode === "expanded" ? "panel" : "tab";
 

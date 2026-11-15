@@ -5,7 +5,8 @@ export type DockState = { mode: Mode; session?: string; approval?: number };
 export type DockEvent =
   | { t: "hotkey" }
   | { t: "submit"; session: string }
-  | { t: "esc" }
+  | { t: "esc"; running?: boolean }
+  | { t: "blur"; running: boolean }
   | { t: "approval"; request: number }
   | { t: "resolved"; request: number }
   | { t: "done" }
@@ -31,7 +32,11 @@ export function step(s: DockState, e: DockEvent): DockState {
     case "submit":
       return mode === "prompt" ? to(s, "working", e.session) : s;
     case "esc":
-      return mode === "prompt" || mode === "done" || mode === "failed" || mode === "expanded" ? to(s, "hidden") : s;
+      if (mode === "expanded") return to(s, e.running ? "working" : "hidden");
+      return mode === "prompt" || mode === "done" || mode === "failed" ? to(s, "hidden") : s;
+    case "blur":
+      if (mode === "expanded") return to(s, e.running ? "working" : "hidden");
+      return mode === "prompt" ? to(s, "hidden") : s;
     case "approval":
       return { ...s, approval: e.request };
     case "resolved": {
