@@ -5,6 +5,7 @@ mod d3d;
 mod error;
 mod input;
 mod launch;
+mod overlay;
 mod stream_capture;
 mod uia;
 mod util;
@@ -16,6 +17,7 @@ pub use input::{
     set_clipboard_text, set_idle_before_input, type_text,
 };
 pub use launch::{find_program, launch};
+pub use overlay::{overlay_hide, overlay_mark, overlay_restore, overlay_update};
 pub use stream_capture::{
     live_key, live_mouse_button, live_mouse_move, live_wheel, CursorWatch, FocusWatch,
     MonitorCapture,

@@ -25,7 +25,8 @@ pub fn visible(msg: &AgentMsg, perms: &Permissions) -> bool {
     match msg {
         AgentMsg::Event { .. }
         | AgentMsg::ApprovalRequest { .. }
-        | AgentMsg::ApprovalResolved { .. } => perms.chat || perms.tools,
+        | AgentMsg::ApprovalResolved { .. }
+        | AgentMsg::Activity { .. } => perms.chat || perms.tools,
         AgentMsg::Config { .. } => perms.settings,
         _ => true,
     }

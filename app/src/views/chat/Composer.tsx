@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
 import { Icon } from "../../Icon";
 import { EFFORTS, LOCAL, cancel, prompt, send, useStore, type ApprovalMode, type Effort } from "../../api";
+import { APPROVALS, approvalWarn } from "../../approval";
 import { setComposer, setUi, useNav } from "../../nav";
 import { label } from "./util";
 
@@ -94,10 +95,8 @@ export function Composer({ dev, session, running, compact, text, setText, inputR
           </label>
         </div></details>
         <label className="flex min-w-0 flex-wrap items-center gap-1.5">Approvals
-          <select className={`${sel} ${approval === "auto" ? "!border-warn text-warn" : ""}`} value={approval ?? "rules"} onChange={(e) => setComposer({ approval: e.target.value === "rules" ? undefined : (e.target.value as ApprovalMode) })}>
-            <option value="rules">Follow rules</option>
-            <option value="auto">Auto: run without asking</option>
-            <option value="always">Ask before every action</option>
+          <select className={`${sel} ${approvalWarn(approval)}`} value={approval ?? "rules"} onChange={(e) => setComposer({ approval: e.target.value === "rules" ? undefined : (e.target.value as ApprovalMode) })}>
+            {APPROVALS.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
           </select>
         </label>
       </div>

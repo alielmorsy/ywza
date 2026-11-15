@@ -5,6 +5,7 @@ use ywza_desktop::{self as desk, Button};
 use super::{
     act::{act, Report},
     find,
+    mark::{click_verb, Verb},
     output::{desk_err, flat},
     util::blocking,
     Ctx, ElementArg, Tool, ToolOutput, WindowArg,
@@ -82,7 +83,8 @@ impl Tool for Click {
                     ))
                 }
             };
-            act(cx, w, Some(id), cx.report(Report::Diff), move |s| {
+            let verb = Verb::On(click_verb(button, count, expand));
+            act(cx, w, Some(id), verb, cx.report(Report::Diff), move |s| {
                 let tier = if expand {
                     desk::expand(s, id)
                 } else {
@@ -114,9 +116,14 @@ impl Tool for LongPress {
         flat(async {
             let (w, id) = (self.window.0, self.element.0);
             let ms = self.ms.min(10_000);
-            act(cx, w, Some(id), cx.report(Report::Diff), move |s| {
-                desk::long_press(s, id, ms).map(Some)
-            })
+            act(
+                cx,
+                w,
+                Some(id),
+                Verb::On("Hold"),
+                cx.report(Report::Diff),
+                move |s| desk::long_press(s, id, ms).map(Some),
+            )
             .await
         })
         .await
@@ -167,7 +174,7 @@ impl Tool for TypeText {
                     "nothing changed in the window: the text went nowhere. Click the field (click text= its label or placeholder), then type_text without element.",
                 )
             });
-            let typed = act(cx, w, id, mode, move |s| match id {
+            let typed = act(cx, w, id, Verb::On("Type in"), mode, move |s| match id {
                 Some(id) if ocr_box => {
                     desk::click(s, id, Button::Left, 1, real)?;
                     std::thread::sleep(std::time::Duration::from_millis(150));
@@ -187,7 +194,8 @@ impl Tool for TypeText {
             }
             // Enter on its own, once the text is in: a completion popup opened by the typing
             // may take the first Enter, which the error below then reports.
-            act(cx, w, None, cx.report(Report::Changed(
+            let verb = Verb::Keys("Enter".into());
+            act(cx, w, None, verb, cx.report(Report::Changed(
                 "the text is in, but Enter changed nothing (not sent?). Check with a screenshot; press_keys enter or click the Send button.",
             )), move |_| desk::press_keys(Some(w), "enter").map(|_| None))
             .await
@@ -212,7 +220,8 @@ impl Tool for PressKeys {
             let Self { window, keys } = self;
             match window.map(|w| w.0) {
                 Some(w) if cx.has_snap(w) => {
-                    act(cx, w, None, cx.report(Report::Diff), move |_| {
+                    let verb = Verb::Keys(keys.clone());
+                    act(cx, w, None, verb, cx.report(Report::Diff), move |_| {
                         desk::press_keys(Some(w), &keys).map(|_| None)
                     })
                     .await
@@ -272,9 +281,14 @@ impl Tool for Scroll {
             let w = self.window.0;
             let id = self.element.map(|e| e.0);
             let (dx, dy, real) = (self.dx, self.dy, self.real);
-            act(cx, w, id, cx.report(Report::Diff), move |s| {
-                desk::scroll(s, id, dx, dy, real).map(Some)
-            })
+            act(
+                cx,
+                w,
+                id,
+                Verb::On("Scroll"),
+                cx.report(Report::Diff),
+                move |s| desk::scroll(s, id, dx, dy, real).map(Some),
+            )
             .await
         })
         .await

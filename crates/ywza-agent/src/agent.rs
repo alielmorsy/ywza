@@ -80,6 +80,7 @@ impl Agent {
             local_client,
             local_only,
         });
+        agent.tools.set_activity(agent.tx.clone());
         tokio::spawn(net::watch_relay(agent.endpoint.clone()));
         if watching {
             crate::watch::spawn(agent.clone());
@@ -157,6 +158,7 @@ impl Agent {
     pub async fn run_tool(&self, space: Space, name: &str, args: &Value) -> ToolOutput {
         let cfg = self.config.get();
         ywza_desktop::set_idle_before_input(cfg.desktop.idle_before_input_ms.into());
+        ywza_desktop::set_lens(cfg.desktop.lens, cfg.desktop.lens_dwell_ms.into());
         // Taken before the call: it reads the element list the call's ids refer to.
         let rec = crate::plans::record::before(&self.tools, space, name, args);
         let args = match crate::vault::substitute(name, args) {

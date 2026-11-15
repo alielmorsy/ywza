@@ -7,10 +7,11 @@
 
 use std::time::{Duration, Instant};
 
-use ywza_desktop::{self as desk, Button, Image, Rect, Snapshot, Tier, WindowId};
+use ywza_desktop::{self as desk, Button, Image, MarkKind, Rect, Snapshot, Tier, WindowId};
 
 use super::{
     act::{settle_diff, via},
+    mark::{self, click_verb},
     ocr::{engine, read_lines, snapshot_with_ocr},
     output::{desk_err, MODEL_IMAGE_MAX, R},
     util::blocking,
@@ -203,6 +204,7 @@ async fn settle_pixels(w: WindowId, max: Duration) {
 }
 
 async fn click_spot(
+    cx: &Ctx,
     snap: Snapshot,
     spot: Spot,
     button: Button,
@@ -210,9 +212,16 @@ async fn click_spot(
     real: bool,
 ) -> desk::Result<Tier> {
     let w = snap.window.id;
-    blocking(move || match spot.element {
-        Some(id) => desk::click(&snap, id, button, count, real),
-        None => desk::click_at(w, spot.rect.center(), button, count).map(|_| Tier::Takeover),
+    let cx = cx.clone();
+    blocking(move || {
+        let verb = click_verb(button, count, false);
+        let mark = mark::begin(&cx, w, spot.rect, verb, Some(&spot.text), MarkKind::Element);
+        let res = match spot.element {
+            Some(id) => desk::click(&snap, id, button, count, real),
+            None => desk::click_at(w, spot.rect.center(), button, count).map(|_| Tier::Takeover),
+        };
+        mark::finish(mark, res.is_ok());
+        res
     })
     .await
 }
@@ -282,7 +291,9 @@ pub async fn click_text(
         } else {
             (Button::Left, 1)
         };
-        tier = click_spot(snap, spot, b, c, real).await.map_err(desk_err)?;
+        tier = click_spot(cx, snap, spot, b, c, real)
+            .await
+            .map_err(desk_err)?;
         what = format!("clicked{} {place}", via(Some(tier)));
         if !last {
             settle_pixels(w, SETTLE_MAX).await;
@@ -364,9 +375,17 @@ pub async fn click_point(cx: &Ctx, w: WindowId, x: i32, y: i32, button: Button, 
     }
     let at = (img.origin.0 + px, img.origin.1 + py);
     let base = cx.snap(w);
-    blocking(move || desk::click_at(w, at, button, count))
-        .await
-        .map_err(desk_err)?;
+    let mcx = cx.clone();
+    blocking(move || {
+        let verb = click_verb(button, count, false);
+        let rect = Rect::new(at.0 - 1, at.1 - 1, 2, 2);
+        let mark = mark::begin(&mcx, w, rect, verb, None, MarkKind::Point);
+        let res = desk::click_at(w, at, button, count);
+        mark::finish(mark, res.is_ok());
+        res
+    })
+    .await
+    .map_err(desk_err)?;
     let what = format!("clicked{} at {x},{y}", via(Some(Tier::Takeover)));
     finish(cx, w, base, what, Tier::Takeover).await
 }

@@ -63,6 +63,7 @@ mod tests {
         assert!(c.llm.vision);
         assert_eq!(c.ocr.engine, OcrEngine::Auto);
         assert_eq!(c.desktop.idle_before_input_ms, 1000);
+        assert!(Desktop::default().lens && Desktop::default().lens_dwell_ms == 120);
     }
 
     #[test]

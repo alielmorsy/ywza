@@ -3,6 +3,8 @@ import { EFFORTS, LOCAL, send, useStore, type Config, type Effort } from "../api
 import { Icon } from "../Icon";
 import { ApprovalRules } from "./ApprovalRules";
 import { Num, Row, Section, Tog } from "./Form";
+import { DockShortcut } from "./DockShortcut";
+import { ExplorerMenu } from "./ExplorerMenu";
 import { McpClients } from "./McpClients";
 import { cleanConfig, saveConfig, trimRules } from "./localConfig";
 
@@ -129,6 +131,14 @@ export default function Settings() {
             <Row t="Idle before input" d="How long you stay idle before the agent clicks or types" w="w-[150px]">
               <Num value={draft.desktop.idle_before_input_ms} unit="ms" onChange={(v) => up((c) => (c.desktop.idle_before_input_ms = v))} />
             </Row>
+            <Row t="Show what the agent touches" d="Outlines the target on screen just before each action" w="w-auto">
+              <Tog on={draft.desktop.lens} set={(v) => up((c) => (c.desktop.lens = v))} />
+            </Row>
+            <Row t="Pause before acting" d="How long the outline shows before the agent acts" w="w-[150px]">
+              <Num value={draft.desktop.lens_dwell_ms} max={2000} unit="ms" onChange={(v) => up((c) => (c.desktop.lens_dwell_ms = v))} />
+            </Row>
+            <DockShortcut />
+            <ExplorerMenu />
             <Row t="Text recognition" w="w-[150px]">
               <select className="field" value={draft.ocr.engine} onChange={(e) => up((c) => (c.ocr.engine = e.target.value as Config["ocr"]["engine"]))}>
                 <option value="auto">Automatic</option>

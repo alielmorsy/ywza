@@ -41,7 +41,7 @@ export interface Config {
   llm: { base_url: string; api_key: string; model: string; max_steps: number; vision: boolean; effort?: Effort | null; price_in?: number | null; price_out?: number | null };
   approval: { rules: ApprovalRule[] };
   ocr: { engine: "auto" | "windows" | "paddle" };
-  desktop: { agent_virtual_desktop: boolean; idle_before_input_ms: number };
+  desktop: { agent_virtual_desktop: boolean; idle_before_input_ms: number; lens: boolean; lens_dwell_ms: number };
   stream: { fps: number; bitrate_kbps: number; cursor: boolean };
   log: Record<string, unknown>;
 }
@@ -83,7 +83,9 @@ export type AgentMsg =
   | { type: "image"; png_base64: string; width: number; height: number }
   | { type: "error"; message: string }
   | { type: "lens"; window: string; title: string; monitor: number; rect: Rect; full: boolean; elements: LensElement[]; removed?: number[] }
-  | { type: "watch_fired"; watcher: string; name: string; text: string };
+  | { type: "watch_fired"; watcher: string; name: string; text: string }
+  /** What the agent is about to do in `session`, one short line. Not part of the history. */
+  | { type: "activity"; session: Sid; text: string };
 /** What a screenshot points at. */
 export type Target = { type: "monitor"; id: number } | { type: "window"; id: number };
 export type ClientMsg =
@@ -177,12 +179,14 @@ export interface State {
   /** This PC's agent tools (`list_tools`). */
   tools: ToolInfo[];
   approvals: Record<number, Approval>;
+  /** Latest `activity` line per session of this PC's agent. */
+  activity: Record<Sid, string>;
   pairing?: { code: string; expires_at: number };
   /** Latest error from any device or command; the status bar shows it. */
   error?: { device: string; message: string; at: number };
 }
 
-let state: State = { devices: {}, sessions: {}, remote: {}, remoteApprovals: {}, shots: {}, events: {}, models: [], tools: [], approvals: {} };
+let state: State = { devices: {}, sessions: {}, remote: {}, remoteApprovals: {}, shots: {}, events: {}, models: [], tools: [], approvals: {}, activity: {} };
 const subs = new Set<() => void>();
 const set = (fn: (s: State) => State) => { state = fn(state); subs.forEach((f) => f()); };
 const dev = (name: string): Device =>
@@ -381,6 +385,7 @@ function onMsg(device: string, m: AgentMsg) {
       });
     case "watch_fired":
       return patch(device, (d) => ({ fired: [{ watcher: m.watcher, name: m.name, text: m.text, at: Date.now() }, ...(d.fired ?? []).filter((f) => f.watcher !== m.watcher)].slice(0, 20) }));
+    case "activity": if (device === LOCAL) set((s) => ({ ...s, activity: { ...s.activity, [m.session]: m.text } })); return;
     case "error": {
       const unknown = /unknown variant `(\w+)`/.exec(m.message)?.[1];
       // No device list coming back: drive alone instead of waiting forever.
@@ -420,3 +425,25 @@ export const lensAct = (device: string, window: string, element: number, o: { te
 /** Hides a fired-watcher notice. */
 export const dismissFired = (device: string, watcher: string) =>
   patch(device, (d) => ({ fired: (d.fired ?? []).filter((f) => f.watcher !== watcher) }));
+
+// ---- dock window (desktop only; the commands live in src-tauri) -------------------------------
+/** Physical pixels. */
+export interface DockRect { x: number; y: number; w: number; h: number }
+export interface DockMonitor extends DockRect { scale: number }
+export type DockKey = "alt+backquote" | "ctrl+alt+space" | "alt+space";
+export const dockPlace = (r: DockRect) => invoke("dock_place", { ...r });
+export const dockShow = (focus: boolean) => invoke("dock_show", { focus });
+export const dockHide = () => invoke("dock_hide");
+/** Work area of the monitor the mouse is on. */
+export const dockMonitor = () => invoke<DockMonitor>("dock_monitor");
+/** The window that had focus before the dock opened. */
+export const dockTarget = () => invoke<{ window: string; title: string; process: string } | null>("dock_target");
+export const dockRestoreFocus = () => invoke("dock_restore_focus");
+/** Rejects with a message when another program holds the key. */
+export const dockShortcut = (key: DockKey) => invoke("dock_shortcut", { key });
+export const onDockHotkey = (f: () => void) => listen("dock-hotkey", f);
+/** Something attached to the command box: copied text, files or a screen snip saved as PNG. */
+export type ContextItem = { kind: "path"; path: string; dir: boolean } | { kind: "text"; text: string } | { kind: "image"; path: string };
+export interface DockOpen { source: "explorer" | "clipboard"; items: ContextItem[] }
+/** The dock was asked to open with `items` attached (Win+Alt+V, Explorer's menu). */
+export const onDockOpen = (f: (o: DockOpen) => void) => listen<DockOpen>("dock-open", (e) => f(e.payload));

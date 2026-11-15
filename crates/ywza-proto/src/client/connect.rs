@@ -109,14 +109,16 @@ async fn exchange(
     }
 }
 
-/// Sends one request and returns the next reply, turning `error` into Err. Approval messages
-/// that arrive meanwhile are skipped.
+/// Sends one request and returns the next reply, turning `error` into Err. Approval and activity
+/// broadcasts that arrive meanwhile are skipped.
 pub async fn ask(c: &mut Control, msg: ClientMsg) -> Result<AgentMsg> {
     write_frame(&mut c.send, &msg).await?;
     loop {
         match read_frame(&mut c.recv).await? {
             AgentMsg::Error { message } => return Err(anyhow!("agent: {message}")),
-            AgentMsg::ApprovalRequest { .. } | AgentMsg::ApprovalResolved { .. } => {}
+            AgentMsg::ApprovalRequest { .. }
+            | AgentMsg::ApprovalResolved { .. }
+            | AgentMsg::Activity { .. } => {}
             m => return Ok(m),
         }
     }

@@ -72,7 +72,7 @@ const config: any = {
   llm: { base_url: "http://127.0.0.1:1234/v1", api_key: "", model: "qwen3-coder-30b", max_steps: 60, vision: true, effort: null },
   ocr: { engine: "auto" },
   approval: { rules: [{ tool: "run_command", pattern: "git status*", action: "allow" }] },
-  desktop: { agent_virtual_desktop: false, idle_before_input_ms: 1000 },
+  desktop: { agent_virtual_desktop: false, idle_before_input_ms: 1000, lens: true, lens_dwell_ms: 120 },
   peers: [
     { id: "7f3a9c2e41d0b5a8c91e", name: "Ali's phone", view: true, chat: true, control: true, tools: false, settings: false },
     { id: "b204ee71c3a95d10f6aa", name: "berkeley", view: true, chat: false, control: false, tools: true, settings: false },
