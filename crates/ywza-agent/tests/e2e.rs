@@ -298,7 +298,7 @@ async fn local_tcp_port_lists_and_calls_tools() {
     let AgentMsg::Tools { list } = reply(&mut s).await else {
         panic!("expected tools")
     };
-    assert_eq!(list.len(), 23);
+    assert_eq!(list.len(), 37);
     assert!(list
         .iter()
         .any(|t| t.name == "wait" && t.parameters["type"] == "object"));
