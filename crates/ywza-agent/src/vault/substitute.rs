@@ -58,7 +58,10 @@ mod tests {
     use super::*;
 
     fn vault() -> Entries {
-        Entries::from([("gh".into(), "s3cret".into()), ("a".into(), "{{vault:gh}}".into())])
+        Entries::from([
+            ("gh".into(), "s3cret".into()),
+            ("a".into(), "{{vault:gh}}".into()),
+        ])
     }
 
     #[test]
@@ -98,9 +101,15 @@ mod tests {
     #[test]
     fn other_tools_fields_and_plain_text_are_left_alone() {
         let args = json!({"command":"echo {{vault:gh}}","text":"{{vault:nope"});
-        assert_eq!(substitute_args("run_command", &args, &vault()).unwrap(), args);
+        assert_eq!(
+            substitute_args("run_command", &args, &vault()).unwrap(),
+            args
+        );
         let plain = json!({"text":"hello {{ not vault }}"});
-        assert_eq!(substitute_args("type_text", &plain, &vault()).unwrap(), plain);
+        assert_eq!(
+            substitute_args("type_text", &plain, &vault()).unwrap(),
+            plain
+        );
         let open = json!({"text":"a {{vault:gh"});
         assert_eq!(substitute_args("type_text", &open, &vault()).unwrap(), open);
     }

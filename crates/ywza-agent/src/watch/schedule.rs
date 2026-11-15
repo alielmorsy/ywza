@@ -72,7 +72,10 @@ mod tests {
         assert_eq!(next_after(None, at, t(1, 8, 0, 0)), Some(t(1, 9, 30, 0)));
         assert_eq!(next_after(None, at, t(1, 9, 30, 0)), Some(t(2, 9, 30, 0)));
         assert_eq!(next_after(None, at, t(1, 10, 0, 0)), Some(t(2, 9, 30, 0)));
-        assert_eq!(next_after(Some(5), None, t(1, 10, 0, 0)), Some(t(1, 10, 5, 0)));
+        assert_eq!(
+            next_after(Some(5), None, t(1, 10, 0, 0)),
+            Some(t(1, 10, 5, 0))
+        );
         assert_eq!(next_after(None, None, t(1, 10, 0, 0)), None);
     }
 

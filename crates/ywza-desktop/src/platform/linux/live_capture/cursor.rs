@@ -62,7 +62,11 @@ fn argb_to_rgba(img: &[u32]) -> Vec<u8> {
     img.iter()
         .flat_map(|&p| {
             let a = p >> 24;
-            let un = |v: u32| ((v & 255) * 255).checked_div(a).map_or(0, |v| v.min(255) as u8);
+            let un = |v: u32| {
+                ((v & 255) * 255)
+                    .checked_div(a)
+                    .map_or(0, |v| v.min(255) as u8)
+            };
             [un(p >> 16), un(p >> 8), un(p), a as u8]
         })
         .collect()

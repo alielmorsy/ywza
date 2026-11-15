@@ -90,8 +90,12 @@ pub async fn act(
                 ..ToolOutput::ok(if d.is_empty() {
                     format!("done{}; no visible change", via(tier))
                 } else {
-                    format!("done{}; changes:
-{}", via(tier), desk::render_diff(&d))
+                    format!(
+                        "done{}; changes:
+{}",
+                        via(tier),
+                        desk::render_diff(&d)
+                    )
                 })
             })
         }

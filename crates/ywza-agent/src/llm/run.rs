@@ -149,7 +149,9 @@ async fn steps(
             };
             agent.emit_tool_result(sid, &id, name, &out);
             if let Some(args) = &local_args {
-                let found = agent.check_blocker(sid, name, args, &out, &mut streak).await;
+                let found = agent
+                    .check_blocker(sid, name, args, &out, &mut streak)
+                    .await;
                 blocker = blocker.or(found);
             }
             if let (Some(png), true, false) = (&out.image_png, llm.vision, name == SHOW_SCREENSHOT)

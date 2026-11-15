@@ -180,7 +180,11 @@ async fn eval(
             let engine = ocr_engine(agent.config.get().ocr.engine);
             let want = desk::ocr_norm(text);
             match shots.ocr(w.id, engine).await {
-                Some(lines) if lines.iter().any(|l| desk::ocr_matches(&desk::ocr_norm(l), &want)) => {
+                Some(lines)
+                    if lines
+                        .iter()
+                        .any(|l| desk::ocr_matches(&desk::ocr_norm(l), &want)) =>
+                {
                     Truth::Hit(format!("{text:?} on screen in {:?}", w.title))
                 }
                 Some(_) => Truth::Miss,
@@ -190,7 +194,11 @@ async fn eval(
         Condition::TermOutput { term, text } => {
             let (terms, id) = (agent.tools.terms(), TermId(*term));
             let out = blocking(move || terms.read(id, TERM_LINES)).await;
-            match out.as_ref().ok().and_then(|o| term_line(o, &text.to_lowercase())) {
+            match out
+                .as_ref()
+                .ok()
+                .and_then(|o| term_line(o, &text.to_lowercase()))
+            {
                 Some(l) => Truth::Hit(format!("{id} output: {}", l.trim())),
                 None => Truth::Miss,
             }
@@ -246,7 +254,13 @@ fn announce(agent: &Agent, w: &Watcher, text: String) {
 
 fn fire(agent: &Arc<Agent>, store: &Store, w: &Watcher, run: &mut Run, detail: String) {
     let now = now_ms();
-    match gate(now, w.last_fired_ms, &mut run.recent, w.min_gap_s, w.max_per_hour) {
+    match gate(
+        now,
+        w.last_fired_ms,
+        &mut run.recent,
+        w.min_gap_s,
+        w.max_per_hour,
+    ) {
         Gate::Skip => {}
         Gate::Disable => {
             if let Err(e) = store.set_enabled(&w.id, false) {

@@ -225,13 +225,7 @@ impl Tools {
     }
 
     /// Runs a tool in an element space. `ocr` is the configured engine.
-    pub async fn call(
-        &self,
-        space: Space,
-        name: &str,
-        args: &Value,
-        ocr: OcrEngine,
-    ) -> ToolOutput {
+    pub async fn call(&self, space: Space, name: &str, args: &Value, ocr: OcrEngine) -> ToolOutput {
         let cx = Ctx {
             shared: self.shared.clone(),
             space,

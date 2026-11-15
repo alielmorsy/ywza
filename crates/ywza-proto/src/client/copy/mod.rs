@@ -80,7 +80,11 @@ pub async fn copy(ep: &Endpoint, srcs: &[String], dst: &str, recursive: bool) ->
             );
         }
     }
-    if !srcs.iter().chain([&dst]).any(|l| matches!(l, Loc::Remote { .. })) {
+    if !srcs
+        .iter()
+        .chain([&dst])
+        .any(|l| matches!(l, Loc::Remote { .. }))
+    {
         bail!("both sides are on this machine; use your shell's copy");
     }
     let mut st = Stats::default();
@@ -148,9 +152,7 @@ async fn copy_one(
 ) -> Result<()> {
     let open = |name: &str| {
         let name = name.to_string();
-        async move {
-            Ok::<_, anyhow::Error>(Peer::new(&name, dial(ep, &name, CLIENT_NAME).await?.0))
-        }
+        async move { Ok::<_, anyhow::Error>(Peer::new(&name, dial(ep, &name, CLIENT_NAME).await?.0)) }
     };
     match (src, dst) {
         (Loc::Local(_), Loc::Local(_)) => bail!("both sides are on this machine"),

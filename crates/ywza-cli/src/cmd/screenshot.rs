@@ -15,7 +15,15 @@ pub async fn run(
             id: monitor.unwrap_or(0),
         },
     };
-    match ask(c, ClientMsg::Screenshot { target, max_width: None }).await? {
+    match ask(
+        c,
+        ClientMsg::Screenshot {
+            target,
+            max_width: None,
+        },
+    )
+    .await?
+    {
         AgentMsg::Image {
             png_base64,
             width,

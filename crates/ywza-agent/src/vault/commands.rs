@@ -21,7 +21,10 @@ pub fn cli(dir: &Path, args: &[String]) -> anyhow::Result<()> {
             let mut entries = load(dir)?;
             entries.insert(key.into(), value);
             save(dir, &entries)?;
-            eprintln!("saved `{key}` in {}; use it as {{{{vault:{key}}}}}", dir.join(FILE).display());
+            eprintln!(
+                "saved `{key}` in {}; use it as {{{{vault:{key}}}}}",
+                dir.join(FILE).display()
+            );
         }
         (Some("list"), None) => {
             for key in load(dir)?.keys() {

@@ -72,7 +72,8 @@ pub fn parse_batch(window: Option<&Value>, list: &[Value]) -> Result<Vec<Step>, 
 fn guard_failure(cx: &Ctx, args: &Value, want: &str) -> Option<String> {
     let snap = cx.snap(parse_window(&args["window"])?)?;
     let e = snap.get(args.get("element").and_then(parse_element)?)?;
-    (!guard::contains(&e.name, want)).then(|| format!("guard failed: [{}] is now {}", e.id, e.line()))
+    (!guard::contains(&e.name, want))
+        .then(|| format!("guard failed: [{}] is now {}", e.id, e.line()))
 }
 
 /// Outcome of one batch action; `error` set = it failed.

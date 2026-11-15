@@ -219,7 +219,12 @@ impl OwnedTerm {
         let s = lock(&self.shared);
         let total = s.scanner.pos();
         let raw = if s.sh.runs > runs_before {
-            slice(&s.ring, total, s.sh.out_start, s.sh.out_end.unwrap_or(total))
+            slice(
+                &s.ring,
+                total,
+                s.sh.out_start,
+                s.sh.out_end.unwrap_or(total),
+            )
         } else {
             Vec::new()
         };

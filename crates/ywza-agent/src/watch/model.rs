@@ -102,7 +102,10 @@ impl Condition {
     /// True for the moment it happens, not a state that holds: fires every time, no edge.
     pub fn is_event(&self) -> bool {
         use Condition::*;
-        matches!(self, ElementChanges { .. } | TermExit { .. } | Schedule { .. })
+        matches!(
+            self,
+            ElementChanges { .. } | TermExit { .. } | Schedule { .. }
+        )
     }
 
     pub fn describe(&self) -> String {
@@ -117,7 +120,10 @@ impl Condition {
                 format!("text {text:?} in window {title:?}{ocr}")
             }
             TermOutput { term, text } => format!("t{term} output shows {text:?}"),
-            TermExit { term, code: Some(c) } => format!("t{term} command exits with {c}"),
+            TermExit {
+                term,
+                code: Some(c),
+            } => format!("t{term} command exits with {c}"),
             TermExit { term, code: None } => format!("t{term} command exits non-zero"),
             Schedule {
                 every_min: Some(m), ..
@@ -141,7 +147,10 @@ impl Action {
             Action::Notify { text: None } => "notify".into(),
             Action::Notify { text: Some(t) } => format!("notify {:?}", short(t)),
             Action::Prompt { text, device } => {
-                let on = device.as_deref().map(|d| format!(" on {d}")).unwrap_or_default();
+                let on = device
+                    .as_deref()
+                    .map(|d| format!(" on {d}"))
+                    .unwrap_or_default();
                 format!("prompt {:?}{on}", short(text))
             }
             Action::Plan { name } => format!("run plan {name}"),
@@ -208,9 +217,12 @@ mod tests {
             w.line(),
             "k3x9a off \"build done\" when window \"Build\" closes then prompt \"summarize\" on vm (fired 2)"
         );
-        assert!(Condition::Schedule { every_min: None, at: Some("09:30".into()) }
-            .describe()
-            .contains("09:30"));
+        assert!(Condition::Schedule {
+            every_min: None,
+            at: Some("09:30".into())
+        }
+        .describe()
+        .contains("09:30"));
     }
 
     #[test]

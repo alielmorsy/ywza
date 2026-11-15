@@ -84,20 +84,28 @@ async fn one(
         .filter(|_| tool == "click" && id.is_none());
     let mut found = None;
     if id.is_some() || label.is_some() {
-        let snap = tools.latest_snapshot(Some(space), w, info.rect).await.ok()?;
+        let snap = tools
+            .latest_snapshot(Some(space), w, info.rect)
+            .await
+            .ok()?;
         let e = match (id, label) {
             (Some(id), _) => Some(snap.get(id)?),
             (None, Some(t)) => {
                 let want = desk::ocr_norm(t);
                 let nth = args.get("nth").and_then(Value::as_u64).unwrap_or(1).max(1);
-                let mut named = snap.elements.iter().filter(|e| desk::ocr_norm(&e.name) == want);
+                let mut named = snap
+                    .elements
+                    .iter()
+                    .filter(|e| desk::ocr_norm(&e.name) == want);
                 named.nth(nth as usize - 1)
             }
             _ => None,
         };
         found = e.map(|e| (e.id, e.kind, e.name.clone(), e.rect));
     }
-    let el = found.as_ref().map(|(id, kind, name, _)| (*id, *kind, name.as_str()));
+    let el = found
+        .as_ref()
+        .map(|(id, kind, name, _)| (*id, *kind, name.as_str()));
     Some(Resolved {
         line: line(tool, args, el, label, &info.process, &info.title),
         window: w,
@@ -128,8 +136,14 @@ fn line(
     }
     let _ = write!(s, " in {process}: {title}");
     let extra = match tool {
-        "type_text" => args.get("text").and_then(Value::as_str).map(|t| ("typed", t)),
-        "press_keys" => args.get("keys").and_then(Value::as_str).map(|k| ("keys", k)),
+        "type_text" => args
+            .get("text")
+            .and_then(Value::as_str)
+            .map(|t| ("typed", t)),
+        "press_keys" => args
+            .get("keys")
+            .and_then(Value::as_str)
+            .map(|k| ("keys", k)),
         _ => None,
     };
     if let Some((what, v)) = extra {
@@ -197,19 +211,47 @@ mod tests {
         );
         let typed = json!({"window":"w3","element":9,"text":"hi\nthere"});
         assert_eq!(
-            line("type_text", &typed, Some((9, "edit", "")), None, "a.exe", "t"),
+            line(
+                "type_text",
+                &typed,
+                Some((9, "edit", "")),
+                None,
+                "a.exe",
+                "t"
+            ),
             "type_text [9] edit in a.exe: t | typed: hi there"
         );
         assert_eq!(
-            line("click", &json!({"text":"File"}), None, Some("File"), "a.exe", "t"),
+            line(
+                "click",
+                &json!({"text":"File"}),
+                None,
+                Some("File"),
+                "a.exe",
+                "t"
+            ),
             r#"click text "File" in a.exe: t"#
         );
         assert_eq!(
-            line("press_keys", &json!({"keys":"ctrl+s"}), None, None, "a.exe", "t"),
+            line(
+                "press_keys",
+                &json!({"keys":"ctrl+s"}),
+                None,
+                None,
+                "a.exe",
+                "t"
+            ),
             "press_keys in a.exe: t | keys: ctrl+s"
         );
         assert_eq!(
-            line("close_window", &json!({"window":"w3"}), None, None, "a.exe", "t"),
+            line(
+                "close_window",
+                &json!({"window":"w3"}),
+                None,
+                None,
+                "a.exe",
+                "t"
+            ),
             "close_window in a.exe: t"
         );
     }

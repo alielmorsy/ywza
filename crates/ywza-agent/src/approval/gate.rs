@@ -40,11 +40,13 @@ pub fn verdict(
     for (i, (tool, summary)) in calls(tool, args).into_iter().enumerate() {
         let line = resolved.get(i).and_then(|l| l.as_deref());
         let seen: Vec<&str> = line.into_iter().chain([summary.as_str()]).collect();
-        let action = approval.decide_any(&tool, &seen).unwrap_or(if risky(&tool) {
-            Action::Ask
-        } else {
-            Action::Allow
-        });
+        let action = approval
+            .decide_any(&tool, &seen)
+            .unwrap_or(if risky(&tool) {
+                Action::Ask
+            } else {
+                Action::Allow
+            });
         match mode.apply(action) {
             Action::Deny => return Verdict::Deny,
             Action::Ask => {
@@ -239,14 +241,28 @@ mod tests {
         let a = Approval::default();
         let fan = |tool: &str| json!({"tool":tool,"args":{"command":"ls"},"devices":["vm","pc"]});
         assert_eq!(
-            verdict(&a, ApprovalMode::Rules, "fanout", &fan("run_command"), &[], risky),
+            verdict(
+                &a,
+                ApprovalMode::Rules,
+                "fanout",
+                &fan("run_command"),
+                &[],
+                risky
+            ),
             Verdict::Ask {
                 tool: "run_command".into(),
                 summary: "ls".into()
             }
         );
         assert_eq!(
-            verdict(&a, ApprovalMode::Rules, "fanout", &fan("list_windows"), &[], risky),
+            verdict(
+                &a,
+                ApprovalMode::Rules,
+                "fanout",
+                &fan("list_windows"),
+                &[],
+                risky
+            ),
             Verdict::Allow
         );
     }
@@ -262,7 +278,10 @@ mod tests {
             ApprovalMode::Auto,
             ApprovalMode::Always,
         ] {
-            assert_eq!(verdict(&a, mode, "run_command", &rm, &[], risky), Verdict::Deny);
+            assert_eq!(
+                verdict(&a, mode, "run_command", &rm, &[], risky),
+                Verdict::Deny
+            );
         }
     }
 
@@ -308,8 +327,22 @@ mod tests {
             let a = Approval {
                 rules: vec![rule("click", Some(pattern), Action::Ask)],
             };
-            let v = verdict(&a, ApprovalMode::Rules, "click", &click, std::slice::from_ref(&line), risky);
-            assert_eq!(v, Verdict::Ask { tool: "click".into(), summary: SEND.into() }, "{pattern}");
+            let v = verdict(
+                &a,
+                ApprovalMode::Rules,
+                "click",
+                &click,
+                std::slice::from_ref(&line),
+                risky,
+            );
+            assert_eq!(
+                v,
+                Verdict::Ask {
+                    tool: "click".into(),
+                    summary: SEND.into()
+                },
+                "{pattern}"
+            );
             assert_eq!(
                 verdict(&a, ApprovalMode::Rules, "click", &click, &[], risky),
                 Verdict::Allow,
@@ -343,11 +376,15 @@ mod tests {
         let a = Approval {
             rules: vec![rule("click", Some("*OUTLOOK.EXE*"), Action::Ask)],
         };
-        let args = json!({"window":"w3","actions":[{"tool":"wait","ms":1},{"tool":"click","element":14}]});
+        let args =
+            json!({"window":"w3","actions":[{"tool":"wait","ms":1},{"tool":"click","element":14}]});
         let resolved = [None, None, Some(SEND.to_string())];
         assert_eq!(
             verdict(&a, ApprovalMode::Rules, "batch", &args, &resolved, risky),
-            Verdict::Ask { tool: "click".into(), summary: SEND.into() }
+            Verdict::Ask {
+                tool: "click".into(),
+                summary: SEND.into()
+            }
         );
     }
 
@@ -355,12 +392,36 @@ mod tests {
     fn resolving_is_skipped_when_nothing_could_ask() {
         let click = json!({"window":"w3","element":14});
         let a = Approval::default();
-        assert!(!worth_resolving(&a, ApprovalMode::Rules, "click", &click, &risky));
-        assert!(worth_resolving(&a, ApprovalMode::Always, "click", &click, &risky));
-        assert!(worth_resolving(&a, ApprovalMode::Rules, "run_command", &click, &risky));
+        assert!(!worth_resolving(
+            &a,
+            ApprovalMode::Rules,
+            "click",
+            &click,
+            &risky
+        ));
+        assert!(worth_resolving(
+            &a,
+            ApprovalMode::Always,
+            "click",
+            &click,
+            &risky
+        ));
+        assert!(worth_resolving(
+            &a,
+            ApprovalMode::Rules,
+            "run_command",
+            &click,
+            &risky
+        ));
         let ruled = Approval {
             rules: vec![rule("click", None, Action::Deny)],
         };
-        assert!(worth_resolving(&ruled, ApprovalMode::Auto, "click", &click, &risky));
+        assert!(worth_resolving(
+            &ruled,
+            ApprovalMode::Auto,
+            "click",
+            &click,
+            &risky
+        ));
     }
 }

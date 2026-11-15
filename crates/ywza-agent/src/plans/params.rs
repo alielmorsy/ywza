@@ -11,7 +11,10 @@ fn fill(s: &str, vals: &HashMap<&str, String>) -> String {
     while let Some(i) = rest.find("{{") {
         out.push_str(&rest[..i]);
         let after = &rest[i + 2..];
-        match after.find("}}").and_then(|j| Some((j, vals.get(&after[..j])?))) {
+        match after
+            .find("}}")
+            .and_then(|j| Some((j, vals.get(&after[..j])?)))
+        {
             Some((j, v)) => {
                 out.push_str(v);
                 rest = &after[j + 2..];
@@ -108,7 +111,10 @@ mod tests {
             ..Default::default()
         };
         let err = bind(&plan, &Map::new()).unwrap_err();
-        assert!(err.contains("missing param `q`") && err.contains("q (required)"), "{err}");
+        assert!(
+            err.contains("missing param `q`") && err.contains("q (required)"),
+            "{err}"
+        );
         let given = json!({"q": "{{other}}"}).as_object().unwrap().clone();
         let steps = bind(&plan, &given).unwrap();
         assert_eq!(steps[0].args["text"], "{{other}} {{vault:k}} {{other}}");

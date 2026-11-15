@@ -60,13 +60,13 @@ impl Permissions {
             | ListMonitors
             | WindowInfo { .. }
             | LensStart { .. }
-            | LensStop => {
-                (self.view, "view")
-            }
+            | LensStop => (self.view, "view"),
             Input { .. } | Pull { .. } | Push { .. } | PushEnd { .. } | LensAct { .. } => {
                 (self.control, "control")
             }
-            Prompt { device, devices, .. } if device.is_some() || !devices.is_empty() => {
+            Prompt {
+                device, devices, ..
+            } if device.is_some() || !devices.is_empty() => {
                 if self.chat {
                     (self.drive, "drive")
                 } else {

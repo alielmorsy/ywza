@@ -46,12 +46,19 @@ fn classify(
     items: &[(&str, String)],
     allow_login: bool,
 ) -> Option<(&'static str, String)> {
-    let any = |words: &[&str]| items.iter().any(|(_, t)| words.iter().any(|w| t.contains(w)));
+    let any = |words: &[&str]| {
+        items
+            .iter()
+            .any(|(_, t)| words.iter().any(|w| t.contains(w)))
+    };
     let title = title.to_lowercase();
     if process.eq_ignore_ascii_case("CredentialUIBroker.exe")
         || (title.contains("windows security") && any(CREDENTIAL_WORDS))
     {
-        return Some(("credentials", "a Windows credential prompt needs the user".into()));
+        return Some((
+            "credentials",
+            "a Windows credential prompt needs the user".into(),
+        ));
     }
     if any(CAPTCHA) {
         return Some(("captcha", "a captcha needs a human".into()));
@@ -118,7 +125,10 @@ mod tests {
         let k = |v: &[(&str, &str)], login| kind("chrome.exe", "Page", v, login);
         assert_eq!(k(&[("button", "Save"), ("edit", "Name")], true), None);
         assert_eq!(k(&[("edit", "6 digit number")], true), None);
-        assert_eq!(k(&[("edit", "Password"), ("button", "Sign in")], false), None);
+        assert_eq!(
+            k(&[("edit", "Password"), ("button", "Sign in")], false),
+            None
+        );
         assert_eq!(k(&[("button", "Sign in")], true), None);
     }
 

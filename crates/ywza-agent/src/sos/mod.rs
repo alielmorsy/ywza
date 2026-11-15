@@ -63,7 +63,11 @@ impl Sos {
         let Some(p) = self.paused.lock().unwrap().remove(&sid) else {
             return false;
         };
-        p.tx.send(Handback { note, steps: p.steps }).is_ok()
+        p.tx.send(Handback {
+            note,
+            steps: p.steps,
+        })
+        .is_ok()
     }
 
     /// Forgets a finished session.
@@ -93,7 +97,10 @@ fn fix_name(kind: &str, process: &str) -> String {
         .take(40)
         .collect();
     let stem = stem.trim_matches('-');
-    format!("fix-{kind}-{}", if stem.is_empty() { "unknown" } else { stem })
+    format!(
+        "fix-{kind}-{}",
+        if stem.is_empty() { "unknown" } else { stem }
+    )
 }
 
 #[cfg(test)]
@@ -105,7 +112,10 @@ mod tests {
         assert_eq!(fix_name("otp", "chrome.exe"), "fix-otp-chrome");
         assert_eq!(fix_name("uac", "?"), "fix-uac-unknown");
         assert_eq!(fix_name("login", "My App.exe"), "fix-login-my-app");
-        assert!(crate::plans::store::valid_name(&fix_name("otp", "a b/c.exe")));
+        assert!(crate::plans::store::valid_name(&fix_name(
+            "otp",
+            "a b/c.exe"
+        )));
     }
 
     #[test]

@@ -705,8 +705,22 @@ fn form(first_y: i32, key0: i32, extra: bool) -> Vec<Raw> {
     }
     let g = raws.len();
     raws.push(node("group", "Form", "form", None, 40, key0 + 1));
-    raws.push(node("button", "Save", "btnSave", Some(g), first_y, key0 + 2));
-    raws.push(node("button", "Cancel", "btnCancel", Some(g), first_y + 40, key0 + 3));
+    raws.push(node(
+        "button",
+        "Save",
+        "btnSave",
+        Some(g),
+        first_y,
+        key0 + 2,
+    ));
+    raws.push(node(
+        "button",
+        "Cancel",
+        "btnCancel",
+        Some(g),
+        first_y + 40,
+        key0 + 3,
+    ));
     raws
 }
 
@@ -723,7 +737,10 @@ fn resolves_after_restart() {
     assert!(c[0].score > 0.99 && c.iter().all(|c| (0.0..=1.0).contains(&c.score)));
     // A small move stays within the position tolerance.
     let moved = snap(form(104, 900, true), None);
-    assert_eq!(top(&resolve(&save.anchor, &moved)), named(&moved, "Save").id);
+    assert_eq!(
+        top(&resolve(&save.anchor, &moved)),
+        named(&moved, "Save").id
+    );
 }
 
 fn closes(aids: [&str; 2], groups: [&str; 2], y: i32) -> Vec<Raw> {
@@ -737,7 +754,11 @@ fn closes(aids: [&str; 2], groups: [&str; 2], y: i32) -> Vec<Raw> {
 
 #[test]
 fn identical_buttons_are_ambiguous_until_distinguished() {
-    let anchor_of = |aids, groups| named(&snap(closes(aids, groups, 100), None), "Close").anchor.clone();
+    let anchor_of = |aids, groups| {
+        named(&snap(closes(aids, groups, 100), None), "Close")
+            .anchor
+            .clone()
+    };
     // The layout moved, so position cannot help either.
     let b = snap(closes(["", ""], ["Tabs", "Tabs"], 300), None);
     let anchor = anchor_of(["", ""], ["Tabs", "Tabs"]);

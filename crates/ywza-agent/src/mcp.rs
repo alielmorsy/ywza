@@ -41,7 +41,9 @@ pub async fn call_tool(
 ) -> AgentMsg {
     let id = format!("mcp_{call}");
     agent.emit_tool_call(sid, &id, &name, &args, None);
-    let out = agent.run_tool(Space { session: sid, sub }, &name, &args).await;
+    let out = agent
+        .run_tool(Space { session: sid, sub }, &name, &args)
+        .await;
     agent.emit_tool_result(sid, &id, &name, &out);
     AgentMsg::ToolResult {
         call,

@@ -116,9 +116,8 @@ fn text_score(e: &Element, want: &str) -> Option<u8> {
 /// Squared gap between two rects (0 when they touch or overlap), then the squared distance
 /// of their centers as the tie-break.
 fn distance(a: &Rect, b: &Rect) -> (i64, i64) {
-    let gap = |a0: i32, al: i32, b0: i32, bl: i32| {
-        (a0 - (b0 + bl)).max(b0 - (a0 + al)).max(0) as i64
-    };
+    let gap =
+        |a0: i32, al: i32, b0: i32, bl: i32| (a0 - (b0 + bl)).max(b0 - (a0 + al)).max(0) as i64;
     let (dx, dy) = (gap(a.x, a.w, b.x, b.w), gap(a.y, a.h, b.y, b.h));
     let ((ax, ay), (bx, by)) = (a.center(), b.center());
     (

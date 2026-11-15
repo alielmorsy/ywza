@@ -177,7 +177,10 @@ mod tests {
         else {
             panic!()
         };
-        assert_eq!((input, output, cost, screenshot_cost), (1000, 20, None, None));
+        assert_eq!(
+            (input, output, cost, screenshot_cost),
+            (1000, 20, None, None)
+        );
     }
 
     #[test]

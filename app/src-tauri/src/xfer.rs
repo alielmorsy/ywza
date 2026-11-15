@@ -18,7 +18,12 @@ const DEFAULT_DEST: &str = "Downloads/";
 
 /// Sends a local file or folder to `dest` on `device` (default `Downloads`).
 #[tauri::command]
-pub async fn push_file(app: AppHandle, device: String, path: String, dest: String) -> Result<String, String> {
+pub async fn push_file(
+    app: AppHandle,
+    device: String,
+    path: String,
+    dest: String,
+) -> Result<String, String> {
     push(&app, &device, Path::new(&path), &dest).await
 }
 
@@ -74,7 +79,11 @@ async fn push(app: &AppHandle, device: &str, path: &Path, dest: &str) -> Result<
     if device == LOCAL {
         return Err("pick a paired device".into());
     }
-    let dest = if dest.trim().is_empty() { DEFAULT_DEST } else { dest.trim() };
+    let dest = if dest.trim().is_empty() {
+        DEFAULT_DEST
+    } else {
+        dest.trim()
+    };
     let ep = conn::device_endpoint(app, device).await?;
     let st = client::copy::push(&ep, device, path, dest, path.is_dir())
         .await
@@ -84,7 +93,11 @@ async fn push(app: &AppHandle, device: &str, path: &Path, dest: &str) -> Result<
 
 fn summary(st: &Stats, device: &str, dest: &str) -> String {
     let plural = if st.files == 1 { "" } else { "s" };
-    let mut s = format!("sent {} file{plural}, {} to {device}:{dest}", st.files, size(st.bytes));
+    let mut s = format!(
+        "sent {} file{plural}, {} to {device}:{dest}",
+        st.files,
+        size(st.bytes)
+    );
     for e in &st.errors {
         s.push('\n');
         s.push_str(e);
@@ -99,7 +112,11 @@ fn size(bytes: u64) -> String {
         v /= 1024.0;
         i += 1;
     }
-    if i == 0 { format!("{bytes} B") } else { format!("{v:.1} {}", UNITS[i]) }
+    if i == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{v:.1} {}", UNITS[i])
+    }
 }
 
 fn unescape(s: &str) -> String {
@@ -108,7 +125,10 @@ fn unescape(s: &str) -> String {
     let mut i = 0;
     while i < b.len() {
         let hex = (b[i] == b'%')
-            .then(|| s.get(i + 1..i + 3).and_then(|h| u8::from_str_radix(h, 16).ok()))
+            .then(|| {
+                s.get(i + 1..i + 3)
+                    .and_then(|h| u8::from_str_radix(h, 16).ok())
+            })
             .flatten();
         match hex {
             Some(v) => {

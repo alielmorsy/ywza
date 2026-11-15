@@ -16,7 +16,10 @@ pub fn to_pixels(r: Rect, x: f32, y: f32) -> (i32, i32) {
 pub fn run(rect: Rect, events: Receiver<InputEvent>, to_client: UnboundedSender<AgentMsg>) {
     for ev in events {
         // A failing move would repeat at mouse rate; its button/key events report it.
-        if let (Err(e), false) = (inject(rect, &ev), matches!(ev, InputEvent::MouseMove { .. })) {
+        if let (Err(e), false) = (
+            inject(rect, &ev),
+            matches!(ev, InputEvent::MouseMove { .. }),
+        ) {
             tracing::warn!(error = %e, "input failed");
             let _ = to_client.send(AgentMsg::Error {
                 message: format!("input: {e}"),

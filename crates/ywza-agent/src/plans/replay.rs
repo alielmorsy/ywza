@@ -62,7 +62,12 @@ async fn step(cx: &Ctx, steps: &[PlanStep], i: usize) -> Result<String, Stop> {
         let wins = blocking(desk::list_windows).await.map_err(lost)?;
         let Some(info) = find(&wins, r) else {
             let open: Vec<String> = wins.iter().map(ToString::to_string).collect();
-            let reason = format!("no window of {} {:?}; open windows:\n{}", r.process, r.title, open.join("\n"));
+            let reason = format!(
+                "no window of {} {:?}; open windows:\n{}",
+                r.process,
+                r.title,
+                open.join("\n")
+            );
             return Err(Box::new((reason, None)));
         };
         let w = info.id;
@@ -84,7 +89,8 @@ async fn step(cx: &Ctx, steps: &[PlanStep], i: usize) -> Result<String, Stop> {
         Ok(None) => {}
         Err(e) => return Err(Box::new((e, live))),
     }
-    let args = crate::vault::substitute(&s.tool, &Value::Object(args)).map_err(|e| Box::new((e, live.clone())))?;
+    let args = crate::vault::substitute(&s.tool, &Value::Object(args))
+        .map_err(|e| Box::new((e, live.clone())))?;
     let mut out = cx.call(&s.tool, args).await;
     crate::vault::scrub(&mut out.text);
     let after = || {
@@ -95,8 +101,15 @@ async fn step(cx: &Ctx, steps: &[PlanStep], i: usize) -> Result<String, Stop> {
     if !out.ok {
         return Err(Box::new((format!("tool failed: {}", out.text), after())));
     }
-    if let Some(want) = s.changes.as_deref().filter(|w| !guard::contains(&out.text, w)) {
-        return Err(Box::new((format!("expected changes containing {want:?}, got: {}", out.text), after())));
+    if let Some(want) = s
+        .changes
+        .as_deref()
+        .filter(|w| !guard::contains(&out.text, w))
+    {
+        return Err(Box::new((
+            format!("expected changes containing {want:?}, got: {}", out.text),
+            after(),
+        )));
     }
     Ok(out.text)
 }
@@ -132,7 +145,10 @@ fn locate(s: &PlanStep, snap: Option<&Snapshot>) -> Result<Option<u32>, String> 
     };
     if let (Some(want), Some(e)) = (&s.expect, snap.get(id)) {
         if !guard::contains(&e.name, want) {
-            return Err(format!("guard failed: expected an element named {want:?}, found {}", e.line()));
+            return Err(format!(
+                "guard failed: expected an element named {want:?}, found {}",
+                e.line()
+            ));
         }
     }
     Ok(Some(id))

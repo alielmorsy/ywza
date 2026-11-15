@@ -32,7 +32,13 @@ pub async fn run(c: &mut Control, sub: ConfigCmd) -> Result<()> {
             config.llm.model = model.unwrap_or(config.llm.model);
             config.llm.api_key = api_key.unwrap_or_default();
             // Any reply other than `error` means it took.
-            ask(c, ClientMsg::SetConfig { config: Box::new(config) }).await?;
+            ask(
+                c,
+                ClientMsg::SetConfig {
+                    config: Box::new(config),
+                },
+            )
+            .await?;
             println!("ok");
         }
     }

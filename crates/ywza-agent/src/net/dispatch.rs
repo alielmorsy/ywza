@@ -125,9 +125,9 @@ impl Client {
                 let sid = *self
                     .mcp
                     .get_or_insert_with(|| mcp::session(&agent, &self.name));
-                self.reply_later(
-                    async move { mcp::call_tool(&agent, sid, space, call, name, args).await },
-                );
+                self.reply_later(async move {
+                    mcp::call_tool(&agent, sid, space, call, name, args).await
+                });
             }
             ClientMsg::Approve {
                 request,

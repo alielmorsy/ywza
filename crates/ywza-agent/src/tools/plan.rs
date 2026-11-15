@@ -76,7 +76,12 @@ impl Tool for ListPlans {
         if list.is_empty() {
             return ToolOutput::ok("no plans saved");
         }
-        ToolOutput::ok(list.iter().map(plans::describe).collect::<Vec<_>>().join("\n"))
+        ToolOutput::ok(
+            list.iter()
+                .map(plans::describe)
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
     }
 }
 
@@ -118,7 +123,11 @@ impl Tool for SavePlan {
             Err(e) => return ToolOutput::err(e),
         };
         match store::save(&plan) {
-            Ok(()) => ToolOutput::ok(format!("saved plan {}: {} steps", plan.name, plan.steps.len())),
+            Ok(()) => ToolOutput::ok(format!(
+                "saved plan {}: {} steps",
+                plan.name,
+                plan.steps.len()
+            )),
             Err(e) => ToolOutput::err(format!("{e:#}")),
         }
     }
@@ -161,7 +170,9 @@ impl Tool for PatchPlan {
                 plan.steps.remove(n - 1);
                 format!("removed step {n}, {} left", plan.steps.len())
             }
-            (None, true) => return ToolOutput::err("a plan needs at least one step; delete it instead"),
+            (None, true) => {
+                return ToolOutput::err("a plan needs at least one step; delete it instead")
+            }
             _ => return ToolOutput::err("give exactly one of `with` and `remove`"),
         };
         match store::save(&plan) {

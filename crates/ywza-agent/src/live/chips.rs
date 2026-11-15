@@ -42,7 +42,15 @@ pub fn editable(kind: &str, p: &Patterns) -> bool {
 /// The chip for one element, or None when it is not worth tapping: disabled, unnamed
 /// (unless a text field) or without area.
 fn chip(e: &Element, origin: (i32, i32)) -> Option<ElementInfo> {
-    chip_of(e.id, e.kind, &e.name, e.enabled, &e.patterns, e.rect, origin)
+    chip_of(
+        e.id,
+        e.kind,
+        &e.name,
+        e.enabled,
+        &e.patterns,
+        e.rect,
+        origin,
+    )
 }
 
 fn chip_of(
@@ -91,7 +99,11 @@ pub fn changes(
         .cloned()
         .collect();
     let live: HashSet<u32> = now.iter().map(|c| c.id).collect();
-    let mut removed: Vec<u32> = sent.keys().filter(|id| !live.contains(id)).copied().collect();
+    let mut removed: Vec<u32> = sent
+        .keys()
+        .filter(|id| !live.contains(id))
+        .copied()
+        .collect();
     removed.sort_unstable();
     (upsert, removed)
 }

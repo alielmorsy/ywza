@@ -142,7 +142,10 @@ mod tests {
             json: Some(r#"{"on":"schedule","every_min":5}"#.into()),
             ..Default::default()
         };
-        assert_eq!(a.into_args().unwrap(), json!({"on": "schedule", "every_min": 5}));
+        assert_eq!(
+            a.into_args().unwrap(),
+            json!({"on": "schedule", "every_min": 5})
+        );
         let bad = AddArgs {
             json: Some("[1]".into()),
             ..Default::default()

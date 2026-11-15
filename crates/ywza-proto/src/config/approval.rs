@@ -140,7 +140,10 @@ mod tests {
         assert_eq!(a.decide("run_command", "RM -rf x"), Some(Action::Deny));
         assert_eq!(a.decide("run_command", "ls"), Some(Action::Ask));
         assert_eq!(a.decide("click", "rm x"), None);
-        assert_eq!(a.decide_any("run_command", &["ls", "rm y"]), Some(Action::Deny));
+        assert_eq!(
+            a.decide_any("run_command", &["ls", "rm y"]),
+            Some(Action::Deny)
+        );
         assert_eq!(a.decide_any("run_command", &[]), Some(Action::Ask));
     }
 

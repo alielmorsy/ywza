@@ -29,7 +29,14 @@ impl Snapshot {
                         path: tree.path(i),
                         rel: rel(&raw.rect, raw.bounds.as_ref().unwrap_or(&window.rect)),
                     };
-                    (i, Element { handle, anchor, ..e })
+                    (
+                        i,
+                        Element {
+                            handle,
+                            anchor,
+                            ..e
+                        },
+                    )
                 })
             })
             .collect();
@@ -58,9 +65,13 @@ impl Snapshot {
         }
         let mut nearest: Vec<Option<usize>> = vec![None; n];
         for i in 0..n {
-            nearest[i] = tree
-                .parent(i)
-                .and_then(|p| if slot[p].is_some() { Some(p) } else { nearest[p] });
+            nearest[i] = tree.parent(i).and_then(|p| {
+                if slot[p].is_some() {
+                    Some(p)
+                } else {
+                    nearest[p]
+                }
+            });
         }
         let parents: Vec<Option<u32>> = src
             .iter()

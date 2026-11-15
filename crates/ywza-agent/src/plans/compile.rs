@@ -60,9 +60,19 @@ fn is_vault(text: &str) -> bool {
 fn slug(s: &str) -> String {
     let s: String = s
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
         .collect();
-    let s = s.split('_').filter(|p| !p.is_empty()).collect::<Vec<_>>().join("_");
+    let s = s
+        .split('_')
+        .filter(|p| !p.is_empty())
+        .collect::<Vec<_>>()
+        .join("_");
     s.chars().take(24).collect()
 }
 
@@ -85,7 +95,11 @@ fn build(steps: Vec<PlanStep>, name: &str) -> Plan {
     let steps = steps
         .into_iter()
         .map(|mut s| {
-            let element = s.anchor.as_ref().map_or("", |a| a.name.as_str()).to_string();
+            let element = s
+                .anchor
+                .as_ref()
+                .map_or("", |a| a.name.as_str())
+                .to_string();
             if s.expect.is_none() && !element.is_empty() {
                 s.expect = Some(element.clone());
             }

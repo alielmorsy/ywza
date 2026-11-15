@@ -94,7 +94,9 @@ fn base_dir() -> PathBuf {
     } else {
         var("XDG_CACHE_HOME").or_else(|| var("HOME").map(|h| h.join(".cache")))
     };
-    root.unwrap_or_else(std::env::temp_dir).join("ywza").join("shell")
+    root.unwrap_or_else(std::env::temp_dir)
+        .join("ywza")
+        .join("shell")
 }
 
 #[cfg(test)]
@@ -112,12 +114,23 @@ mod tests {
         assert_eq!(kind("/usr/bin/bash"), Some(Shell::Bash));
         assert_eq!(kind("zsh"), Some(Shell::Zsh));
         let (p, s) = detect("\"C:/Program Files/PowerShell/7/pwsh.exe\"").unwrap();
-        assert_eq!((p.as_str(), s), ("C:/Program Files/PowerShell/7/pwsh.exe", Shell::Pwsh));
+        assert_eq!(
+            (p.as_str(), s),
+            ("C:/Program Files/PowerShell/7/pwsh.exe", Shell::Pwsh)
+        );
     }
 
     #[test]
     fn leaves_everything_else_alone() {
-        for c in ["cmd", "cmd.exe", "bash -c ls", "pwsh -NoProfile", "claude", "python", ""] {
+        for c in [
+            "cmd",
+            "cmd.exe",
+            "bash -c ls",
+            "pwsh -NoProfile",
+            "claude",
+            "python",
+            "",
+        ] {
             assert_eq!(kind(c), None, "{c}");
         }
     }

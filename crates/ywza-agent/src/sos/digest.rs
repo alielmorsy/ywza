@@ -25,7 +25,9 @@ pub fn changes(w: WindowId, before: &Snapshot, fresh: Option<&Snapshot>) -> Stri
 }
 
 fn hide(e: &mut Element) {
-    if e.patterns.value && !e.patterns.value_readonly && e.value.as_deref().is_some_and(|v| !v.is_empty())
+    if e.patterns.value
+        && !e.patterns.value_readonly
+        && e.value.as_deref().is_some_and(|v| !v.is_empty())
     {
         e.value = Some("(hidden)".into());
     }
@@ -80,7 +82,13 @@ mod tests {
             }),
             ..Default::default()
         };
-        let t = text("otp", " done ", Some("window w1 closed"), &[step], Some("fix-otp-a"));
+        let t = text(
+            "otp",
+            " done ",
+            Some("window w1 closed"),
+            &[step],
+            Some("fix-otp-a"),
+        );
         assert_eq!(
             t,
             "The user took over (otp) and handed back.\nTheir note: done\nwindow w1 closed\n\

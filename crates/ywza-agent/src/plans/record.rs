@@ -54,13 +54,17 @@ fn step(tools: &Tools, space: Space, tool: &str, args: &Value) -> Option<PlanSte
     let mut a = args.as_object().cloned().unwrap_or_default();
     let window = a.remove("window");
     let element = a.remove("element").filter(|v| !v.is_null());
-    let expect = a.remove("expect").and_then(|v| v.as_str().map(String::from));
+    let expect = a
+        .remove("expect")
+        .and_then(|v| v.as_str().map(String::from));
     let snap = window
         .as_ref()
         .and_then(parse_window)
         .and_then(|w| tools.snap(space, w));
     let anchor = match element {
-        Some(v) => Some(SavedAnchor::from(&snap.as_ref()?.get(element_id(&v)?)?.anchor)),
+        Some(v) => Some(SavedAnchor::from(
+            &snap.as_ref()?.get(element_id(&v)?)?.anchor,
+        )),
         None => None,
     };
     Some(PlanStep {

@@ -7,7 +7,10 @@ mod scrub;
 mod store;
 mod substitute;
 
-use std::{path::{Path, PathBuf}, sync::OnceLock};
+use std::{
+    path::{Path, PathBuf},
+    sync::OnceLock,
+};
 
 use serde_json::Value;
 
@@ -22,7 +25,8 @@ pub fn init(dir: &Path) {
 
 /// Read on every use, so edits to the file apply without a restart.
 fn entries() -> anyhow::Result<store::Entries> {
-    DIR.get().map_or_else(|| Ok(Default::default()), |d| store::load(d))
+    DIR.get()
+        .map_or_else(|| Ok(Default::default()), |d| store::load(d))
 }
 
 /// `args` for tool `name` with `{{vault:key}}` replaced where the tool types text.
@@ -46,5 +50,8 @@ pub fn scrub(text: &mut String) {
 /// The vault values long enough to hide, for screenshot blurring.
 pub fn secrets() -> Vec<String> {
     let entries = entries().unwrap_or_default();
-    scrub::secrets(&entries).into_iter().map(|(_, v)| v.to_string()).collect()
+    scrub::secrets(&entries)
+        .into_iter()
+        .map(|(_, v)| v.to_string())
+        .collect()
 }

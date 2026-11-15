@@ -20,7 +20,11 @@ pub fn watch(ctl: &Ctl, monitor: Rect, to_client: &mpsc::UnboundedSender<AgentMs
     };
     let mut last = None;
     while !ctl.stop.load(Ordering::Relaxed) {
-        let rect = w.now().ok().flatten().map(|r| rel_rect((monitor.x, monitor.y), r));
+        let rect = w
+            .now()
+            .ok()
+            .flatten()
+            .map(|r| rel_rect((monitor.x, monitor.y), r));
         if last != Some(rect) {
             last = Some(rect);
             if to_client.send(AgentMsg::Focus { rect }).is_err() {

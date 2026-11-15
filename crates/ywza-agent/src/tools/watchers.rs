@@ -140,9 +140,15 @@ impl WatcherCreate {
                     .map(String::from),
             },
             Then::Prompt => {
-                let device = self.run_on.as_deref().map(str::trim).filter(|d| !d.is_empty());
+                let device = self
+                    .run_on
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|d| !d.is_empty());
                 if device.is_some_and(|d| !ywza_proto::client::valid_device_name(d)) {
-                    return Err("`run_on` must be a paired device name (omit it for this machine)".into());
+                    return Err(
+                        "`run_on` must be a paired device name (omit it for this machine)".into(),
+                    );
                 }
                 Action::Prompt {
                     text: need(&self.prompt, "prompt", "then: prompt")?,
@@ -165,7 +171,12 @@ impl WatcherCreate {
         if !(1..=PER_HOUR_MAX).contains(&max_per_hour) {
             return Err(format!("`max_per_hour` must be 1 to {PER_HOUR_MAX}"));
         }
-        let name: String = match self.name.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
+        let name: String = match self
+            .name
+            .as_deref()
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+        {
             Some(n) => n.chars().take(NAME_MAX).collect(),
             None => when.describe().chars().take(NAME_MAX).collect(),
         };
@@ -207,9 +218,7 @@ impl Tool for WatcherCreate {
     const RISKY: bool = true;
 
     async fn run(self, _: &Ctx) -> ToolOutput {
-        let made = self
-            .build()
-            .and_then(|w| watch::store()?.add(w));
+        let made = self.build().and_then(|w| watch::store()?.add(w));
         match made {
             Ok(w) => ToolOutput::ok(format!("created {}", w.line())),
             Err(e) => ToolOutput::err(e),
@@ -298,12 +307,23 @@ mod tests {
     #[test]
     fn builds_each_condition_with_defaults() {
         let w = build(json!({"on": "window_appears", "title": " Build "})).unwrap();
-        assert_eq!(w.when, Condition::WindowAppears { title: "Build".into() });
+        assert_eq!(
+            w.when,
+            Condition::WindowAppears {
+                title: "Build".into()
+            }
+        );
         assert_eq!((w.min_gap_s, w.max_per_hour), (60, 12));
         assert_eq!(w.then, Action::Notify { text: None });
         assert!(w.name.contains("Build"));
         let w = build(json!({"on": "term_exit", "term": "t3", "then": "prompt", "prompt": "look", "run_on": "vm"})).unwrap();
-        assert_eq!(w.when, Condition::TermExit { term: 3, code: None });
+        assert_eq!(
+            w.when,
+            Condition::TermExit {
+                term: 3,
+                code: None
+            }
+        );
         assert_eq!(
             w.then,
             Action::Prompt {
@@ -311,7 +331,8 @@ mod tests {
                 device: Some("vm".into())
             }
         );
-        let w = build(json!({"on": "text", "title": "a", "text": "b", "ocr": true, "name": "n"})).unwrap();
+        let w = build(json!({"on": "text", "title": "a", "text": "b", "ocr": true, "name": "n"}))
+            .unwrap();
         assert_eq!(w.name, "n");
         assert!(matches!(w.when, Condition::Text { ocr: true, .. }));
     }
@@ -320,11 +341,17 @@ mod tests {
     fn missing_pieces_name_the_argument() {
         let e = build(json!({"on": "element_changes", "title": "a"})).unwrap_err();
         assert!(e.contains("`text`") && e.contains("element_changes"), "{e}");
-        assert!(build(json!({"on": "term_output", "text": "x"})).unwrap_err().contains("`term`"));
-        assert!(build(json!({"on": "window_closes", "title": "  "})).unwrap_err().contains("`title`"));
-        assert!(build(json!({"on": "window_closes", "title": "a", "then": "prompt"}))
+        assert!(build(json!({"on": "term_output", "text": "x"}))
             .unwrap_err()
-            .contains("`prompt`"));
+            .contains("`term`"));
+        assert!(build(json!({"on": "window_closes", "title": "  "}))
+            .unwrap_err()
+            .contains("`title`"));
+        assert!(
+            build(json!({"on": "window_closes", "title": "a", "then": "prompt"}))
+                .unwrap_err()
+                .contains("`prompt`")
+        );
         assert!(build(json!({"on": "nope"})).is_err());
     }
 

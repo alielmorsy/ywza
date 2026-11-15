@@ -142,7 +142,9 @@ impl Agent {
                     ..Default::default()
                 };
                 plans::store::save(&plan)
-                    .map_err(|e| tracing::warn!(error = %format!("{e:#}"), "saving the taught plan"))
+                    .map_err(
+                        |e| tracing::warn!(error = %format!("{e:#}"), "saving the taught plan"),
+                    )
                     .ok()
                     .map(|()| plan.name)
             })
@@ -155,9 +157,12 @@ impl Agent {
             saved.as_deref(),
         );
         crate::vault::scrub(&mut text);
-        self.emit(sid, SessionEvent::Resumed {
-            digest: text.clone(),
-        });
+        self.emit(
+            sid,
+            SessionEvent::Resumed {
+                digest: text.clone(),
+            },
+        );
         Ok(text)
     }
 }

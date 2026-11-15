@@ -208,10 +208,9 @@ pub fn wait_activity(window: WindowId, since: u64, max: Duration) -> Activity {
             live: false,
         };
     }
-    let (st, _) = s
-        .cv
-        .wait_timeout_while(st, max, |st| st.count <= since)
-        .unwrap_or_else(PoisonError::into_inner);
+    let (st, _) =
+        s.cv.wait_timeout_while(st, max, |st| st.count <= since)
+            .unwrap_or_else(PoisonError::into_inner);
     Activity {
         count: st.count,
         changed: st.count > since,

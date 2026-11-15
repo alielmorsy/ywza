@@ -39,7 +39,10 @@ pub fn gate(
     if last_ms.is_some_and(|l| now_ms < l.saturating_add(u64::from(min_gap_s) * 1000)) {
         return Gate::Skip;
     }
-    while recent.front().is_some_and(|&t| now_ms.saturating_sub(t) >= HOUR_MS) {
+    while recent
+        .front()
+        .is_some_and(|&t| now_ms.saturating_sub(t) >= HOUR_MS)
+    {
         recent.pop_front();
     }
     if recent.len() >= max_per_hour as usize {
@@ -74,8 +77,14 @@ mod tests {
         assert_eq!(gate(0, None, &mut recent, 60, 2), Gate::Fire);
         assert_eq!(gate(30_000, Some(0), &mut recent, 60, 2), Gate::Skip);
         assert_eq!(gate(60_000, Some(0), &mut recent, 60, 2), Gate::Fire);
-        assert_eq!(gate(120_000, Some(60_000), &mut recent, 60, 2), Gate::Disable);
+        assert_eq!(
+            gate(120_000, Some(60_000), &mut recent, 60, 2),
+            Gate::Disable
+        );
         // The first fire leaves the hour window.
-        assert_eq!(gate(3_600_000, Some(60_000), &mut recent, 60, 2), Gate::Fire);
+        assert_eq!(
+            gate(3_600_000, Some(60_000), &mut recent, 60, 2),
+            Gate::Fire
+        );
     }
 }

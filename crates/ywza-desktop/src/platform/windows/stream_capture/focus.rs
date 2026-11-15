@@ -29,7 +29,8 @@ pub struct FocusWatch {
 impl FocusWatch {
     pub fn new() -> Result<Self> {
         com();
-        let uia: IUIAutomation = unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)? };
+        let uia: IUIAutomation =
+            unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)? };
         Ok(Self { uia })
     }
 
@@ -95,7 +96,12 @@ fn caret() -> Option<Rect> {
     if !unsafe { ClientToScreen(gi.hwndCaret, &mut p) }.as_bool() {
         return None;
     }
-    Some(Rect::new(p.x, p.y, (r.right - r.left).max(2), r.bottom - r.top))
+    Some(Rect::new(
+        p.x,
+        p.y,
+        (r.right - r.left).max(2),
+        r.bottom - r.top,
+    ))
 }
 
 fn foreground_class() -> String {

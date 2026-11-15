@@ -96,7 +96,11 @@ impl Tool for Screenshot {
             // Blur needs a snapshot too; fetching one is worth it only when there is a vault.
             let fetch = self.marks || !secrets.is_empty();
             let snaps = marks_snapshots(cx, &target, fetch).await;
-            let snaps = if self.marks { snaps? } else { snaps.unwrap_or_default() };
+            let snaps = if self.marks {
+                snaps?
+            } else {
+                snaps.unwrap_or_default()
+            };
             for s in &snaps {
                 for r in blur_rects(s, &secrets, img.origin) {
                     desk::pixelate(&mut img, r);

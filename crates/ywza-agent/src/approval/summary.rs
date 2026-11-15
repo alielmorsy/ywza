@@ -24,7 +24,11 @@ fn plan_steps(args: &Value) -> Vec<Step> {
     let Some(plan) = text(args, "name").and_then(|n| plans::store::load(n).ok()) else {
         return Vec::new();
     };
-    let params = args.get("params").and_then(Value::as_object).cloned().unwrap_or_default();
+    let params = args
+        .get("params")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
     let from = args.get("from").and_then(Value::as_u64).unwrap_or(1).max(1) as usize;
     plans::bind(&plan, &params)
         .unwrap_or_default()
@@ -152,8 +156,14 @@ mod tests {
         let args = json!({"tool":"run_command","args":{"command":"rm x"},"devices":["vm"]});
         let all = calls("fanout", &args);
         assert_eq!(all.len(), 2);
-        assert_eq!((all[1].0.as_str(), all[1].1.as_str()), ("run_command", "rm x"));
-        assert_eq!(calls("fanout", &json!({"tool":"find_app","devices":[]})).len(), 2);
+        assert_eq!(
+            (all[1].0.as_str(), all[1].1.as_str()),
+            ("run_command", "rm x")
+        );
+        assert_eq!(
+            calls("fanout", &json!({"tool":"find_app","devices":[]})).len(),
+            2
+        );
         assert_eq!(
             summary("copy", &json!({"src":"vm:/a","dst":"E:\\b"})),
             "vm:/a -> E:\\b"

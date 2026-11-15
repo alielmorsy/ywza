@@ -28,7 +28,9 @@ pub fn init(dir: &Path) -> bool {
 }
 
 pub fn get() -> Result<&'static Store, String> {
-    STORE.get().ok_or_else(|| "watchers are not available here".into())
+    STORE
+        .get()
+        .ok_or_else(|| "watchers are not available here".into())
 }
 
 fn new_id() -> String {
@@ -125,7 +127,9 @@ fn no_watcher(id: &str) -> String {
 }
 
 fn find<'a>(list: &'a mut [Watcher], id: &str) -> Result<&'a mut Watcher, String> {
-    list.iter_mut().find(|w| w.id == id).ok_or_else(|| no_watcher(id))
+    list.iter_mut()
+        .find(|w| w.id == id)
+        .ok_or_else(|| no_watcher(id))
 }
 
 #[cfg(test)]

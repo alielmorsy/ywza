@@ -54,7 +54,10 @@ pub fn learn(anchor: &Anchor, label: &str) -> anyhow::Result<()> {
     let mut all = LABELS.lock().unwrap();
     let mut next: Vec<Entry> = all.iter().filter(|e| e.anchor != saved).cloned().collect();
     if !label.is_empty() {
-        next.push(Entry { anchor: saved, label: label.into() });
+        next.push(Entry {
+            anchor: saved,
+            label: label.into(),
+        });
     }
     if let Some(dir) = DIR.get() {
         let text = serde_json::to_string_pretty(&next)?;

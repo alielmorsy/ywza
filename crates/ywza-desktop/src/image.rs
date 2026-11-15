@@ -36,7 +36,10 @@ pub fn pixelate(img: &mut Image, r: Rect) {
     let at = |x: i32, y: i32| (y as usize * stride + x as usize) * 4;
     for by in (r.y..r.y + r.h).step_by(BLOCK) {
         for bx in (r.x..r.x + r.w).step_by(BLOCK) {
-            let (x1, y1) = ((bx + BLOCK as i32).min(r.x + r.w), (by + BLOCK as i32).min(r.y + r.h));
+            let (x1, y1) = (
+                (bx + BLOCK as i32).min(r.x + r.w),
+                (by + BLOCK as i32).min(r.y + r.h),
+            );
             let n = ((x1 - bx) * (y1 - by)) as u32;
             let mut sum = [0u32; 3];
             for y in by..y1 {
@@ -46,7 +49,12 @@ pub fn pixelate(img: &mut Image, r: Rect) {
                     }
                 }
             }
-            let avg = [(sum[0] / n) as u8, (sum[1] / n) as u8, (sum[2] / n) as u8, 255];
+            let avg = [
+                (sum[0] / n) as u8,
+                (sum[1] / n) as u8,
+                (sum[2] / n) as u8,
+                255,
+            ];
             for y in by..y1 {
                 for x in bx..x1 {
                     img.rgba[at(x, y)..at(x, y) + 4].copy_from_slice(&avg);

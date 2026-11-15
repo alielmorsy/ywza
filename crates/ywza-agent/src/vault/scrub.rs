@@ -50,15 +50,24 @@ mod tests {
 
     #[test]
     fn the_longer_of_overlapping_values_wins() {
-        let e = Entries::from([("short".into(), "abcd".into()), ("long".into(), "abcd1234".into())]);
-        assert_eq!(scrub_text("x abcd1234 abcd", &e), "x {{vault:long}} {{vault:short}}");
+        let e = Entries::from([
+            ("short".into(), "abcd".into()),
+            ("long".into(), "abcd1234".into()),
+        ]);
+        assert_eq!(
+            scrub_text("x abcd1234 abcd", &e),
+            "x {{vault:long}} {{vault:short}}"
+        );
     }
 
     #[test]
     fn short_values_and_placeholder_names_are_left_alone() {
         let e = Entries::from([("p".into(), "123".into()), ("v".into(), "vault".into())]);
         assert_eq!(scrub_text("pin 123", &e), "pin 123");
-        assert_eq!(scrub_text("{{vault:x}} é", &Entries::new()), "{{vault:x}} é");
+        assert_eq!(
+            scrub_text("{{vault:x}} é", &Entries::new()),
+            "{{vault:x}} é"
+        );
         // A value equal to placeholder text never gets re-scanned into mangled output.
         assert_eq!(scrub_text("vault", &e), "{{vault:v}}");
     }

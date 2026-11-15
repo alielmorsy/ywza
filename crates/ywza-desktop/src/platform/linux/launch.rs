@@ -136,7 +136,10 @@ mod tests {
     fn path_search_takes_the_first_executable() {
         let dirs = [PathBuf::from("/a"), PathBuf::from("/b")];
         let is_exe = |p: &Path| p == Path::new("/b/tool") || p == Path::new("/a/other");
-        assert_eq!(in_dirs("tool", &dirs, &is_exe), Some(PathBuf::from("/b/tool")));
+        assert_eq!(
+            in_dirs("tool", &dirs, &is_exe),
+            Some(PathBuf::from("/b/tool"))
+        );
         assert_eq!(in_dirs("none", &dirs, &is_exe), None);
     }
 

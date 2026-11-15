@@ -57,7 +57,11 @@ pub enum Resolve {
 }
 
 pub(super) fn norm(s: &str) -> String {
-    cap(&s.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase())
+    cap(&s
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase())
 }
 
 pub(super) fn rel(rect: &Rect, origin: &Rect) -> Rect {

@@ -19,6 +19,7 @@ pub use image::{encode_png, pixelate, Image};
 pub use keys::{parse_keys, Combo, Key};
 pub use marks::{draw_box, draw_marks};
 pub use model::{Button, CursorShape, Launched, Monitor, Tier, WindowId, WindowInfo};
+pub use platform::wait_activity;
 pub use platform::{
     capture_monitor, capture_window, click, click_at, clipboard_text, close_window, expand,
     find_program, focus_window, launch, list_monitors, list_windows, long_press, move_window,
@@ -29,7 +30,6 @@ pub use platform::{
     live_key, live_mouse_button, live_mouse_move, live_text, live_wheel, CursorWatch, FocusWatch,
     MonitorCapture,
 };
-pub use platform::wait_activity;
 pub use settle::{wait_settled, Activity, SETTLE_TIMEOUT};
 
 /// Environment that makes Qt export its UI tree over AT-SPI (it decides once, at start):

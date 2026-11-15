@@ -26,8 +26,7 @@ pub fn step_from(cx: &Ctx, v: &Value) -> Result<PlanStep, String> {
         .remove("element")
         .or_else(|| m.remove("element"))
         .filter(|v| !v.is_null());
-    let mut step: PlanStep =
-        serde_json::from_value(Value::Object(m)).map_err(|e| e.to_string())?;
+    let mut step: PlanStep = serde_json::from_value(Value::Object(m)).map_err(|e| e.to_string())?;
     step.args = args;
     let Some(wid) = wid else {
         return match el {

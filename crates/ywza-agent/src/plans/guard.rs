@@ -2,7 +2,10 @@
 //! `expect` checks an element's name, `changes` a step's reported changes.
 
 fn norm(s: &str) -> String {
-    s.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
+    s.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
 }
 
 pub fn contains(text: &str, want: &str) -> bool {
