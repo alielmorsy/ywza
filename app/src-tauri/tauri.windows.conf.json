@@ -3,7 +3,7 @@
     "beforeBundleCommand": "cargo build --release -p ywza-agent -p ywza-cli"
   },
   "bundle": {
-    "targets": ["nsis"],
+    "targets": ["nsis", "msi"],
     "resources": {
       "../../plugin/server/run.py": "mcp/run.py",
       "../../plugin/server/ywza_mcp/*.py": "mcp/ywza_mcp/"
@@ -15,6 +15,10 @@
         "headerImage": "windows/header.bmp",
         "sidebarImage": "windows/sidebar.bmp",
         "installerHooks": "./windows/hooks.nsh"
+      },
+      "wix": {
+        "fragmentPaths": ["./windows/agent.wxs"],
+        "componentGroupRefs": ["YwzaAgent"]
       }
     }
   }

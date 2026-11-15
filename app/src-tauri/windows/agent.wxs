@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- MSI counterpart of hooks.nsh: ships ywza-agent.exe and the ywza CLI, registers the
+     "ywza-agent" service, opens it in the firewall and puts the install dir on the machine PATH. -->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <?define Release = "$(sys.SOURCEFILEDIR)..\..\..\target\release" ?>
+  <Fragment>
+    <DirectoryRef Id="INSTALLDIR">
+      <Component Id="YwzaAgentExe" Guid="*">
+        <File Id="YwzaAgentExe" Source="$(var.Release)\ywza-agent.exe" KeyPath="yes" />
+        <ServiceInstall Id="YwzaAgentService" Name="ywza-agent" DisplayName="ywza agent"
+          Description="Keeps the ywza agent on the signed-in desktop and the sign-in screen."
+          Type="ownProcess" Start="auto" ErrorControl="normal" Account="LocalSystem"
+          Arguments="--log-file &quot;[CommonAppDataFolder]ywza\agent.log&quot; service" />
+        <ServiceControl Id="YwzaAgentService" Name="ywza-agent" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+      </Component>
+      <Component Id="YwzaCliExe" Guid="*">
+        <File Id="YwzaCliExe" Source="$(var.Release)\ywza.exe" KeyPath="yes" />
+        <Environment Id="YwzaPath" Name="PATH" Value="[INSTALLDIR]" Part="last" Action="set" System="yes" Permanent="no" />
+      </Component>
+    </DirectoryRef>
+
+    <ComponentGroup Id="YwzaAgent">
+      <ComponentRef Id="YwzaAgentExe" />
+      <ComponentRef Id="YwzaCliExe" />
+    </ComponentGroup>
+
+    <!-- Deferred and not impersonated, so they run as SYSTEM. Failures are ignored, as in hooks.nsh. -->
+    <CustomAction Id="YwzaServiceFailure" Directory="INSTALLDIR" Execute="deferred" Impersonate="no" Return="ignore"
+      ExeCommand="&quot;[SystemFolder]sc.exe&quot; failure ywza-agent reset= 86400 actions= restart/5000/restart/5000/restart/30000" />
+    <CustomAction Id="YwzaServiceFailureFlag" Directory="INSTALLDIR" Execute="deferred" Impersonate="no" Return="ignore"
+      ExeCommand="&quot;[SystemFolder]sc.exe&quot; failureflag ywza-agent 1" />
+    <CustomAction Id="YwzaFirewallClear" Directory="INSTALLDIR" Execute="deferred" Impersonate="no" Return="ignore"
+      ExeCommand="&quot;[SystemFolder]netsh.exe&quot; advfirewall firewall delete rule name=&quot;ywza-agent&quot;" />
+    <CustomAction Id="YwzaFirewallAdd" Directory="INSTALLDIR" Execute="deferred" Impersonate="no" Return="ignore"
+      ExeCommand="&quot;[SystemFolder]netsh.exe&quot; advfirewall firewall add rule name=&quot;ywza-agent&quot; dir=in action=allow protocol=UDP program=&quot;[INSTALLDIR]ywza-agent.exe&quot; profile=any" />
+    <CustomAction Id="YwzaFirewallRemove" Directory="INSTALLDIR" Execute="deferred" Impersonate="no" Return="ignore"
+      ExeCommand="&quot;[SystemFolder]netsh.exe&quot; advfirewall firewall delete rule name=&quot;ywza-agent&quot;" />
+
+    <InstallExecuteSequence>
+      <Custom Action="YwzaServiceFailure" After="InstallServices">NOT REMOVE~="ALL"</Custom>
+      <Custom Action="YwzaServiceFailureFlag" After="YwzaServiceFailure">NOT REMOVE~="ALL"</Custom>
+      <Custom Action="YwzaFirewallClear" After="YwzaServiceFailureFlag">NOT REMOVE~="ALL"</Custom>
+      <Custom Action="YwzaFirewallAdd" After="YwzaFirewallClear">NOT REMOVE~="ALL"</Custom>
+      <Custom Action="YwzaFirewallRemove" Before="RemoveFiles">REMOVE~="ALL"</Custom>
+    </InstallExecuteSequence>
+  </Fragment>
+</Wix>

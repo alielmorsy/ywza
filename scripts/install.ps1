@@ -6,7 +6,7 @@ $ProgressPreference = 'SilentlyContinue'
 
 $repo = 'alielmorsy/ywza'
 $release = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest" -Headers @{ 'User-Agent' = 'ywza-install' }
-$asset = $release.assets | Where-Object name -like '*-setup.exe' | Select-Object -First 1
+$asset = $release.assets | Where-Object name -like '*.msi' | Select-Object -First 1
 if (-not $asset) { throw "No Windows installer found in release $($release.tag_name)" }
 
 $file = Join-Path $env:TEMP $asset.name
@@ -15,8 +15,9 @@ Invoke-WebRequest $asset.browser_download_url -OutFile $file
 
 Write-Host 'Installing (accept the admin prompt)'
 try {
-    $p = Start-Process $file -ArgumentList '/S' -Verb RunAs -Wait -PassThru
-    if ($p.ExitCode -ne 0) { throw "Installer exited with code $($p.ExitCode)" }
+    $p = Start-Process msiexec.exe -ArgumentList "/i `"$file`" /qn /norestart" -Verb RunAs -Wait -PassThru
+    # 3010: installed, a restart is pending.
+    if ($p.ExitCode -notin 0, 3010) { throw "Installer exited with code $($p.ExitCode)" }
 } finally {
     Remove-Item $file -Force -ErrorAction SilentlyContinue
 }
