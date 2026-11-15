@@ -54,4 +54,8 @@
   Delete "$INSTDIR\ywza-agent.exe"
   Delete "$INSTDIR\ywza.exe"
   !insertmacro YWZA_PATH remove
+  ; Explorer menu verbs the app added for the user running the uninstaller.
+  DeleteRegKey HKCU "Software\Classes\*\shell\ywza"
+  DeleteRegKey HKCU "Software\Classes\Directory\shell\ywza"
+  DeleteRegKey HKCU "Software\Classes\Directory\Background\shell\ywza"
 !macroend

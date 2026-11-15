@@ -66,6 +66,8 @@ pub fn run() {
             desktop::setup(app.handle())?;
             #[cfg(desktop)]
             activate::launched(app.handle());
+            #[cfg(desktop)]
+            shell::first_run(app.handle());
             #[cfg(mobile)]
             mobile::setup(app.handle())?;
             Ok(())

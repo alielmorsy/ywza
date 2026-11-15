@@ -9,6 +9,31 @@ fn exe() -> Result<String, String> {
     Ok(p.to_string_lossy().into_owned())
 }
 
+/// Turns the menu on at the first start of an installed build; after that the Settings toggle
+/// decides, so turning it off sticks. Dev builds skip it so they do not point Explorer at target/.
+pub fn first_run(app: &tauri::AppHandle) {
+    #[cfg(windows)]
+    if !cfg!(debug_assertions) {
+        use tauri::Manager;
+        let Ok(dir) = app.path().app_data_dir() else {
+            return;
+        };
+        let mark = dir.join("explorer-menu-default");
+        if mark.exists() {
+            return;
+        }
+        // Not marked on failure, so the next start tries again.
+        if let Err(e) = explorer_menu_set(true) {
+            eprintln!("explorer menu: {e}");
+            return;
+        }
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::write(mark, "");
+    }
+    #[cfg(not(windows))]
+    let _ = app;
+}
+
 /// On only when every key is present and points at this exe.
 #[tauri::command]
 pub fn explorer_menu_status() -> bool {
