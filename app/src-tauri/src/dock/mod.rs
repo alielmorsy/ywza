@@ -127,7 +127,9 @@ pub struct MonitorInfo {
 #[tauri::command]
 pub fn dock_monitor(app: AppHandle) -> Result<MonitorInfo, String> {
     let at_cursor = match app.cursor_position() {
-        Ok(p) => app.monitor_from_point(p.x, p.y).map_err(|e| e.to_string())?,
+        Ok(p) => app
+            .monitor_from_point(p.x, p.y)
+            .map_err(|e| e.to_string())?,
         Err(_) => None,
     };
     let m = match at_cursor {

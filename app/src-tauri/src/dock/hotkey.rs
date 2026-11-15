@@ -41,8 +41,7 @@ mod win {
         MapVirtualKeyW, RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MAPVK_VSC_TO_VK_EX,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetMessageW, PeekMessageW, PostThreadMessageW, MSG, PM_NOREMOVE, WM_APP, WM_HOTKEY,
-        WM_USER,
+        GetMessageW, PeekMessageW, PostThreadMessageW, MSG, PM_NOREMOVE, WM_APP, WM_HOTKEY, WM_USER,
     };
 
     const ID: i32 = 1;
@@ -86,8 +85,10 @@ mod win {
 
         fn send(&self, cmd: Cmd) -> Result<(), String> {
             self.tx.send(cmd).map_err(|e| e.to_string())?;
-            unsafe { PostThreadMessageW(self.thread, WM_APP, Default::default(), Default::default()) }
-                .map_err(|e| e.to_string())
+            unsafe {
+                PostThreadMessageW(self.thread, WM_APP, Default::default(), Default::default())
+            }
+            .map_err(|e| e.to_string())
         }
     }
 
@@ -116,7 +117,16 @@ mod win {
         }
         let mut current = DEFAULT.to_string();
         let _ = register(&current);
-        if unsafe { RegisterHotKey(None, PASTE_ID, HOT_KEY_MODIFIERS(MOD_WIN | MOD_ALT | MOD_NOREPEAT), VK_V) }.is_err() {
+        if unsafe {
+            RegisterHotKey(
+                None,
+                PASTE_ID,
+                HOT_KEY_MODIFIERS(MOD_WIN | MOD_ALT | MOD_NOREPEAT),
+                VK_V,
+            )
+        }
+        .is_err()
+        {
             eprintln!("dock: Win+Alt+V is taken by another app");
         }
         while unsafe { GetMessageW(&mut msg, None, 0, 0) }.0 > 0 {

@@ -60,13 +60,33 @@ mod tests {
         let exe = r"C:\Apps\ywza\ywza-app.exe";
         let k = keys(exe);
         assert_eq!(k.len(), 9);
-        assert!(k.iter().all(|k| ROOTS.iter().any(|r| k.path.starts_with(&verb(r)))));
+        assert!(k
+            .iter()
+            .all(|k| ROOTS.iter().any(|r| k.path.starts_with(&verb(r)))));
         assert_eq!(k[0].path, r"Software\Classes\*\shell\ywza");
         assert!(k[0].values.contains(&("SubCommands", String::new())));
-        assert_eq!(k[2].path, r"Software\Classes\*\shell\ywza\shell\ask\command");
-        assert_eq!(k[2].values, vec![("", r#""C:\Apps\ywza\ywza-app.exe" --explorer "%1""#.to_string())]);
-        assert_eq!(k[5].path, r"Software\Classes\Directory\shell\ywza\shell\ask\command");
-        assert_eq!(k[8].path, r"Software\Classes\Directory\Background\shell\ywza\shell\ask\command");
-        assert_eq!(k[8].values[0].1, r#""C:\Apps\ywza\ywza-app.exe" --explorer "%V""#);
+        assert_eq!(
+            k[2].path,
+            r"Software\Classes\*\shell\ywza\shell\ask\command"
+        );
+        assert_eq!(
+            k[2].values,
+            vec![(
+                "",
+                r#""C:\Apps\ywza\ywza-app.exe" --explorer "%1""#.to_string()
+            )]
+        );
+        assert_eq!(
+            k[5].path,
+            r"Software\Classes\Directory\shell\ywza\shell\ask\command"
+        );
+        assert_eq!(
+            k[8].path,
+            r"Software\Classes\Directory\Background\shell\ywza\shell\ask\command"
+        );
+        assert_eq!(
+            k[8].values[0].1,
+            r#""C:\Apps\ywza\ywza-app.exe" --explorer "%V""#
+        );
     }
 }

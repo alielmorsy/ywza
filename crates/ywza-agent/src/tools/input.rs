@@ -116,9 +116,14 @@ impl Tool for LongPress {
         flat(async {
             let (w, id) = (self.window.0, self.element.0);
             let ms = self.ms.min(10_000);
-            act(cx, w, Some(id), Verb::On("Hold"), cx.report(Report::Diff), move |s| {
-                desk::long_press(s, id, ms).map(Some)
-            })
+            act(
+                cx,
+                w,
+                Some(id),
+                Verb::On("Hold"),
+                cx.report(Report::Diff),
+                move |s| desk::long_press(s, id, ms).map(Some),
+            )
             .await
         })
         .await
@@ -276,9 +281,14 @@ impl Tool for Scroll {
             let w = self.window.0;
             let id = self.element.map(|e| e.0);
             let (dx, dy, real) = (self.dx, self.dy, self.real);
-            act(cx, w, id, Verb::On("Scroll"), cx.report(Report::Diff), move |s| {
-                desk::scroll(s, id, dx, dy, real).map(Some)
-            })
+            act(
+                cx,
+                w,
+                id,
+                Verb::On("Scroll"),
+                cx.report(Report::Diff),
+                move |s| desk::scroll(s, id, dx, dy, real).map(Some),
+            )
             .await
         })
         .await

@@ -18,7 +18,9 @@ pub use error::{Error, Result};
 pub use geometry::Rect;
 pub use image::{encode_png, pixelate, Image};
 pub use keys::{parse_keys, Combo, Key};
-pub use lens::{lens_dwell, lens_hidden, lens_mark, lens_update, set_lens, MarkId, MarkKind, Phase};
+pub use lens::{
+    lens_dwell, lens_hidden, lens_mark, lens_update, set_lens, MarkId, MarkKind, Phase,
+};
 pub use marks::{draw_box, draw_marks};
 pub use model::{Button, CursorShape, Launched, Monitor, Tier, WindowId, WindowInfo};
 pub use platform::wait_activity;

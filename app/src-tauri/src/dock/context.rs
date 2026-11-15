@@ -32,9 +32,14 @@ mod tests {
         let o = DockOpen {
             source: "clipboard",
             items: vec![
-                ContextItem::Path { path: "C:\\a.pdf".into(), dir: false },
+                ContextItem::Path {
+                    path: "C:\\a.pdf".into(),
+                    dir: false,
+                },
                 ContextItem::Text { text: "hi".into() },
-                ContextItem::Image { path: "C:\\c.png".into() },
+                ContextItem::Image {
+                    path: "C:\\c.png".into(),
+                },
             ],
         };
         assert_eq!(

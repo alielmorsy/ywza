@@ -15,7 +15,11 @@ pub fn read() -> Vec<ContextItem> {
     // Files and text first: Office and browsers put a picture next to copied text.
     let Some((files, text, dib)) = win::open(|| unsafe {
         let files = win::bytes(CF_HDROP);
-        let text = if files.is_none() { win::bytes(CF_UNICODETEXT) } else { None };
+        let text = if files.is_none() {
+            win::bytes(CF_UNICODETEXT)
+        } else {
+            None
+        };
         let dib = if files.is_none() && text.is_none() {
             win::bytes(CF_DIB).or_else(|| win::bytes(CF_DIBV5))
         } else {
@@ -29,7 +33,10 @@ pub fn read() -> Vec<ContextItem> {
         return drop_files(&b)
             .into_iter()
             .take(MAX_FILES)
-            .map(|path| ContextItem::Path { dir: Path::new(&path).is_dir(), path })
+            .map(|path| ContextItem::Path {
+                dir: Path::new(&path).is_dir(),
+                path,
+            })
             .collect();
     }
     if let Some(t) = text.as_deref().and_then(utf16_text) {
@@ -44,8 +51,10 @@ pub fn read() -> Vec<ContextItem> {
 
 fn utf16_text(b: &[u8]) -> Option<String> {
     let units: Vec<u16> = b
-        .chunks_exact(2)
-        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|&c| u16::from_le_bytes(c))
         .take_while(|&u| u != 0)
         .collect();
     let s = String::from_utf16_lossy(&units);
@@ -65,10 +74,20 @@ fn drop_files(b: &[u8]) -> Vec<String> {
         return Vec::new();
     };
     let names: Vec<String> = if wide != 0 {
-        let units: Vec<u16> = list.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
-        units.split(|&u| u == 0).map(String::from_utf16_lossy).collect()
+        let units: Vec<u16> = list
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&c| u16::from_le_bytes(c))
+            .collect();
+        units
+            .split(|&u| u == 0)
+            .map(String::from_utf16_lossy)
+            .collect()
     } else {
-        list.split(|&c| c == 0).map(|s| String::from_utf8_lossy(s).into_owned()).collect()
+        list.split(|&c| c == 0)
+            .map(|s| String::from_utf8_lossy(s).into_owned())
+            .collect()
     };
     names.into_iter().take_while(|s| !s.is_empty()).collect()
 }
@@ -98,8 +117,11 @@ fn dib_rgba(b: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
         }
     }
     // Most apps leave the alpha byte of 32 bit DIBs at zero.
-    if bpp == 32 && out.chunks_exact(4).all(|p| p[3] == 0) {
-        out.chunks_exact_mut(4).for_each(|p| p[3] = 255);
+    if bpp == 32 && out.as_chunks::<4>().0.iter().all(|p| p[3] == 0) {
+        out.as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .for_each(|p| p[3] = 255);
     }
     Some((w as u32, rows as u32, out))
 }
@@ -168,7 +190,10 @@ mod tests {
     fn text_is_capped_and_blank_is_none() {
         assert_eq!(utf16_text(&wide("hi\0junk")), Some("hi".into()));
         assert_eq!(utf16_text(&wide("  \r\n\0")), None);
-        assert_eq!(utf16_text(&wide(&"x".repeat(30000))).unwrap().len(), MAX_TEXT);
+        assert_eq!(
+            utf16_text(&wide(&"x".repeat(30000))).unwrap().len(),
+            MAX_TEXT
+        );
     }
 
     #[test]

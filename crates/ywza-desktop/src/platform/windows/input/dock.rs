@@ -3,8 +3,7 @@
 
 use ::windows::Win32::Foundation::{HWND, POINT};
 use ::windows::Win32::UI::WindowsAndMessaging::{
-    GetAncestor, GetWindowTextW, ShowWindow, WindowFromPoint, GA_ROOT, SW_HIDE,
-    SW_SHOWNOACTIVATE,
+    GetAncestor, GetWindowTextW, ShowWindow, WindowFromPoint, GA_ROOT, SW_HIDE, SW_SHOWNOACTIVATE,
 };
 
 const TITLE: &str = "ywza dock";

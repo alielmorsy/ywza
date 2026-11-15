@@ -33,7 +33,10 @@ pub fn items(paths: &[String]) -> Vec<ContextItem> {
         .filter(|p| Path::new(p).is_absolute() && seen.insert(p.to_lowercase()))
         .filter_map(|p| {
             let dir = std::fs::metadata(p).ok()?.is_dir();
-            Some(ContextItem::Path { path: p.clone(), dir })
+            Some(ContextItem::Path {
+                path: p.clone(),
+                dir,
+            })
         })
         .take(MAX_ITEMS)
         .collect()
@@ -121,7 +124,19 @@ mod tests {
         let got = items(&paths);
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(got.len(), MAX_ITEMS);
-        assert_eq!(got[0], ContextItem::Path { path: paths[2].clone(), dir: true });
-        assert_eq!(got[1], ContextItem::Path { path: paths[4].clone(), dir: false });
+        assert_eq!(
+            got[0],
+            ContextItem::Path {
+                path: paths[2].clone(),
+                dir: true
+            }
+        );
+        assert_eq!(
+            got[1],
+            ContextItem::Path {
+                path: paths[4].clone(),
+                dir: false
+            }
+        );
     }
 }
