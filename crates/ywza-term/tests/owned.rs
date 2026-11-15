@@ -2,10 +2,14 @@ use std::time::{Duration, Instant};
 use ywza_term::TermManager;
 
 fn wait_for(m: &TermManager, id: ywza_term::TermId, needle: &str) -> String {
+    wait_for_n(m, id, needle, 1)
+}
+
+fn wait_for_n(m: &TermManager, id: ywza_term::TermId, needle: &str, n: usize) -> String {
     let end = Instant::now() + Duration::from_secs(15);
     loop {
         let text = m.read(id, 50).unwrap();
-        if text.contains(needle) || Instant::now() > end {
+        if text.matches(needle).count() >= n || Instant::now() > end {
             return text;
         }
         std::thread::sleep(Duration::from_millis(100));
@@ -45,12 +49,9 @@ fn interactive_write_and_keys() {
     assert!(text.contains("ywza-marker-one"), "got {text:?}");
     m.write(id, "echo ywza-marker-two", false).unwrap();
     m.keys(id, "enter").unwrap();
-    assert!(
-        wait_for(&m, id, "ywza-marker-two")
-            .matches("ywza-marker-two")
-            .count()
-            >= 2
-    );
+    // Once for the typed command, once for its output.
+    let text = wait_for_n(&m, id, "ywza-marker-two", 2);
+    assert!(text.matches("ywza-marker-two").count() >= 2, "got {text:?}");
     m.write(id, "exit", true).unwrap();
     let end = Instant::now() + Duration::from_secs(10);
     while m.owned(id).unwrap().is_running() && Instant::now() < end {
