@@ -7882,7 +7882,7 @@ dependencies = [
 
 [[package]]
 name = "ywza-agent"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7910,7 +7910,7 @@ dependencies = [
 
 [[package]]
 name = "ywza-app"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "iroh",
  "rustls",
@@ -7926,7 +7926,7 @@ dependencies = [
 
 [[package]]
 name = "ywza-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -7943,7 +7943,7 @@ dependencies = [
 
 [[package]]
 name = "ywza-desktop"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atspi",
  "libc",
@@ -7956,7 +7956,7 @@ dependencies = [
 
 [[package]]
 name = "ywza-ocr"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "ort",
@@ -7966,7 +7966,7 @@ dependencies = [
 
 [[package]]
 name = "ywza-proto"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "data-encoding",
@@ -7990,7 +7990,7 @@ dependencies = [
 
 [[package]]
 name = "ywza-relay"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -8010,7 +8010,7 @@ dependencies = [
 
 [[package]]
 name = "ywza-stream"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "openh264",
  "ywza-desktop",
@@ -8018,7 +8018,7 @@ dependencies = [
 
 [[package]]
 name = "ywza-term"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "portable-pty",
  "serde",
