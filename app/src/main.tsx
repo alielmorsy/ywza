@@ -11,10 +11,16 @@ addEventListener("keydown", (e) => {
 
 // Phone UI on Tauri mobile; `?mobile` shows it in the desktop preview.
 const mobile = /android|iphone|ipad/i.test(navigator.userAgent) || new URLSearchParams(location.search).has("mobile");
+// The dock window (`?dock`) is transparent and has no splash.
+const dock = new URLSearchParams(location.search).has("dock");
+if (dock) {
+  document.documentElement.classList.add("dock");
+  document.getElementById("splash")?.remove();
+}
 
 const [{ createRoot }, { default: Root }, { boot }, { setStatus }] = await Promise.all([
   import("react-dom/client"),
-  mobile ? import("./mobile/MobileApp") : import("./App"),
+  dock ? import("./dock/Dock") : mobile ? import("./mobile/MobileApp") : import("./App"),
   import("./api"),
   import("./nav"),
   import("./style.css"),
