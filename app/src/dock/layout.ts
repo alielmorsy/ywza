@@ -11,7 +11,9 @@ export const union = (a: Rect, b: Rect): Rect => {
 };
 export const sameRect = (a: Rect | null, b: Rect | null) => a === b || (!!a && !!b && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h);
 
-const SIZE: Partial<Record<Mode, [number, number]>> = { prompt: [640, 64], working: [420, 40], done: [420, 40], failed: [420, 40], expanded: [560, 520] };
+/** Prompt box height without context, CSS px. */
+export const PROMPT_H = 64;
+const SIZE: Partial<Record<Mode, [number, number]>> = { prompt: [640, PROMPT_H], working: [420, 40], done: [420, 40], failed: [420, 40], expanded: [560, 520] };
 const TAB: [number, number] = [420, 40];
 const CARD_W = 480;
 /** Tallest approval card, CSS px; taller content scrolls. */
@@ -23,9 +25,9 @@ const centered = (work: Work, [w, h]: [number, number], y: number): Rect => {
   return { x: Math.round(work.x + (work.w - w * s) / 2), y: Math.round(y), w: Math.round(w * s), h: Math.round(h * s) };
 };
 
-/** Where the dock draws for `mode`; `approval`: a card hangs under the shape. A hidden dock with an approval shows just the tab and the card. */
-export function shape(mode: Mode, approval: boolean, work: Work, cardH = CARD_H): Shape {
-  const size = SIZE[mode] ?? (approval ? TAB : undefined);
+/** Where the dock draws for `mode`; `approval`: a card hangs under the shape. A hidden dock with an approval shows just the tab and the card. `promptH` grows the prompt for attached context. */
+export function shape(mode: Mode, approval: boolean, work: Work, cardH = CARD_H, promptH = PROMPT_H): Shape {
+  const size: [number, number] | undefined = mode === "prompt" ? [SIZE.prompt![0], promptH] : SIZE[mode] ?? (approval ? TAB : undefined);
   if (!size) return { base: null, card: null };
   const base = centered(work, size, mode === "prompt" ? work.y + work.h * 0.22 : work.y);
   const card = approval ? centered(work, [CARD_W, cardH], base.y + base.h + GAP * work.scale) : null;

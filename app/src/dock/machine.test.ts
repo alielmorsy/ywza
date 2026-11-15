@@ -60,3 +60,23 @@ test("geometry scales with the monitor", () => {
   assert.equal(shape("hidden", true, work).card?.y, 50 + 80 + 16);
   assert.deepEqual(union({ x: 0, y: 0, w: 10, h: 10 }, { x: 5, y: 5, w: 10, h: 10 }), { x: 0, y: 0, w: 15, h: 15 });
 });
+
+test("opening with context", () => {
+  const context = { source: "clipboard" as const, items: [{ kind: "text" as const, text: "boom" }] };
+  const open = step({ mode: "hidden" }, { t: "open", context });
+  assert.deepEqual(open, { mode: "prompt", context });
+  assert.equal(step({ mode: "done", session: "a" }, { t: "open", context }).context, context);
+  assert.deepEqual(step({ mode: "working", session: "a" }, { t: "open", context }), { mode: "working", session: "a" });
+  assert.deepEqual(step({ mode: "expanded", session: "a" }, { t: "open", context }), { mode: "expanded", session: "a" });
+  assert.deepEqual(step(open, { t: "esc" }), { mode: "hidden" });
+  assert.deepEqual(step(open, { t: "blur", running: false }), { mode: "hidden" });
+  assert.deepEqual(step(open, { t: "submit", session: "b" }), { mode: "working", session: "b" });
+  assert.equal(step(open, { t: "approval", request: 1 }).context, context);
+  assert.equal(step({ mode: "hidden" }, { t: "hotkey" }).context, undefined);
+});
+
+test("context grows the prompt", () => {
+  const work = { x: 0, y: 0, w: 1000, h: 1000, scale: 1 };
+  assert.equal(shape("prompt", false, work, undefined, 150).base?.h, 150);
+  assert.equal(shape("working", false, work, undefined, 150).base?.h, 40);
+});

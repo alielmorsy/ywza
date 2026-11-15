@@ -7913,6 +7913,7 @@ name = "ywza-app"
 version = "0.1.1"
 dependencies = [
  "iroh",
+ "png",
  "rustls",
  "serde",
  "serde_json",
@@ -7921,6 +7922,7 @@ dependencies = [
  "tauri-plugin-barcode-scanner",
  "tauri-plugin-opener",
  "tokio",
+ "windows",
  "ywza-proto",
 ]
 

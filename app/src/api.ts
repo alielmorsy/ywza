@@ -442,3 +442,8 @@ export const dockRestoreFocus = () => invoke("dock_restore_focus");
 /** Rejects with a message when another program holds the key. */
 export const dockShortcut = (key: DockKey) => invoke("dock_shortcut", { key });
 export const onDockHotkey = (f: () => void) => listen("dock-hotkey", f);
+/** Something attached to the command box: copied text, files or a screen snip saved as PNG. */
+export type ContextItem = { kind: "path"; path: string; dir: boolean } | { kind: "text"; text: string } | { kind: "image"; path: string };
+export interface DockOpen { source: "explorer" | "clipboard"; items: ContextItem[] }
+/** The dock was asked to open with `items` attached (Win+Alt+V, Explorer's menu). */
+export const onDockOpen = (f: (o: DockOpen) => void) => listen<DockOpen>("dock-open", (e) => f(e.payload));

@@ -5,6 +5,7 @@ pub const TAKEN: &str = "That shortcut is taken by another app";
 
 const MOD_ALT: u32 = 0x1;
 const MOD_CONTROL: u32 = 0x2;
+const MOD_WIN: u32 = 0x8;
 const MOD_NOREPEAT: u32 = 0x4000;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -30,8 +31,8 @@ pub use other::Hotkey;
 
 #[cfg(windows)]
 mod win {
-    use super::{parse_shortcut, Key, DEFAULT, TAKEN};
-    use crate::dock::target;
+    use super::{parse_shortcut, Key, DEFAULT, MOD_ALT, MOD_NOREPEAT, MOD_WIN, TAKEN};
+    use crate::dock::{clipboard, context, target};
     use std::sync::mpsc::{channel, Receiver, Sender};
     use std::time::Duration;
     use tauri::{AppHandle, Emitter};
@@ -45,6 +46,9 @@ mod win {
     };
 
     const ID: i32 = 1;
+    /// Win+Alt+V: opens the dock with the clipboard attached.
+    const PASTE_ID: i32 = 2;
+    const VK_V: u32 = 0x56;
     const VK_SPACE: u32 = 0x20;
     const SC_BACKQUOTE: u32 = 0x29;
 
@@ -112,8 +116,17 @@ mod win {
         }
         let mut current = DEFAULT.to_string();
         let _ = register(&current);
+        if unsafe { RegisterHotKey(None, PASTE_ID, HOT_KEY_MODIFIERS(MOD_WIN | MOD_ALT | MOD_NOREPEAT), VK_V) }.is_err() {
+            eprintln!("dock: Win+Alt+V is taken by another app");
+        }
         while unsafe { GetMessageW(&mut msg, None, 0, 0) }.0 > 0 {
             match msg.message {
+                WM_HOTKEY if msg.wParam.0 == PASTE_ID as usize => {
+                    target::remember();
+                    let app = app.clone();
+                    // Saving a large snip as PNG takes a moment; keep the hotkeys responsive.
+                    std::thread::spawn(move || context::open(&app, "clipboard", clipboard::read()));
+                }
                 WM_HOTKEY => {
                     target::remember();
                     let _ = app.emit_to("dock", "dock-hotkey", ());

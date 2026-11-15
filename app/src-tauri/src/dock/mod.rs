@@ -1,5 +1,8 @@
 //! The dock window (command box and working tab) and its global shortcut.
 
+#[cfg(windows)]
+mod clipboard;
+pub mod context;
 mod hotkey;
 mod target;
 

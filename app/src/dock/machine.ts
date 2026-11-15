@@ -1,9 +1,12 @@
 // Dock state machine. `approval` is an overlay over any mode: resolving it keeps the mode, so a dock
-// that opened only for an approval goes back to hidden.
+// that opened only for an approval goes back to hidden. `context` lives only while the prompt shows.
+import type { DockOpen } from "../api";
+
 export type Mode = "hidden" | "prompt" | "working" | "done" | "failed" | "expanded";
-export type DockState = { mode: Mode; session?: string; approval?: number };
+export type DockState = { mode: Mode; session?: string; approval?: number; context?: DockOpen };
 export type DockEvent =
   | { t: "hotkey" }
+  | { t: "open"; context: DockOpen }
   | { t: "submit"; session: string }
   | { t: "esc"; running?: boolean }
   | { t: "blur"; running: boolean }
@@ -29,6 +32,8 @@ export function step(s: DockState, e: DockEvent): DockState {
       if (mode === "hidden") return to(s, "prompt");
       if (mode === "prompt" || mode === "expanded") return to(s, "hidden");
       return to(s, "expanded");
+    case "open":
+      return mode === "working" || mode === "expanded" ? s : { ...to(s, "prompt"), context: e.context };
     case "submit":
       return mode === "prompt" ? to(s, "working", e.session) : s;
     case "esc":

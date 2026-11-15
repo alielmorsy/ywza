@@ -3,12 +3,12 @@
 // areas never block the apps below.
 import { useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { Sprite } from "../Icon";
-import { cancel, dockHide, dockMonitor, dockPlace, dockRestoreFocus, dockShortcut, dockShow, dockTarget, onDockHotkey, useStore, type SEvent } from "../api";
+import { cancel, dockHide, dockMonitor, dockPlace, dockRestoreFocus, dockShortcut, dockShow, dockTarget, onDockHotkey, onDockOpen, useStore, type DockOpen, type SEvent } from "../api";
 import { ApprovalCard } from "../views/chat/ApprovalCard";
 import { Expanded } from "./Expanded";
 import { PromptBox } from "./PromptBox";
 import { Tab, type TabKind } from "./Tab";
-import { CARD_H, bounds, sameRect, shape, union, type Rect, type Shape, type Work } from "./layout";
+import { CARD_H, PROMPT_H, bounds, sameRect, shape, union, type Rect, type Shape, type Work } from "./layout";
 import { step, type Mode } from "./machine";
 import { ask } from "./prompt";
 import { DEFAULT_SHORTCUT, savedShortcut } from "./shortcut";
@@ -33,6 +33,11 @@ export default function Dock() {
   const [s, dispatch] = useReducer(step, { mode: "hidden" });
   const [view, setView] = useState<View | null>(null);
   const [cardH, setCardH] = useState(CARD_H);
+  const [contextH, setContextH] = useState(130);
+  const promptH = s.context ? contextH : PROMPT_H;
+  // Kept while the prompt fades out, so its chips do not collapse first.
+  const shown = useRef<DockOpen | undefined>(undefined);
+  if (s.mode === "prompt") shown.current = s.context;
   const work = useRef<Work | undefined>(undefined);
   const placed = useRef<Rect | null>(null);
   const last = useRef<{ shape: Shape; mode: Mode } | null>(null);
@@ -49,9 +54,10 @@ export default function Dock() {
 
   useEffect(() => {
     const un = onDockHotkey(() => dispatch({ t: "hotkey" }));
+    const unOpen = onDockOpen((context) => dispatch({ t: "open", context }));
     const key = savedShortcut();
     if (key !== DEFAULT_SHORTCUT) dockShortcut(key).catch(() => {});
-    return () => { un.then((f) => f()); };
+    return () => { un.then((f) => f()); unOpen.then((f) => f()); };
   }, []);
 
   const running = useRef(false);
@@ -109,7 +115,7 @@ export default function Dock() {
       if ((s.mode !== "hidden" || hasApproval) && !placed.current) work.current = await dockMonitor();
       const w = work.current;
       if (!live() || !w) return;
-      const next = shape(s.mode, hasApproval, w, cardH);
+      const next = shape(s.mode, hasApproval, w, cardH, promptH);
       const nb = bounds(next);
 
       if (!nb) {
@@ -144,7 +150,7 @@ export default function Dock() {
       if (!live()) return;
       setView((v) => v && { ...v, origin: nb, animating: false });
     })().catch(() => {});
-  }, [s.mode, hasApproval, cardH]);
+  }, [s.mode, hasApproval, cardH, promptH]);
 
   const submit = async (text: string) => {
     if (submitting.current) return;
@@ -171,7 +177,7 @@ export default function Dock() {
   const failure = latest(events, "failed");
   const body = {
     hidden: tab("waiting", approval?.summary ?? ""),
-    prompt: <PromptBox onSubmit={submit} />,
+    prompt: <PromptBox context={shown.current} onSubmit={submit} onHeight={setContextH} />,
     working: tab("working", activity ?? ""),
     done: tab("done", firstLine(events)),
     failed: tab("failed", failure?.error ?? ""),
