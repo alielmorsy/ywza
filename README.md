@@ -31,6 +31,8 @@ something.
 
 ywza works perfectly on Windows. Linux works on X11.
 
+> [!IMPORTANT]
+> **Help Wanted:** This tool does not currently support macOS or Apple devices. Pull requests to add support are very welcome!
 ## Demo
 
 <table>
